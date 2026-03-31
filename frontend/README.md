@@ -56,7 +56,7 @@ The dev server starts at http://localhost:5173 by default.
 | LiquidationPanel   | Complete      | Fetches and displays recent BTC liquidation events   |
 | OrderBookPanel     | Complete      | Fetches and displays latest BTC order book snapshot  |
 | AlertsPanel        | [Later]       | Placeholder — wired up in the Alerts phase           |
-| AnalysisPanel      | [Later]       | Placeholder — wired up in the Analysis worker phase  |
+| AnalysisPanel      | Complete      | Displays latest Claude-generated market summary      |
 
 ## Design Notes
 
@@ -70,6 +70,6 @@ The dev server starts at http://localhost:5173 by default.
 
 ## Next Phase
 
-Phase 7 — AI-assisted analysis panel. The backend will call the Claude API to generate
-market summaries, store them in the database, and expose them via `/api/analysis/latest`.
-The AnalysisPanel placeholder will be wired up to display them.
+Phase 8 — Alerts. An alert evaluation worker will watch the incoming market data
+and fire notifications when configurable thresholds are crossed. The AlertsPanel
+placeholder will be wired up to display active alerts and their trigger status.

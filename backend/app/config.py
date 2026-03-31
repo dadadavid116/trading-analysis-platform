@@ -29,8 +29,12 @@ class Settings(BaseSettings):
     exchange: str = "binance"
     symbol: str = "BTCUSDT"
 
-    # ── Claude API (analysis panel) — used in a later phase ──────────────────
+    # ── Claude API (analysis worker) ─────────────────────────────────────────
     anthropic_api_key: str = ""
+
+    # How often the analysis worker generates a new summary (in minutes).
+    # Set ANALYSIS_INTERVAL_MINUTES in .env to override.
+    analysis_interval_minutes: int = 10
 
     # ── Alerts (Telegram) — used in a later phase ─────────────────────────────
     alert_telegram_token: str = ""

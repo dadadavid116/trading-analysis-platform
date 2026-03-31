@@ -151,13 +151,13 @@ blueprint and build order.
 
 ## Status
 
-**Phase 6 complete — live Binance data collectors.**
-The full stack runs locally via Docker Compose. Three collector workers stream
-live BTC market data from Binance WebSocket APIs into PostgreSQL continuously.
-The dashboard panels poll the API every 10–15 seconds and display fresh data
-without a manual page reload.
+**Phase 7 complete — AI-assisted analysis worker.**
+The full stack runs locally via Docker Compose. Live BTC data is collected from
+Binance WebSocket streams and stored continuously. An AI analysis worker calls
+the Claude API every 10 minutes to generate a market summary, which is stored
+in the database and displayed in the Analysis panel.
 
-Next: Phase 7 — AI-assisted analysis panel (Claude API integration).
+Next: Phase 8 — Alerts (evaluation logic, DB table, API + panel).
 
 ---
 

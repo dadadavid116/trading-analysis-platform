@@ -18,7 +18,9 @@ backend/
 │   ├── liquidation_collector.py # Streams liquidation events (Binance Futures)
 │   ├── orderbook_collector.py   # Captures BTC order book snapshots
 │   └── run_all.py               # Entry point: runs all three collectors
-├── analysis/           # [Later] AI-assisted analysis logic (Claude API)
+├── analysis/           # AI-assisted market analysis worker (Claude API)
+│   ├── claude_client.py         # Reads market data, calls Claude, stores summary
+│   └── run.py                   # Entry point: runs the analysis loop
 ├── alerts/             # [Later] Alert evaluation and notification logic
 ├── migrations/         # [Later] Alembic database migration scripts
 ├── tests/              # Pytest tests for the backend
@@ -34,27 +36,53 @@ From the repo root:
 docker compose up --build
 ```
 
-This starts four services: `db`, `api`, `collector`, and `frontend`.
-The collector service connects to Binance WebSocket streams and writes live
-BTC data to the database continuously.
+This starts five services: `db`, `api`, `collector`, `analysis`, and `frontend`.
 
-## Verifying that live data is flowing
+Before starting, make sure your `.env` file has `ANTHROPIC_API_KEY` set.
+The analysis worker will skip silently if the key is missing, but the
+Analysis panel will show no data until it is added.
 
-After starting the stack, watch the collector logs:
+## Verifying live collectors
+
+Watch the collector logs:
 
 ```bash
 docker compose logs -f collector
 ```
 
-You should see lines like:
+You should see:
 ```
 Candle stored: BTCUSDT  close=83850.00  volume=12.4500
 Liquidation stored: BTCUSDT  side=sell  price=83720.00  qty=0.4200
 Order book snapshot stored.
 ```
 
-If you see `reconnecting in 5 s.` messages, the collector is waiting to connect
-to Binance. This is normal on startup — it retries automatically.
+## Verifying the analysis worker
+
+Watch the analysis logs:
+
+```bash
+docker compose logs -f analysis
+```
+
+After ~30 seconds you should see:
+```
+Analysis worker starting. Interval: 10 min. First run in 30 s...
+Analysis summary stored. model=claude-haiku-4-5-20251001  length=312 chars
+Next analysis in 10 minutes.
+```
+
+If you see `ANTHROPIC_API_KEY is not set` — add your key to `.env` and restart:
+```bash
+docker compose restart analysis
+```
+
+## What each service does
+
+| Service | Entry point | Write frequency |
+|---|---|---|
+| `collector` | `collectors/run_all.py` | Price: 1/min · Liquidations: on event · Order book: 1/5s |
+| `analysis` | `analysis/run.py` | Every `ANALYSIS_INTERVAL_MINUTES` (default: 10 min) |
 
 ## What each collector does
 
@@ -63,6 +91,12 @@ to Binance. This is normal on startup — it retries automatically.
 | `price_collector.py` | `btcusdt@kline_1m` (Binance spot) | Once per minute (on candle close) |
 | `liquidation_collector.py` | `btcusdt@forceOrder` (Binance Futures) | On each liquidation event |
 | `orderbook_collector.py` | `btcusdt@depth20` (Binance spot) | At most once every 5 seconds |
+
+## Note on orderbook_snapshots growth
+
+The `orderbook_snapshots` table accumulates ~1 row every 5 seconds. For local
+development this is fine. Before VPS deployment, a periodic pruning strategy
+(e.g. keep only the last 24 hours) should be added.
 
 ## Running Locally (without Docker)
 
@@ -76,13 +110,14 @@ pip install -r requirements.txt
 
 # Copy environment variables
 cp ../.env.example ../.env
-# Edit .env and set DATABASE_URL to point to your local PostgreSQL instance
+# Edit .env — set DATABASE_URL, ANTHROPIC_API_KEY, ANALYSIS_INTERVAL_MINUTES
 
 # Start the API server
 uvicorn app.main:app --reload
 
-# In a separate terminal, start the collectors
+# In separate terminals:
 python -m collectors.run_all
+python -m analysis.run
 ```
 
 ## Environment Variables
@@ -92,7 +127,8 @@ The backend reads them via `app/config.py`.
 
 ## Notes
 
-- The `analysis/` and `alerts/` folders are placeholders for later phases.
+- The `analysis_summaries` table is created automatically on API startup
+  via `Base.metadata.create_all` — no DB wipe or manual SQL needed.
 - Database migrations (Alembic) will be added once the schema stabilises.
-- The collector service uses the same Docker image as the API but runs
-  `python -m collectors.run_all` instead of `uvicorn`.
+- The `collector` and `analysis` services use the same Docker image as the
+  API but run different entry points via CMD overrides in docker-compose.yml.

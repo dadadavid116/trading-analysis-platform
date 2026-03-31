@@ -79,4 +79,26 @@ export function fetchOrderBookSnapshot(): Promise<OrderBookSnapshot> {
   return apiFetch<OrderBookSnapshot>('/orderbook/snapshot');
 }
 
-// [Later] fetchAlerts, fetchLatestAnalysis will be added in their respective phases.
+export interface AnalysisSummary {
+  id: number;
+  symbol: string;
+  generated_at: string;
+  summary_text: string;
+  model_used: string;
+}
+
+/**
+ * Fetch the latest AI-generated market summary.
+ * Returns null if no summary has been generated yet (404 from the API).
+ * Throws on other errors (network failure, 5xx, etc.).
+ */
+export async function fetchLatestAnalysis(): Promise<AnalysisSummary | null> {
+  const response = await fetch(`${BASE_URL}/analysis/latest`);
+  if (response.status === 404) return null;  // worker hasn't run yet
+  if (!response.ok) {
+    throw new Error(`API error ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<AnalysisSummary>;
+}
+
+// [Later] fetchAlerts will be added in the Alerts phase.

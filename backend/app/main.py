@@ -16,7 +16,8 @@ from app.database import engine, Base
 import app.models.price        # noqa: F401
 import app.models.liquidation  # noqa: F401
 import app.models.orderbook    # noqa: F401
-from app.routers import price, liquidations, orderbook
+import app.models.analysis     # noqa: F401
+from app.routers import price, liquidations, orderbook, analysis
 
 
 @asynccontextmanager
@@ -75,8 +76,8 @@ async def health_check():
 app.include_router(price.router,        prefix="/api")
 app.include_router(liquidations.router, prefix="/api")
 app.include_router(orderbook.router,    prefix="/api")
+app.include_router(analysis.router,     prefix="/api")
 
-# [Later] alerts and analysis routers:
-# from app.routers import alerts, analysis
-# app.include_router(alerts.router,   prefix="/api")
-# app.include_router(analysis.router, prefix="/api")
+# [Later] alerts router:
+# from app.routers import alerts
+# app.include_router(alerts.router, prefix="/api")
