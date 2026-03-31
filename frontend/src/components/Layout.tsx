@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import type { CSSProperties } from 'react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -35,7 +36,7 @@ export default Layout;
 
 // ── Inline styles (MVP — replace with CSS modules or Tailwind later) ──────────
 
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<string, CSSProperties> = {
   root: {
     minHeight: '100vh',
     display: 'flex',
