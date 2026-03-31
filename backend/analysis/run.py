@@ -16,6 +16,7 @@ import logging
 
 from analysis.claude_client import generate_and_store
 from app.config import settings
+from app.database import engine, Base
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,7 +30,22 @@ logger = logging.getLogger(__name__)
 STARTUP_DELAY_SECONDS = 30
 
 
+async def _ensure_tables() -> None:
+    """Create the analysis_summaries table if it does not exist yet.
+
+    Normally the api service creates all tables on startup, but if the analysis
+    worker starts before the api is ready we create them here as a fallback.
+    """
+    import app.models.analysis  # noqa: F401 — registers model with Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("Table check complete.")
+
+
 async def main() -> None:
+    await _ensure_tables()
+
     interval = settings.analysis_interval_minutes
     logger.info(
         "Analysis worker starting. Interval: %d min. First run in %d s...",

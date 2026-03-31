@@ -1,10 +1,11 @@
 # docker-compose.yml — Local development stack
 #
-# Starts five services:
+# Starts six services:
 #   db        — PostgreSQL 16 (persistent data volume)
 #   api       — FastAPI backend (built from backend/Dockerfile)
 #   collector — Live Binance WebSocket data collectors
 #   analysis  — AI market summary worker (Claude API, requires ANTHROPIC_API_KEY)
+#   alerts    — Alert evaluation worker (checks conditions every minute)
 #   frontend  — React/Vite dev server (built from frontend/Dockerfile, dev stage)
 #
 # Prerequisites:
@@ -99,6 +100,23 @@ services:
         condition: service_healthy
     # No ports — the analysis worker reads from DB and writes summaries back.
     # Requires ANTHROPIC_API_KEY to be set in .env — worker skips silently if missing.
+
+  # ── Alert evaluation worker ─────────────────────────────────────────────────
+  alerts:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    # Override the default CMD (uvicorn) to run the alert evaluator instead.
+    command: ["python", "-m", "alerts.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+    # No ports — the alert worker reads from DB and writes back trigger times.
 
   # ── Live data collectors ─────────────────────────────────────────────────────
   collector:

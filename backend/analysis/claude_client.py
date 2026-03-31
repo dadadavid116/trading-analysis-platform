@@ -67,8 +67,8 @@ def _build_prompt(ctx: dict) -> str:
     snapshot = ctx["snapshot"]
 
     lines = [
-        "You are a concise crypto market analyst. Based on the live BTC/USDT data below, "
-        "write a 3–4 sentence market summary. Be factual and highlight any notable patterns.",
+        "You are a concise crypto market analyst. Based on the current BTC/USDT market data "
+        "snapshot below, write a 3–4 sentence market summary. Be factual and highlight any notable patterns.",
         "",
     ]
 

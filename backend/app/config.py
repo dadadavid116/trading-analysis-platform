@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     # Set ANALYSIS_INTERVAL_MINUTES in .env to override.
     analysis_interval_minutes: int = 10
 
-    # ── Alerts (Telegram) — used in a later phase ─────────────────────────────
+    # ── Alerts ────────────────────────────────────────────────────────────────
+    # How often the alert evaluator checks conditions (in minutes).
+    alert_evaluation_interval_minutes: int = 1
+
+    # Telegram notification credentials — leave blank to use logging-only mode.
     alert_telegram_token: str = ""
     alert_telegram_chat_id: str = ""
 

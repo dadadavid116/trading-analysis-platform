@@ -4,9 +4,9 @@ This folder contains the React + TypeScript + Vite frontend for the trading anal
 
 ## Phase Status
 
-Phase 5 (mock-data flow) is complete. The full stack runs locally via Docker Compose. The
-Price, Liquidation, and Order Book panels fetch and render real seeded data from the backend API.
-Alerts and Analysis panels are visible placeholders — they will be wired up in later phases.
+Phase 8 (alerts) is complete. The full stack runs locally via Docker Compose with live BTC
+data ingestion, scheduled AI analysis, and alert evaluation. All five dashboard panels are
+implemented — Price, Liquidation, Order Book, Analysis, and Alerts.
 
 ## Folder Structure
 
@@ -23,8 +23,8 @@ frontend/
 │       ├── PricePanel.tsx        # Price / OHLCV data panel
 │       ├── LiquidationPanel.tsx  # Liquidation events panel
 │       ├── OrderBookPanel.tsx    # Order book / liquidity panel
-│       ├── AlertsPanel.tsx       # [Later] Alerts panel — placeholder
-│       └── AnalysisPanel.tsx     # [Later] AI analysis panel — placeholder
+│       ├── AlertsPanel.tsx       # Alerts panel — list + inline create form
+│       └── AnalysisPanel.tsx     # AI analysis panel — Claude-generated summaries
 ├── index.html                # Vite HTML entry point
 ├── package.json              # Dependencies and scripts
 ├── tsconfig.json             # TypeScript configuration
@@ -55,7 +55,7 @@ The dev server starts at http://localhost:5173 by default.
 | PricePanel         | Complete      | Fetches and displays latest BTC OHLCV candle         |
 | LiquidationPanel   | Complete      | Fetches and displays recent BTC liquidation events   |
 | OrderBookPanel     | Complete      | Fetches and displays latest BTC order book snapshot  |
-| AlertsPanel        | [Later]       | Placeholder — wired up in the Alerts phase           |
+| AlertsPanel        | Complete      | Lists active alerts; inline form to create new ones  |
 | AnalysisPanel      | Complete      | Displays latest Claude-generated market summary      |
 
 ## Design Notes
@@ -70,6 +70,5 @@ The dev server starts at http://localhost:5173 by default.
 
 ## Next Phase
 
-Phase 8 — Alerts. An alert evaluation worker will watch the incoming market data
-and fire notifications when configurable thresholds are crossed. The AlertsPanel
-placeholder will be wired up to display active alerts and their trigger status.
+Phase 9 — VPS deployment. Caddy reverse proxy, production Dockerfile stages,
+and domain/TLS configuration for running the full stack on a VPS.

@@ -101,4 +101,40 @@ export async function fetchLatestAnalysis(): Promise<AnalysisSummary | null> {
   return response.json() as Promise<AnalysisSummary>;
 }
 
-// [Later] fetchAlerts will be added in the Alerts phase.
+export interface Alert {
+  id:             number;
+  name:           string;
+  symbol:         string;
+  condition_type: string;
+  threshold:      number;
+  window_minutes: number | null;
+  is_active:      boolean;
+  triggered_at:   string | null;
+  created_at:     string;
+}
+
+export interface AlertCreate {
+  name:           string;
+  symbol?:        string;
+  condition_type: string;
+  threshold:      number;
+  window_minutes?: number | null;
+}
+
+/** Fetch all alert rules. */
+export function fetchAlerts(): Promise<Alert[]> {
+  return apiFetch<Alert[]>('/alerts/');
+}
+
+/** Create a new alert rule. */
+export async function createAlert(body: AlertCreate): Promise<Alert> {
+  const response = await fetch(`${BASE_URL}/alerts/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`API error ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<Alert>;
+}
