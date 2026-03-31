@@ -1,0 +1,82 @@
+# docker-compose.yml — Local development stack
+#
+# Starts three services:
+#   db       — PostgreSQL 16 (persistent data volume)
+#   api      — FastAPI backend (built from backend/Dockerfile)
+#   frontend — React/Vite dev server (built from frontend/Dockerfile, dev stage)
+#
+# Prerequisites:
+#   1. Copy .env.example to .env and adjust values if needed.
+#   2. Run:  docker compose up --build
+#
+# The frontend dev server proxies /api requests to the api service
+# via the VITE_API_TARGET env var (set to http://api:8000 below).
+
+services:
+
+  # ── PostgreSQL database ──────────────────────────────────────────────────
+    db:
+        image: postgres:16
+            restart: unless-stopped
+                environment:
+                      POSTGRES_USER: ${POSTGRES_USER}
+                            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+                                  POSTGRES_DB: ${POSTGRES_DB}
+                                      volumes:
+                                            # Named volume so data persists across container restarts
+                                                  - postgres_data:/var/lib/postgresql/data
+                                                      ports:
+                                                            # Expose to host so you can connect with a local DB tool (e.g. psql, TablePlus)
+                                                                  - "5432:5432"
+                                                                      healthcheck:
+                                                                            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+                                                                                  interval: 5s
+                                                                                        timeout: 5s
+                                                                                              retries: 10
+
+                                                                                                # ── FastAPI backend ──────────────────────────────────────────────────────
+                                                                                                  api:
+                                                                                                      build:
+                                                                                                            context: ./backend
+                                                                                                                  dockerfile: Dockerfile
+                                                                                                                      restart: unless-stopped
+                                                                                                                          env_file:
+                                                                                                                                # Load all vars from .env into the container
+                                                                                                                                      - .env
+                                                                                                                                          environment:
+                                                                                                                                                # Override DATABASE_URL so "localhost" in the default is replaced by the
+                                                                                                                                                      # Docker service name "db" — matches the db service above.
+                                                                                                                                                            DATABASE_URL: ${DATABASE_URL}
+                                                                                                                                                                ports:
+                                                                                                                                                                      - "8000:8000"
+                                                                                                                                                                          depends_on:
+                                                                                                                                                                                db:
+                                                                                                                                                                                        condition: service_healthy
+                                                                                                                                                                                        
+                                                                                                                                                                                          # ── React / Vite frontend (dev stage) ───────────────────────────────────
+                                                                                                                                                                                            frontend:
+                                                                                                                                                                                                build:
+                                                                                                                                                                                                      context: ./frontend
+                                                                                                                                                                                                            dockerfile: Dockerfile
+                                                                                                                                                                                                                  # Use the "dev" stage from the multi-stage Dockerfile so we get the
+                                                                                                                                                                                                                        # Vite dev server with hot-module replacement.
+                                                                                                                                                                                                                              target: dev
+                                                                                                                                                                                                                                  restart: unless-stopped
+                                                                                                                                                                                                                                      environment:
+                                                                                                                                                                                                                                            # Tells vite.config.ts where to proxy /api requests.
+                                                                                                                                                                                                                                                  # "api" resolves to the api service inside the Docker network.
+                                                                                                                                                                                                                                                        VITE_API_TARGET: http://api:8000
+                                                                                                                                                                                                                                                            ports:
+                                                                                                                                                                                                                                                                  - "5173:5173"
+                                                                                                                                                                                                                                                                      depends_on:
+                                                                                                                                                                                                                                                                            - api
+                                                                                                                                                                                                                                                                                volumes:
+                                                                                                                                                                                                                                                                                      # Mount source code so edits on the host are reflected immediately
+                                                                                                                                                                                                                                                                                            # without rebuilding the image.
+                                                                                                                                                                                                                                                                                                  - ./frontend:/app
+                                                                                                                                                                                                                                                                                                        # Prevent the host node_modules from overwriting the container's copy
+                                                                                                                                                                                                                                                                                                              - /app/node_modules
+                                                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                                                              # ── Named volumes ────────────────────────────────────────────────────────────
+                                                                                                                                                                                                                                                                                                              volumes:
+                                                                                                                                                                                                                                                                                                                postgres_data:
