@@ -80,6 +80,24 @@ services:
       # Prevent the host node_modules from overwriting the container's copy
       - /app/node_modules
 
+  # ── Live data collectors ─────────────────────────────────────────────────────
+  collector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Same DATABASE_URL override as the api service — "db" resolves inside Docker.
+      DATABASE_URL: ${DATABASE_URL}
+    # Override the default CMD (uvicorn) to run the collectors instead.
+    command: ["python", "-m", "collectors.run_all"]
+    depends_on:
+      db:
+        condition: service_healthy
+    # No ports — the collector writes directly to the DB and does not serve HTTP.
+
 # ── Named volumes ────────────────────────────────────────────────────────────
 volumes:
   postgres_data:

@@ -15,15 +15,22 @@ function PricePanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchLatestPrice()
-      .then((data) => {
-        setCandle(data);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    const fetchData = () => {
+      fetchLatestPrice()
+        .then((data) => {
+          setCandle(data);
+          setError(null);   // clear any previous error on success
+          setLoading(false);
+        })
+        .catch((err: Error) => {
+          setError(err.message);
+          setLoading(false);
+        });
+    };
+
+    fetchData();                                  // fetch immediately on mount
+    const interval = setInterval(fetchData, 15_000); // then re-fetch every 15 s
+    return () => clearInterval(interval);         // clean up on unmount
   }, []);
 
   return (
@@ -34,7 +41,7 @@ function PricePanel() {
 
       {error && (
         <p style={panelStyles.error}>
-          Could not load price data. (Backend not yet running — wire up in Phase 4.)
+          Could not load price data — check that the API is running.
         </p>
       )}
 

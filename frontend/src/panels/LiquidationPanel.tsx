@@ -14,15 +14,22 @@ function LiquidationPanel() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchRecentLiquidations(10)
-      .then((data) => {
-        setEvents(data);
-        setLoading(false);
-      })
-      .catch((err: Error) => {
-        setError(err.message);
-        setLoading(false);
-      });
+    const fetchData = () => {
+      fetchRecentLiquidations(10)
+        .then((data) => {
+          setEvents(data);
+          setError(null);   // clear any previous error on success
+          setLoading(false);
+        })
+        .catch((err: Error) => {
+          setError(err.message);
+          setLoading(false);
+        });
+    };
+
+    fetchData();                                  // fetch immediately on mount
+    const interval = setInterval(fetchData, 10_000); // then re-fetch every 10 s
+    return () => clearInterval(interval);         // clean up on unmount
   }, []);
 
   return (
@@ -33,7 +40,7 @@ function LiquidationPanel() {
 
       {error && (
         <p style={panelStyles.error}>
-          Could not load liquidation data. (Backend not yet running — wire up in Phase 4.)
+          Could not load liquidation data — check that the API is running.
         </p>
       )}
 
