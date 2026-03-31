@@ -151,12 +151,13 @@ blueprint and build order.
 
 ## Status
 
-**Phase 5 complete — first end-to-end mock data flow.**
-The full stack runs locally via Docker Compose. The database is seeded with
-static BTC test data and all three live panels (Price, Liquidations, Order Book)
-render real data fetched from the backend API.
+**Phase 6 complete — live Binance data collectors.**
+The full stack runs locally via Docker Compose. Three collector workers stream
+live BTC market data from Binance WebSocket APIs into PostgreSQL continuously.
+The dashboard panels poll the API every 10–15 seconds and display fresh data
+without a manual page reload.
 
-Next: Phase 6 — replace mock data with live Binance WebSocket collectors.
+Next: Phase 7 — AI-assisted analysis panel (Claude API integration).
 
 ---
 
