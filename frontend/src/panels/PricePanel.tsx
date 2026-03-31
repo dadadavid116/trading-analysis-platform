@@ -3,10 +3,10 @@ import { fetchLatestPrice, PriceCandle } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
- * PricePanel — displays the latest BTC price candle.
+ * PricePanel — displays the latest BTC/USDT 1-minute price candle.
  *
- * Phase 3: fetches from the backend API stub.
- * In Phase 5 (mock data flow) this will render against real data.
+ * Data source: live Binance kline stream via the price collector (Phase 6).
+ * Polls the API every 15 seconds. A new candle is available roughly every minute.
  * A Recharts line chart can be added here [Later] using fetchPriceHistory().
  */
 function PricePanel() {

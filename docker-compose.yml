@@ -1,9 +1,11 @@
 # docker-compose.yml — Local development stack
 #
-# Starts three services:
-#   db       — PostgreSQL 16 (persistent data volume)
-#   api      — FastAPI backend (built from backend/Dockerfile)
-#   frontend — React/Vite dev server (built from frontend/Dockerfile, dev stage)
+# Starts five services:
+#   db        — PostgreSQL 16 (persistent data volume)
+#   api       — FastAPI backend (built from backend/Dockerfile)
+#   collector — Live Binance WebSocket data collectors
+#   analysis  — AI market summary worker (Claude API, requires ANTHROPIC_API_KEY)
+#   frontend  — React/Vite dev server (built from frontend/Dockerfile, dev stage)
 #
 # Prerequisites:
 #   1. Copy .env.example to .env and adjust values if needed.
@@ -79,6 +81,24 @@ services:
       - ./frontend:/app
       # Prevent the host node_modules from overwriting the container's copy
       - /app/node_modules
+
+  # ── AI analysis worker ───────────────────────────────────────────────────────
+  analysis:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    # Override the default CMD (uvicorn) to run the analysis worker instead.
+    command: ["python", "-m", "analysis.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+    # No ports — the analysis worker reads from DB and writes summaries back.
+    # Requires ANTHROPIC_API_KEY to be set in .env — worker skips silently if missing.
 
   # ── Live data collectors ─────────────────────────────────────────────────────
   collector:

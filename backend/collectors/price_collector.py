@@ -43,8 +43,10 @@ async def run() -> None:
 
                     candle = PriceCandle(
                         symbol=kline["s"],
+                        # kline["T"] is the candle close time (end of the 1m window).
+                        # We use close time because we only store completed candles.
                         timestamp=datetime.fromtimestamp(
-                            kline["t"] / 1000, tz=timezone.utc
+                            kline["T"] / 1000, tz=timezone.utc
                         ),
                         open=float(kline["o"]),
                         high=float(kline["h"]),

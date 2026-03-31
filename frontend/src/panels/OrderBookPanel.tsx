@@ -3,11 +3,11 @@ import { fetchOrderBookSnapshot, OrderBookSnapshot } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
- * OrderBookPanel — displays the latest BTC order book snapshot.
+ * OrderBookPanel — displays the latest BTC/USDT order book snapshot.
  *
- * Phase 3: fetches from the backend API stub.
+ * Data source: live Binance depth20 stream via the order book collector (Phase 6).
+ * Polls the API every 10 seconds. The collector writes a new snapshot every 5 seconds.
  * Shows the top 5 bid and ask levels.
- * In Phase 5 (mock data flow) this will render against real data.
  */
 function OrderBookPanel() {
   const [snapshot, setSnapshot] = useState<OrderBookSnapshot | null>(null);

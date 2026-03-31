@@ -3,10 +3,10 @@ import { fetchRecentLiquidations, LiquidationEvent } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
- * LiquidationPanel — displays recent BTC liquidation events.
+ * LiquidationPanel — displays recent BTC/USDT liquidation events.
  *
- * Phase 3: fetches from the backend API stub.
- * In Phase 5 (mock data flow) this will render against real data.
+ * Data source: live Binance Futures forceOrder stream via the liquidation collector (Phase 6).
+ * Polls the API every 10 seconds. Events appear as they occur on Binance Futures.
  */
 function LiquidationPanel() {
   const [events, setEvents] = useState<LiquidationEvent[]>([]);
