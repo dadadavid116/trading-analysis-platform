@@ -9,8 +9,6 @@ Start the server with:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
-
 # ── Create the FastAPI application ────────────────────────────────────────────
 app = FastAPI(
     title="Trading Analysis Platform API",
@@ -19,11 +17,24 @@ app = FastAPI(
 )
 
 # ── CORS middleware ───────────────────────────────────────────────────────────
-# Allow the React frontend (running on a different port) to call this API.
-# In production, replace "*" with your actual frontend domain.
+# Allow the React dev server (Vite default: port 5173) and a plain localhost
+# origin to call this API during local development.
+#
+# Note: allow_origins=["*"] cannot be combined with allow_credentials=True
+# (browsers will reject the response). Use an explicit origin list instead.
+#
+# When deploying to a VPS, add your production domain to this list or move it
+# to an environment variable.
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",   # Vite dev server (React frontend)
+    "http://localhost:3000",   # Alternative dev port
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
