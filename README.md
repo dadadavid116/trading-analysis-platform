@@ -1,144 +1,167 @@
 # Trading Analysis Platform
 
-A VPS-hosted crypto market monitoring platform with multiple visual panels for
-price, liquidation, liquidity, alerts, and AI-assisted analysis.
+A VPS-hosted crypto market monitoring platform with dashboard panels for
+price, liquidations, order book, alerts, and AI-assisted analysis.
 
 ## Goal
 
 Build a personal market intelligence dashboard for BTC first, then evolve it
-into a shareable and customizable platform.
+into a shareable and customisable platform.
 
 ## MVP Features
 
-- Live market monitoring (price, liquidations, order-book)
-- - Multiple dashboard panels
-  - - Historical data storage in PostgreSQL
-    - - AI-assisted market summaries (Claude API)
-      - - Alerts
-       
-        - ## Planned Stack
-       
-        - | Layer      | Technology                        |
-        - |------------|-----------------------------------|
-        - | Backend    | Python / FastAPI                  |
-        - | Frontend   | React + TypeScript + Vite         |
-        - | Database   | PostgreSQL 16                     |
-        - | Runtime    | Docker Compose (local + VPS)      |
-       
-        - ---
+- Live market monitoring (price, liquidations, order book)
+- Multiple dashboard panels
+- Historical data storage in PostgreSQL
+- AI-assisted market summaries (Claude API) — coming soon
+- Alerts — coming soon
 
-        ## Running Locally with Docker Compose
+## Stack
 
-        ### Prerequisites
+| Layer    | Technology                   |
+|----------|------------------------------|
+| Backend  | Python / FastAPI             |
+| Frontend | React + TypeScript + Vite    |
+| Database | PostgreSQL 16                |
+| Runtime  | Docker Compose (local + VPS) |
 
-        - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker
-        -   Engine + Compose plugin on Linux)
-        -   - Git
-         
-            - ### 1. Clone the repo
-         
-            - ```bash
-              git clone https://github.com/dadadavid116/trading-analysis-platform.git
-              cd trading-analysis-platform
-              ```
+---
 
-              ### 2. Create your `.env` file
+## Running Locally with Docker Compose
 
-              ```bash
-              cp .env.example .env
-              ```
+### Prerequisites
 
-              The defaults in `.env.example` work out of the box for local development.
-              You only need to change `POSTGRES_PASSWORD` if you want a stronger password.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose plugin on Linux)
+- Git
 
-              ### 3. Start the stack
+### 1. Clone the repo
 
-              ```bash
-              docker compose up --build
-              ```
+```bash
+git clone https://github.com/dadadavid116/trading-analysis-platform.git
+cd trading-analysis-platform
+```
 
-              Docker Compose will:
-              1. Pull `postgres:16` and start the database.
-              2. 2. Build and start the FastAPI backend (`api`) once the database is healthy.
-                 3. 3. Build and start the React/Vite dev server (`frontend`) once the API is up.
-                   
-                    4. First build takes a few minutes while Docker downloads base images and installs
-                    5. dependencies. Subsequent starts (without `--build`) are much faster.
-                   
-                    6. ### 4. Open the app
-                   
-                    7. | Service  | URL                        |
-                    8. |----------|----------------------------|
-                    9. | Frontend | http://localhost:5173      |
-                    10. | API docs | http://localhost:8000/docs |
-                    11. | API root | http://localhost:8000      |
-                   
-                    12. The frontend dev server proxies all `/api/*` requests to the backend
-                    13. automatically — no CORS configuration needed.
-                   
-                    14. ### 5. Stop the stack
-                   
-                    15. ```bash
-                        docker compose down
-                        ```
+### 2. Create your `.env` file
 
-                        PostgreSQL data is stored in the `postgres_data` Docker volume and survives
-                        container restarts. To wipe the database volume completely:
+```bash
+cp .env.example .env
+```
 
-                        ```bash
-                        docker compose down -v
-                        ```
+The defaults in `.env.example` work out of the box for local development.
+You only need to change `POSTGRES_PASSWORD` if you want a stronger password.
 
-                        ### Useful commands
+### 3. Start the stack
 
-                        ```bash
-                        # View logs from all services
-                        docker compose logs -f
+```bash
+docker compose up --build
+```
 
-                        # View logs from one service only
-                        docker compose logs -f api
+Docker Compose will:
+1. Pull `postgres:16` and start the database.
+2. Run `scripts/init_db.sql` automatically — this creates the tables and seeds BTC mock data.
+3. Build and start the FastAPI backend (`api`) once the database is healthy.
+4. Build and start the React/Vite dev server (`frontend`) once the API is up.
 
-                        # Rebuild a single service after code changes
-                        docker compose up --build api
+First build takes a few minutes while Docker downloads base images and installs
+dependencies. Subsequent starts (without `--build`) are much faster.
 
-                        # Open a psql shell in the running database container
-                        docker compose exec db psql -U trading -d trading_db
-                        ```
+### 4. Open the app
 
-                        ---
+| Service  | URL                        |
+|----------|----------------------------|
+| Frontend | http://localhost:5173      |
+| API docs | http://localhost:8000/docs |
+| API root | http://localhost:8000      |
 
-                        ## Project Structure
+The frontend dev server proxies all `/api/*` requests to the backend automatically.
 
-                        ```
-                        trading-analysis-platform/
-                        ├── backend/          # FastAPI app, collectors, models
-                        ├── frontend/         # React + TypeScript + Vite dashboard
-                        ├── docs/             # Architecture and roadmap docs
-                        ├── scripts/          # One-off helper scripts
-                        ├── tests/            # Backend (pytest) and frontend (vitest) tests
-                        ├── docker-compose.yml
-                        ├── .env.example
-                        └── README.md
-                        ```
+### 5. Verify mock data is flowing
 
-                        See [`docs/architecture.md`](docs/architecture.md) for the full technical
-                        blueprint and build order.
+**Option A — Browser**
+Open http://localhost:5173. The Price, Liquidation, and Order Book panels should
+all show seeded BTC data immediately.
 
-                        ---
+**Option B — API docs**
+Open http://localhost:8000/docs and try these endpoints:
+- `GET /api/price/latest` — returns the most recent BTC candle
+- `GET /api/price/history` — returns the last 60 candles
+- `GET /api/liquidations/recent` — returns the last 20 liquidation events
+- `GET /api/orderbook/snapshot` — returns the current order book snapshot
 
-                        ## Status
+**Option C — Database directly**
+```bash
+docker compose exec db psql -U trading -d trading_db
+```
+Then run:
+```sql
+SELECT * FROM price_candles ORDER BY timestamp DESC LIMIT 5;
+SELECT * FROM liquidations ORDER BY timestamp DESC LIMIT 5;
+SELECT id, symbol, timestamp FROM orderbook_snapshots;
+```
 
-                        Phase 4 complete — Docker / local runtime.
-                        The full stack (db + api + frontend) runs together locally via Docker Compose.
+### 6. Stop the stack
 
-                        Next: Phase 5 — seed the database with static test data and confirm the
-                        frontend renders it end-to-end through the full stack.
+```bash
+docker compose down
+```
 
-                        ---
+PostgreSQL data is stored in the `postgres_data` Docker volume and survives
+container restarts. To wipe the database and re-seed from scratch:
 
-                        ## Notes
+```bash
+docker compose down -v
+docker compose up --build
+```
 
-                        - This repo is for original development.
-                        - - External repositories are used only as references for inspiration, not for
-                          -   direct copying.
-                          -   - Secrets and real API keys must never be committed. Use `.env` (git-ignored).
+### Useful commands
+
+```bash
+# View logs from all services
+docker compose logs -f
+
+# View logs from one service only
+docker compose logs -f api
+
+# Rebuild a single service after code changes
+docker compose up --build api
+
+# Open a psql shell in the running database container
+docker compose exec db psql -U trading -d trading_db
+```
+
+---
+
+## Project Structure
+
+```
+trading-analysis-platform/
+├── backend/          # FastAPI app, collectors, models, routers, schemas
+├── frontend/         # React + TypeScript + Vite dashboard
+├── scripts/          # init_db.sql — table creation and seed data
+├── docs/             # Architecture and roadmap docs
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+See [`docs/architecture.md`](docs/architecture.md) for the full technical
+blueprint and build order.
+
+---
+
+## Status
+
+**Phase 5 complete — first end-to-end mock data flow.**
+The full stack runs locally via Docker Compose. The database is seeded with
+static BTC test data and all three live panels (Price, Liquidations, Order Book)
+render real data fetched from the backend API.
+
+Next: Phase 6 — replace mock data with live Binance WebSocket collectors.
+
+---
+
+## Notes
+
+- This repo is for original development.
+- External repositories are used only as references for inspiration, not for direct copying.
+- Secrets and real API keys must never be committed. Use `.env` (git-ignored).

@@ -6,14 +6,34 @@ Start the server with:
     uvicorn app.main:app --reload
 """
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.database import engine, Base
+# Import models so SQLAlchemy registers them with Base before create_all runs.
+import app.models.price        # noqa: F401
+import app.models.liquidation  # noqa: F401
+import app.models.orderbook    # noqa: F401
+from app.routers import price, liquidations, orderbook
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create any tables that don't already exist.
+    # In Docker this is a no-op because init_db.sql already created them.
+    # Outside Docker (running uvicorn directly) this creates the tables automatically.
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
 
 # ── Create the FastAPI application ────────────────────────────────────────────
 app = FastAPI(
     title="Trading Analysis Platform API",
     description="Backend API for the crypto market monitoring dashboard.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # ── CORS middleware ───────────────────────────────────────────────────────────
@@ -51,13 +71,12 @@ async def health_check():
     return {"status": "ok"}
 
 
-# ── Routers (added here as they are implemented) ──────────────────────────────
-# from app.routers import price, liquidations, orderbook
-# app.include_router(price.router, prefix="/api")
-# app.include_router(liquidations.router, prefix="/api")
-# app.include_router(orderbook.router, prefix="/api")
-#
+# ── Routers ───────────────────────────────────────────────────────────────────
+app.include_router(price.router,        prefix="/api")
+app.include_router(liquidations.router, prefix="/api")
+app.include_router(orderbook.router,    prefix="/api")
+
 # [Later] alerts and analysis routers:
 # from app.routers import alerts, analysis
-# app.include_router(alerts.router, prefix="/api")
+# app.include_router(alerts.router,   prefix="/api")
 # app.include_router(analysis.router, prefix="/api")

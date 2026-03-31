@@ -25,6 +25,9 @@ services:
     volumes:
       # Named volume so data persists across container restarts
       - postgres_data:/var/lib/postgresql/data
+      # SQL scripts here are run automatically on first database initialisation.
+      # They will NOT run again unless you wipe the volume: docker compose down -v
+      - ./scripts:/docker-entrypoint-initdb.d
     ports:
       # Expose to host so you can connect with a local DB tool (e.g. psql, TablePlus)
       - "5432:5432"
