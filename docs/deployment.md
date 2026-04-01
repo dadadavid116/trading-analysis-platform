@@ -61,9 +61,9 @@ DOMAIN=yourdomain.com
 # CORS — set to your domain only (no localhost origins in production)
 CORS_ALLOWED_ORIGINS=https://yourdomain.com
 
-# Dashboard access control — generate a strong key and set both values
-DASHBOARD_API_KEY=<generate with: python -c "import secrets; print(secrets.token_urlsafe(32))">
-VITE_DASHBOARD_API_KEY=<same value as DASHBOARD_API_KEY>
+# Dashboard access control — see §7 for instructions
+CADDY_USER=<your chosen username>
+CADDY_HASHED_PASSWORD=<bcrypt hash — see §7>
 ```
 
 To enable the Telegram bot and alert notifications, also set:
@@ -88,10 +88,9 @@ Docker will:
 1. Pull `postgres:16` and initialise the database.
 2. Build and start the FastAPI backend (`api`).
 3. Build the React app as a static bundle and serve it via Nginx (`frontend`).
-   The `VITE_DASHBOARD_API_KEY` value is inlined into the bundle at this step.
 4. Start the `collector`, `analysis`, and `alerts` workers.
 5. Start `caddy` — which immediately requests a Let's Encrypt certificate for
-   your domain and begins proxying traffic.
+   your domain and begins proxying traffic with Basic Auth enforced.
 
 > **First build** takes a few minutes while Docker builds images and npm installs
 > packages. Subsequent starts (without `--build`) are much faster.
@@ -108,8 +107,9 @@ docker compose -f docker-compose.prod.yml logs -f
 docker compose -f docker-compose.prod.yml ps
 ```
 
-Open `https://yourdomain.com` in a browser. The dashboard should load with
-live BTC data within a minute.
+Open `https://yourdomain.com` in a browser. You should see a login prompt
+(HTTP Basic Auth). Enter your `CADDY_USER` and password. The dashboard should
+load with live BTC data within a minute of first login.
 
 ---
 
@@ -117,7 +117,7 @@ live BTC data within a minute.
 
 | Service    | Public? | Description |
 |------------|---------|-------------|
-| `caddy`    | **Yes** (80, 443) | Reverse proxy + automatic HTTPS |
+| `caddy`    | **Yes** (80, 443) | Reverse proxy + automatic HTTPS + Basic Auth |
 | `frontend` | Internal only | Nginx serving the built React app |
 | `api`      | Internal only | FastAPI — accessed via Caddy at `/api/*` |
 | `collector`| Internal only | Binance WebSocket data collectors |
@@ -129,31 +129,60 @@ live BTC data within a minute.
 
 ## 7. Access control
 
-The dashboard and all `/api/*` routes are protected by a static API key
-(`X-API-Key` header). The key is configured via two environment variables
-that must be set to the same value:
+Authentication is handled at the **Caddy layer** using HTTP Basic Auth.
+Caddy rejects unauthenticated requests before they touch the application —
+no secret is embedded in or exposed by the frontend bundle.
 
 | Variable | Where used |
 |---|---|
-| `DASHBOARD_API_KEY` | Backend — validates incoming requests |
-| `VITE_DASHBOARD_API_KEY` | Frontend — inlined at build time, sent with every request |
+| `CADDY_USER` | Caddy — username shown in the browser login prompt |
+| `CADDY_HASHED_PASSWORD` | Caddy — bcrypt hash of your password |
 
-The `/health` endpoint is intentionally unauthenticated so that uptime
-monitoring tools can reach it without a key.
+The `/health` endpoint is intentionally excluded from auth so that uptime
+monitoring tools can reach it without credentials.
 
-**Generate a key:**
+**Step 1 — Generate a password hash**
+
+Run this on your VPS (no extra tools needed):
+
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
+docker run --rm caddy:2-alpine caddy hash-password --plaintext 'yourpassword'
 ```
 
-**When auth is disabled (key not set):**
-A warning is logged at startup. This is acceptable for local development
-but must not be used in production.
+This outputs a string like `$2a$14$...`. Copy the full hash.
+
+**Step 2 — Add to `.env`**
+
+```dotenv
+CADDY_USER=admin
+CADDY_HASHED_PASSWORD=$2a$14$...paste full hash here...
+```
+
+**Step 3 — Restart Caddy**
+
+```bash
+docker compose -f docker-compose.prod.yml restart caddy
+```
+
+**If `CADDY_USER` or `CADDY_HASHED_PASSWORD` are not set**, Caddy will fail
+to start with a config error. This is intentional — failing loudly is safer
+than silently disabling authentication.
 
 **Local development:**
-Leave both variables empty in `.env`. The backend skips key validation and
-the frontend sends no `X-API-Key` header. The full dev stack works without
-any credential setup.
+Caddy is not used in the local dev stack (`docker-compose.yml`). The Vite
+dev server and FastAPI are accessed directly on their ports. No auth setup
+is needed for local development.
+
+**Optional secondary layer:**
+Setting `DASHBOARD_API_KEY` in `.env` also enables an `X-API-Key` check
+directly in FastAPI on all `/api/*` routes. This is not required when Caddy
+Basic Auth is the primary gate. Leave it empty (the default) to rely on
+Caddy alone.
+
+**If you accidentally expose a credential:**
+Immediately generate a new password, update `.env` with the new bcrypt hash,
+and restart Caddy: `docker compose -f docker-compose.prod.yml restart caddy`.
+If `DASHBOARD_API_KEY` is also set, rotate it too and rebuild the stack.
 
 ---
 
@@ -186,9 +215,6 @@ docker compose -f docker-compose.prod.yml up -d --build
 This rebuilds only the services whose image has changed (Docker layer cache),
 which is usually just `api` and `frontend` after code changes.
 
-> **Note:** After a `git pull`, rebuild with `--build` to ensure the frontend
-> bundle is rebuilt with the current `VITE_DASHBOARD_API_KEY` value.
-
 ---
 
 ## 10. Useful commands
@@ -198,7 +224,7 @@ which is usually just `api` and `frontend` after code changes.
 docker compose -f docker-compose.prod.yml logs -f api
 
 # Restart a single service (e.g. after updating .env)
-docker compose -f docker-compose.prod.yml restart analysis
+docker compose -f docker-compose.prod.yml restart caddy
 
 # Stop the stack (data is preserved in the postgres_data volume)
 docker compose -f docker-compose.prod.yml down
@@ -278,8 +304,8 @@ For local development, use `docker-compose.yml` (the default):
 docker compose up --build
 ```
 
-Leave `DASHBOARD_API_KEY` and `VITE_DASHBOARD_API_KEY` empty in `.env`.
-Authentication is automatically disabled when the key is not set.
+Caddy is not in the local dev stack. The Vite dev server and FastAPI are
+accessed directly on their ports with no authentication required.
 
 See the main [README.md](../README.md) for full local dev instructions.
 
@@ -287,10 +313,31 @@ See the main [README.md](../README.md) for full local dev instructions.
 
 ## 14. Export / review bundle hygiene
 
-When sharing code for review, **never include**:
-- `.env` — contains real secrets
-- `node_modules/` — large binary artefact, not part of source
-- `.claude/` or any local IDE/tool settings directories
+When sharing code for review, use the export script to create a clean bundle:
 
-The `.gitignore` already excludes `.env` and `node_modules/`. Double-check
-before creating a zip or uploading to any external tool.
+```bash
+bash scripts/export.sh
+# Output: ../trading-analysis-platform-review-YYYYMMDD_HHMMSS.zip
+```
+
+The script uses `git archive`, which exports only version-controlled files and
+automatically excludes everything in `.gitignore`.
+
+**Never include in a review bundle:**
+- `.env` — contains real secrets (passwords, API keys)
+- `node_modules/` — large binary artefact, not source code
+- `.claude/` or any local IDE/tool settings directories
+- `frontend/dist/` — build output, regenerated on deploy
+- Any `*.pyc` / `__pycache__` directories
+
+**Verify a bundle is clean before sharing:**
+```bash
+unzip -l yourfile.zip | grep -E '\.env|node_modules|\.claude'
+# Should produce no output
+```
+
+**If you accidentally commit or share a secret:**
+1. Rotate the secret immediately (generate a new password/key).
+2. Update `.env` and restart the affected service.
+3. If committed to git: rewrite history with `git filter-repo` or contact
+   your git host's support to remove cached objects.

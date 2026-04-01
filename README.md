@@ -16,7 +16,7 @@ into a shareable and customisable platform.
 - AI-assisted market summaries via Claude API
 - Configurable price and liquidation alerts with full lifecycle management (create, list, delete)
 - Telegram bot for remote monitoring and alert management (restricted to configured chat ID)
-- Static API key access control protecting the dashboard and all API routes
+- Caddy-layer HTTP Basic Auth protecting the dashboard and all API routes (no secret in browser bundle)
 
 ## Stack
 
@@ -50,8 +50,8 @@ cp .env.example .env
 ```
 
 The defaults in `.env.example` work out of the box for local development.
-`DASHBOARD_API_KEY` and `VITE_DASHBOARD_API_KEY` are intentionally empty —
-authentication is disabled in local dev. Set them only for VPS deployment.
+`CADDY_USER` and `CADDY_HASHED_PASSWORD` are only needed for VPS deployment —
+Caddy is not part of the local dev stack.
 
 ### 3. Start the stack
 
@@ -153,7 +153,7 @@ git clone https://github.com/dadadavid116/trading-analysis-platform.git
 cd trading-analysis-platform
 cp .env.example .env
 # Edit .env: set DOMAIN, POSTGRES_PASSWORD, ANTHROPIC_API_KEY,
-#             CORS_ALLOWED_ORIGINS, DASHBOARD_API_KEY, VITE_DASHBOARD_API_KEY
+#             CORS_ALLOWED_ORIGINS, CADDY_USER, CADDY_HASHED_PASSWORD
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -184,7 +184,7 @@ guide.
 
 ## Status
 
-**Phase 12 complete — Access control / public hardening.**
+**Phase 13 complete — Auth hardening + release hygiene.**
 The full stack runs locally via Docker Compose (seven services). Live BTC data
 is collected from Binance WebSocket streams and displayed across all five
 dashboard panels. An AI analysis worker generates market summaries every 10
@@ -194,16 +194,20 @@ commands (restricted to the configured `TELEGRAM_CHAT_ID`), and sends alert
 notifications to a configured chat. Alerts can be deleted from the dashboard or
 via `DELETE /api/alerts/{id}`.
 
-All `/api/*` routes are protected by a static API key (`X-API-Key` header).
-Set `DASHBOARD_API_KEY` and `VITE_DASHBOARD_API_KEY` in `.env` before VPS
-deployment. Auth is disabled automatically in local development (empty key).
+Access control is enforced at the Caddy layer via HTTP Basic Auth — both the
+dashboard and all API routes are protected before any request reaches the
+application. No secret is embedded in the frontend bundle. Set `CADDY_USER`
+and `CADDY_HASHED_PASSWORD` in `.env` before VPS deployment. Local development
+requires no auth setup.
 
 A production deployment path exists via `docker-compose.prod.yml` with Caddy,
 automatic HTTPS, and Nginx serving the frontend. See
 [`docs/deployment.md`](docs/deployment.md) for the full VPS deployment guide.
 
-**Still to come:** Telegram Mini App, Alembic migrations,
-automated backups, CI/CD.
+Use `bash scripts/export.sh` to create a clean review bundle (no secrets, no
+node_modules) using `git archive`.
+
+**Still to come:** Telegram Mini App, Alembic migrations, automated backups, CI/CD.
 
 ---
 

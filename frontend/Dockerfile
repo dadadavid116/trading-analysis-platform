@@ -3,6 +3,10 @@
 #
 # For local development (via docker-compose), the dev stage is used.
 # For production (VPS), the prod stage serves the built static files via Nginx.
+#
+# Authentication note (Phase 13):
+# Access control is handled at the Caddy layer (Basic Auth), not in the bundle.
+# No auth secrets are passed to this build.
 
 # ── Stage 1: Dev ──────────────────────────────────────────────────────────────
 FROM node:20-slim AS dev
@@ -32,12 +36,6 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 COPY . .
-
-# Accept the dashboard API key at build time so Vite can inline it.
-# Pass via docker-compose.prod.yml build args (see VITE_DASHBOARD_API_KEY).
-# Leave empty for local development — auth is disabled when the key is not set.
-ARG VITE_DASHBOARD_API_KEY=""
-ENV VITE_DASHBOARD_API_KEY=$VITE_DASHBOARD_API_KEY
 
 RUN npm run build
 

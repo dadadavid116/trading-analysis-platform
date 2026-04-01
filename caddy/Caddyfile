@@ -3,19 +3,43 @@
 # Caddy is the single public entry point on the VPS.
 # It handles HTTPS automatically via Let's Encrypt (no manual cert setup needed).
 #
+# Authentication (Phase 13)
+# -------------------------
+# HTTP Basic Authentication is applied at the Caddy layer.
+# This protects the entire site — both the React frontend and all /api/* routes —
+# before any request reaches the application.
+# No secret is embedded in the frontend bundle.
+#
+# Credentials are set via environment variables in .env:
+#   CADDY_USER            — username (e.g. admin)
+#   CADDY_HASHED_PASSWORD — bcrypt hash of your chosen password
+#
+# Generate a password hash on the VPS:
+#   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'yourpassword'
+#
+# The /health path is exempt from auth so uptime monitors work without credentials.
+#
 # DOMAIN is read from the environment (set DOMAIN=yourdomain.com in .env).
-#
-# Public routing:
-#   /api/*   → FastAPI backend (api:8000, internal Docker network only)
-#   /*       → React frontend  (frontend:80, internal Docker network only)
-#
-# Internal services (db, api, collector, analysis, alerts) are not exposed
-# on public ports — only Caddy binds to 80 and 443.
+# Internal services (db, api, workers, telegram) are not exposed on public ports.
 
 {$DOMAIN} {
-    # Route API requests to the FastAPI backend service.
-    reverse_proxy /api/* api:8000
+    # Public health endpoint — uptime monitors reach this without credentials.
+    handle /health {
+        reverse_proxy api:8000
+    }
 
-    # Route all other requests to the Nginx-served React frontend.
-    reverse_proxy * frontend:80
+    # All other paths require HTTP Basic Authentication.
+    # The browser shows a native login prompt; credentials are cached for the session.
+    # Caddy rejects unauthenticated requests before they touch the application.
+    handle {
+        basic_auth {
+            {$CADDY_USER} {$CADDY_HASHED_PASSWORD}
+        }
+
+        # Route API requests to the FastAPI backend service.
+        reverse_proxy /api/* api:8000
+
+        # Route all other requests to the Nginx-served React frontend.
+        reverse_proxy * frontend:80
+    }
 }

@@ -71,13 +71,11 @@ The dev server starts at http://localhost:5173 by default.
 
 ## Authentication
 
-All API calls include an `X-API-Key` header when `VITE_DASHBOARD_API_KEY` is
-set at build time. In local development the env var is left empty and the
-backend skips key validation automatically.
+Access control is handled entirely at the **Caddy layer** (HTTP Basic Auth).
+The browser shows a native login prompt; credentials are cached for the session.
 
-For VPS production builds, `VITE_DASHBOARD_API_KEY` is passed as a Docker
-build arg (see `docker-compose.prod.yml`) and inlined into the bundle by Vite.
-It must match the `DASHBOARD_API_KEY` set for the backend service.
+The frontend makes plain API requests — no `X-API-Key` header, no secrets in
+the bundle or in the source code. `VITE_DASHBOARD_API_KEY` has been removed.
 
 ## Next Phase
 

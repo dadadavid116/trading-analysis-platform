@@ -9,9 +9,9 @@
  *
  * Authentication
  * --------------
- * When VITE_DASHBOARD_API_KEY is set (production), every request includes an
- * ``X-API-Key`` header. In local development the env var is left empty and the
- * backend skips key validation automatically.
+ * Access control is handled entirely at the Caddy layer (HTTP Basic Auth).
+ * The browser handles the auth prompt and caches credentials for the session.
+ * No secret is embedded in or sent from this module.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -45,18 +45,6 @@ export interface OrderBookSnapshot {
   asks: [number, number][];
 }
 
-// ── Auth helpers ───────────────────────────────────────────────────────────────
-
-const _API_KEY = import.meta.env.VITE_DASHBOARD_API_KEY as string | undefined;
-
-/**
- * Returns an object with the X-API-Key header when the env var is set,
- * or an empty object for local development (auth disabled).
- */
-function authHeader(): Record<string, string> {
-  return _API_KEY ? { 'X-API-Key': _API_KEY } : {};
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const BASE_URL = '/api';
@@ -65,9 +53,7 @@ const BASE_URL = '/api';
  * Generic fetch wrapper. Throws an error if the response is not OK.
  */
 async function apiFetch<T>(path: string): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    headers: authHeader(),
-  });
+  const response = await fetch(`${BASE_URL}${path}`);
   if (!response.ok) {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
   }
@@ -110,9 +96,7 @@ export interface AnalysisSummary {
  * Throws on other errors (network failure, 5xx, etc.).
  */
 export async function fetchLatestAnalysis(): Promise<AnalysisSummary | null> {
-  const response = await fetch(`${BASE_URL}/analysis/latest`, {
-    headers: authHeader(),
-  });
+  const response = await fetch(`${BASE_URL}/analysis/latest`);
   if (response.status === 404) return null;  // worker hasn't run yet
   if (!response.ok) {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
@@ -151,7 +135,7 @@ export function fetchAlerts(): Promise<Alert[]> {
 export async function createAlert(body: AlertCreate): Promise<Alert> {
   const response = await fetch(`${BASE_URL}/alerts/`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...authHeader() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!response.ok) {
@@ -164,7 +148,6 @@ export async function createAlert(body: AlertCreate): Promise<Alert> {
 export async function deleteAlert(id: number): Promise<void> {
   const response = await fetch(`${BASE_URL}/alerts/${id}`, {
     method: 'DELETE',
-    headers: authHeader(),
   });
   if (!response.ok && response.status !== 404) {
     throw new Error(`API error ${response.status}: ${response.statusText}`);

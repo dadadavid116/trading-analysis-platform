@@ -1,29 +1,30 @@
 """
-auth.py — API key authentication dependency.
+auth.py — Optional backend API key dependency (secondary defence layer).
 
-The dashboard API is protected by a static API key passed in the
-``X-API-Key`` request header.
+Primary access control (Phase 13)
+----------------------------------
+The Caddy reverse proxy enforces HTTP Basic Authentication before any request
+reaches the application. Set ``CADDY_USER`` and ``CADDY_HASHED_PASSWORD`` in
+``.env`` — see ``caddy/Caddyfile`` and ``docs/deployment.md §7``.
 
-Configuration
--------------
-DASHBOARD_API_KEY
-    Set in .env. When non-empty, all ``/api/*`` requests must include::
+This module (secondary / optional)
+------------------------------------
+``DASHBOARD_API_KEY`` adds a second check directly in FastAPI on all
+``/api/*`` routes. It is **not required** when Caddy Basic Auth is the primary
+gate, and is not used by the frontend. It can be useful for:
 
-        X-API-Key: <your key>
+- Defence-in-depth (a second barrier if Caddy is misconfigured).
+- Direct API access from trusted scripts or tools that bypass the browser.
 
-    If the header is missing or wrong the API responds with HTTP 401.
+Leave ``DASHBOARD_API_KEY`` empty (the default) to rely on Caddy auth alone.
+When set, every request to ``/api/*`` must also supply::
 
-    When the value is empty (the default) authentication is **disabled**
-    and a warning is logged at startup. This is the expected behaviour for
-    local development. Always set a strong key before VPS deployment.
+    X-API-Key: <your key>
 
-Usage
------
-The single exported dependency ``require_api_key`` is applied to every
-``/api/*`` router in ``app/main.py``. The ``/health`` endpoint is
-intentionally excluded so monitoring tools can reach it without a key.
+The ``/health`` endpoint is intentionally excluded from this check.
 """
 
+import hmac
 import logging
 
 from fastapi import HTTPException, Security, status
@@ -39,14 +40,15 @@ _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 async def require_api_key(api_key: str | None = Security(_api_key_header)) -> None:
     """Validate the ``X-API-Key`` header against ``DASHBOARD_API_KEY``.
 
-    - If ``DASHBOARD_API_KEY`` is empty (local dev default), this is a no-op.
+    - If ``DASHBOARD_API_KEY`` is empty (default), this is a no-op.
     - If set, a missing or incorrect key raises HTTP 401.
+    - Comparison uses ``hmac.compare_digest`` to avoid timing side-channels.
     """
     expected = settings.dashboard_api_key.strip()
     if not expected:
-        # Auth disabled — development mode; see startup warning in main.py.
+        # Secondary layer disabled — Caddy Basic Auth is the primary gate.
         return
-    if not api_key or api_key != expected:
+    if not api_key or not hmac.compare_digest(api_key, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key.",

@@ -126,12 +126,20 @@ python -m analysis.run
 
 ## Access control
 
-All `/api/*` endpoints require an `X-API-Key` header when `DASHBOARD_API_KEY`
-is set in `.env`. The dependency is applied in `app/main.py` via
-`app/auth.py`. The `/health` endpoint is intentionally unauthenticated.
+**Primary gate:** Caddy HTTP Basic Auth (production only). Caddy rejects
+unauthenticated requests before they reach the application. No secret is
+embedded in the frontend bundle. See `caddy/Caddyfile` and
+`docs/deployment.md §7`.
 
-When `DASHBOARD_API_KEY` is empty (local dev default) auth is disabled and a
-warning is logged at startup. Set a strong key before VPS deployment.
+**Optional secondary layer:** `DASHBOARD_API_KEY` in `.env`. When set,
+FastAPI also validates an `X-API-Key` header on all `/api/*` requests via
+`app/auth.py`. Not required when Caddy Basic Auth is active. The comparison
+uses `hmac.compare_digest` for constant-time evaluation.
+
+**`/health`** is intentionally unauthenticated at both layers.
+
+**Local development:** No Caddy in `docker-compose.yml`. `DASHBOARD_API_KEY`
+defaults to empty, so `require_api_key` is a no-op. No auth setup needed.
 
 ## Environment Variables
 
