@@ -2,8 +2,9 @@
 routers/alerts.py — API endpoints for alert management.
 
 Endpoints:
-    GET  /api/alerts/  — list all alerts
-    POST /api/alerts/  — create a new alert rule
+    GET    /api/alerts/      — list all alerts
+    POST   /api/alerts/      — create a new alert rule
+    DELETE /api/alerts/{id}  — delete an alert by ID
 
 Validation is handled by AlertCreate (Pydantic).
 FastAPI returns a 422 with details if the body is invalid.
@@ -12,7 +13,7 @@ FastAPI returns a 422 with details if the body is invalid.
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,3 +53,15 @@ async def create_alert(body: AlertCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(alert)
     return alert
+
+
+@router.delete("/{alert_id}", status_code=204)
+async def delete_alert(alert_id: int, db: AsyncSession = Depends(get_db)):
+    """Delete an alert by ID. Returns 404 if not found."""
+    result = await db.execute(select(Alert).where(Alert.id == alert_id))
+    alert = result.scalar_one_or_none()
+    if alert is None:
+        raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found.")
+    await db.delete(alert)
+    await db.commit()
+    return Response(status_code=204)

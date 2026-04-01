@@ -1,5 +1,5 @@
 import { useState, useEffect, CSSProperties, FormEvent } from 'react';
-import { fetchAlerts, createAlert, Alert } from '../api';
+import { fetchAlerts, createAlert, deleteAlert, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
@@ -17,8 +17,9 @@ import { panelStyles } from './panelStyles';
  *   once  — triggers once, stays triggered until the alert is deleted
  *   rearm — resets when the condition is no longer met, can trigger again
  *
- * Notifications are logged to the alerts worker container logs (logging-only).
- * Telegram and other external notification channels are not yet implemented.
+ * Notifications are sent via Telegram when TELEGRAM_BOT_TOKEN and
+ * TELEGRAM_CHAT_ID are configured. Alerts can also be deleted from this panel
+ * or via the /delete_alert <id> Telegram bot command.
  */
 function AlertsPanel() {
   const [alerts, setAlerts]   = useState<Alert[]>([]);
@@ -33,6 +34,7 @@ function AlertsPanel() {
   const [formTriggerMode, setFormTriggerMode] = useState('once');
   const [formError,       setFormError]       = useState<string | null>(null);
   const [submitting,      setSubmitting]      = useState(false);
+  const [deletingId,      setDeletingId]      = useState<number | null>(null);
 
   // ── Polling ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -95,6 +97,19 @@ function AlertsPanel() {
     }
   };
 
+  // ── Delete alert ──────────────────────────────────────────────────────────
+  const handleDelete = async (id: number) => {
+    setDeletingId(id);
+    try {
+      await deleteAlert(id);
+      setAlerts((prev) => prev.filter((a) => a.id !== id));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not delete alert.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   // ── Helpers ────────────────────────────────────────────────────────────────
   const formatThreshold = (alert: Alert) => {
     if (alert.condition_type === 'liquidation_spike') {
@@ -136,6 +151,7 @@ function AlertsPanel() {
               <th style={panelStyles.th}>Threshold</th>
               <th style={panelStyles.th}>Mode</th>
               <th style={panelStyles.th}>Status</th>
+              <th style={panelStyles.th}></th>
             </tr>
           </thead>
           <tbody>
@@ -153,6 +169,16 @@ function AlertsPanel() {
                   ) : (
                     <span style={{ color: '#66bb6a' }}>Watching</span>
                   )}
+                </td>
+                <td style={panelStyles.td}>
+                  <button
+                    onClick={() => handleDelete(a.id)}
+                    disabled={deletingId === a.id}
+                    style={deleteButtonStyle}
+                    title="Delete alert"
+                  >
+                    {deletingId === a.id ? '…' : '×'}
+                  </button>
                 </td>
               </tr>
             ))}
@@ -230,6 +256,17 @@ const inputStyle: CSSProperties = {
   fontSize: '12px',
   width: '100%',
   boxSizing: 'border-box',
+};
+
+const deleteButtonStyle: CSSProperties = {
+  backgroundColor: 'transparent',
+  border: '1px solid #555',
+  borderRadius: '4px',
+  padding: '2px 7px',
+  color: '#f44336',
+  fontSize: '14px',
+  cursor: 'pointer',
+  lineHeight: 1,
 };
 
 const buttonStyle: CSSProperties = {

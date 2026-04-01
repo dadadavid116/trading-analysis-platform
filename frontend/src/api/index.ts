@@ -137,3 +137,13 @@ export async function createAlert(body: AlertCreate): Promise<Alert> {
   }
   return response.json() as Promise<Alert>;
 }
+
+/** Delete an alert by ID. No-ops silently on 404. */
+export async function deleteAlert(id: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/alerts/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`API error ${response.status}: ${response.statusText}`);
+  }
+}

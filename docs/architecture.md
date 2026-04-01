@@ -178,9 +178,10 @@ GET  /api/price/latest          → latest OHLCV candle for BTC        [Immediat
 GET  /api/price/history         → paginated candle history            [Immediate]
 GET  /api/liquidations/recent   → recent liquidation events           [Immediate]
 GET  /api/orderbook/snapshot    → latest order-book snapshot          [Immediate]
-GET  /api/alerts/               → list of configured alerts + status  [Later]
-POST /api/alerts/               → create a new alert                  [Later]
-GET  /api/analysis/latest       → most recent AI-generated summary    [Later]
+GET    /api/alerts/             → list of configured alerts + status  [Complete]
+POST   /api/alerts/             → create a new alert                  [Complete]
+DELETE /api/alerts/{id}         → delete an alert by ID               [Complete]
+GET    /api/analysis/latest     → most recent AI-generated summary    [Complete]
 ```
 
 ---
@@ -302,6 +303,7 @@ These will be addressed in post-MVP phases documented in `docs/roadmap.md`.
 8. ✅ **Phase 8 cleanup** — Validation, trigger_mode (once/rearm), CORS config, TS fixes.
 9. ✅ **VPS deployment foundation** — `docker-compose.prod.yml`, Caddy reverse proxy, production Nginx config, deployment guide.
 10. ✅ **Telegram bot** — Long-polling bot with `/price`, `/analysis`, `/alerts`, `/status` commands; alert notifications via Telegram when triggered.
+11. ✅ **Alert lifecycle** — `DELETE /api/alerts/{id}` endpoint; delete button in AlertsPanel; `/delete_alert <id>` bot command; bot commands restricted to configured `TELEGRAM_CHAT_ID`.
 
 **Remaining for post-MVP:**
 - Telegram Mini App

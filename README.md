@@ -180,13 +180,15 @@ guide.
 
 ## Status
 
-**Phase 10 complete — Telegram bot.**
+**Phase 11 complete — Alert lifecycle management.**
 The full stack runs locally via Docker Compose (seven services). Live BTC data
 is collected from Binance WebSocket streams and displayed across all five
 dashboard panels. An AI analysis worker generates market summaries every 10
 minutes. An alert evaluation worker checks thresholds every minute. A Telegram
-bot provides `/price`, `/analysis`, `/alerts`, and `/status` commands, and
-sends alert notifications to a configured chat.
+bot provides `/price`, `/analysis`, `/alerts`, `/delete_alert`, and `/status`
+commands (restricted to the configured `TELEGRAM_CHAT_ID`), and sends alert
+notifications to a configured chat. Alerts can be deleted from the dashboard or
+via `DELETE /api/alerts/{id}`.
 
 A production deployment path exists via `docker-compose.prod.yml` with Caddy,
 automatic HTTPS, and Nginx serving the frontend. See

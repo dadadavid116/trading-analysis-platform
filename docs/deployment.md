@@ -208,7 +208,8 @@ docker compose -f docker-compose.prod.yml restart telegram
 | `/help` | List of commands |
 | `/price` | Latest BTC price candle |
 | `/analysis` | Latest AI market summary |
-| `/alerts` | Configured alerts and their status |
+| `/alerts` | Configured alerts and their status (with IDs) |
+| `/delete_alert <id>` | Delete an alert by ID |
 | `/status` | Data freshness overview |
 
 Alert notifications are sent automatically to `TELEGRAM_CHAT_ID` when an alert

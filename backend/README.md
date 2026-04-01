@@ -86,7 +86,7 @@ docker compose restart analysis
 | `collector` | `collectors/run_all.py` | Price: 1/min · Liquidations: on event · Order book: 1/5s |
 | `analysis` | `analysis/run.py` | Every `ANALYSIS_INTERVAL_MINUTES` (default: 10 min) |
 | `alerts` | `alerts/run.py` | Reads DB every `ALERT_EVALUATION_INTERVAL_MINUTES` (default: 1 min) |
-| `telegram` | `telegram_bot/run.py` | Long polling loop; idle if `TELEGRAM_BOT_TOKEN` is not set |
+| `telegram` | `telegram_bot/run.py` | Long polling; restricted to `TELEGRAM_CHAT_ID`; idle if token not set |
 
 ## What each collector does
 
