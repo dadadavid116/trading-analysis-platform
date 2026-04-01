@@ -1,14 +1,11 @@
 /**
- * src/api/index.ts — Starter API helper
+ * src/api/index.ts — Typed API client for the Trading Analysis Platform.
  *
- * A thin wrapper around fetch for making requests to the backend API.
+ * Thin fetch wrappers for all backend endpoints. Types mirror the Pydantic
+ * response schemas in backend/app/schemas/.
  *
- * Phase 3 scope: function signatures and response types are defined here
- * so the panels have something to import. The actual backend endpoints will
- * be wired up in Phase 4 (Docker / local runtime) and Phase 5 (mock data flow).
- *
- * Base URL is proxied through Vite during development (see vite.config.ts).
- * In production the same /api path is routed by the reverse proxy (Nginx/Caddy).
+ * Base URL is proxied through Vite during local development (see vite.config.ts).
+ * In production the same /api path is routed by the Caddy reverse proxy.
  */
 
 // ── Types ──────────────────────────────────────────────────────────────────────

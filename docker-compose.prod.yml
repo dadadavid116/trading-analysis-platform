@@ -5,7 +5,7 @@
 # Key differences from the local dev setup:
 #   - Frontend is built as a static bundle and served by Nginx (no Vite dev server)
 #   - Caddy is the only public-facing service — it handles HTTPS and routes traffic
-#   - Internal services (db, api, workers) are NOT exposed on host ports
+#   - Internal services (db, api, workers, telegram) are NOT exposed on host ports
 #   - No source-code volume mounts — everything is baked into the images
 #
 # Prerequisites:
@@ -105,6 +105,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # ── Telegram bot ──────────────────────────────────────────────────────────────
+  telegram:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "telegram_bot.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+    # No ports — the bot uses long polling (outbound only, no inbound connections).
+    # If TELEGRAM_BOT_TOKEN is not set, the service waits and logs a warning.
 
   # ── Live data collectors ──────────────────────────────────────────────────────
   collector:

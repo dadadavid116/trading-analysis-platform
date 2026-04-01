@@ -13,6 +13,8 @@ The interval is controlled by ALERT_EVALUATION_INTERVAL_MINUTES in .env (default
 import asyncio
 import logging
 
+from sqlalchemy import text
+
 from alerts.evaluator import evaluate_all
 from app.config import settings
 from app.database import engine, Base
@@ -35,6 +37,12 @@ async def _ensure_tables() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Schema migration: add trigger_mode to any alerts table created before
+        # Phase 9. Safe to run on new tables too (PostgreSQL IF NOT EXISTS).
+        await conn.execute(text(
+            "ALTER TABLE IF EXISTS alerts "
+            "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
+        ))
     logger.info("Table check complete.")
 
 

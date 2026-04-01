@@ -22,7 +22,8 @@ backend/
 │   ├── claude_client.py         # Reads market data, calls Claude, stores summary
 │   └── run.py                   # Entry point: runs the analysis loop
 ├── alerts/             # Alert evaluation worker (evaluator, notifications, run loop)
-│   │                   # Notifications are logging-only — Telegram is not yet implemented
+│   │                   # Sends Telegram message if TELEGRAM_BOT_TOKEN is configured
+├── telegram_bot/       # Telegram bot service (long polling, /price /analysis /alerts etc.)
 ├── migrations/         # [Later] Alembic database migration scripts
 ├── tests/              # Pytest tests for the backend
 ├── requirements.txt    # Python dependencies
@@ -37,7 +38,7 @@ From the repo root:
 docker compose up --build
 ```
 
-This starts six services: `db`, `api`, `collector`, `analysis`, `alerts`, and `frontend`.
+This starts seven services: `db`, `api`, `collector`, `analysis`, `alerts`, `telegram`, and `frontend`.
 
 Before starting, make sure your `.env` file has `ANTHROPIC_API_KEY` set.
 The analysis worker will skip silently if the key is missing, but the
@@ -80,11 +81,12 @@ docker compose restart analysis
 
 ## What each service does
 
-| Service | Entry point | Write frequency |
+| Service | Entry point | Behavior |
 |---|---|---|
 | `collector` | `collectors/run_all.py` | Price: 1/min · Liquidations: on event · Order book: 1/5s |
 | `analysis` | `analysis/run.py` | Every `ANALYSIS_INTERVAL_MINUTES` (default: 10 min) |
 | `alerts` | `alerts/run.py` | Reads DB every `ALERT_EVALUATION_INTERVAL_MINUTES` (default: 1 min) |
+| `telegram` | `telegram_bot/run.py` | Long polling loop; idle if `TELEGRAM_BOT_TOKEN` is not set |
 
 ## What each collector does
 

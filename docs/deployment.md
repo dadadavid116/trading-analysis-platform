@@ -62,8 +62,15 @@ DOMAIN=yourdomain.com
 CORS_ALLOWED_ORIGINS=https://yourdomain.com
 ```
 
-Leave `ALERT_TELEGRAM_TOKEN` and `ALERT_TELEGRAM_CHAT_ID` blank — Telegram
-integration is not yet implemented. Alerts currently log to container stdout.
+To enable the Telegram bot and alert notifications, also set:
+
+```dotenv
+TELEGRAM_BOT_TOKEN=<your token from @BotFather>
+TELEGRAM_CHAT_ID=<your Telegram user ID>
+```
+
+These are optional — if blank, the `telegram` service stays idle and alerts
+log to container stdout only.
 
 ---
 
@@ -165,11 +172,57 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ---
 
-## 10. What is intentionally not done yet
+## 10. Telegram bot setup
+
+The `telegram` service runs a long-polling bot. No public URL or webhook is needed.
+
+**Step 1 — Create a bot**
+1. Open Telegram and message @BotFather
+2. Send `/newbot` and follow the prompts
+3. Copy the token you receive
+
+**Step 2 — Get your chat ID**
+1. Message @userinfobot on Telegram
+2. It will reply with your user ID — this is your `TELEGRAM_CHAT_ID`
+
+**Step 3 — Update `.env`**
+```dotenv
+TELEGRAM_BOT_TOKEN=123456:ABCdef...
+TELEGRAM_CHAT_ID=123456789
+```
+
+**Step 4 — Restart the telegram service**
+```bash
+# Local dev
+docker compose restart telegram
+
+# VPS
+docker compose -f docker-compose.prod.yml restart telegram
+```
+
+**Available bot commands:**
+
+| Command | Description |
+|---|---|
+| `/start` | Welcome message |
+| `/help` | List of commands |
+| `/price` | Latest BTC price candle |
+| `/analysis` | Latest AI market summary |
+| `/alerts` | Configured alerts and their status |
+| `/status` | Data freshness overview |
+
+Alert notifications are sent automatically to `TELEGRAM_CHAT_ID` when an alert
+condition is met. Logs are always written regardless of Telegram configuration.
+
+---
+
+## 11. What is intentionally not done yet
 
 | Feature | Status |
 |---|---|
-| Telegram alert notifications | Not implemented — alerts log to stdout only |
+| Telegram Mini App | Deferred — plain bot is Phase 10 foundation |
+| Telegram webhook mode | Deferred — long polling is simpler and works fine for now |
+| Richer bot controls (create alerts from Telegram, etc.) | Deferred |
 | Automated backups | Not implemented — back up the `postgres_data` volume manually |
 | Auth / access control | Not implemented — the dashboard is currently open |
 | Alembic DB migrations | Not implemented — tables are created via `init_db.sql` and `create_all` |
@@ -177,7 +230,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ---
 
-## 11. Local development
+## 12. Local development
 
 For local development, use `docker-compose.yml` (the default):
 

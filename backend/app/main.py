@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.database import engine, Base
 # Import models so SQLAlchemy registers them with Base before create_all runs.
@@ -28,6 +29,12 @@ async def lifespan(app: FastAPI):
     # Outside Docker (running uvicorn directly) this creates the tables automatically.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Schema migration: add trigger_mode to any alerts table that was created
+        # before Phase 9. Safe to run on every startup (PostgreSQL IF NOT EXISTS).
+        await conn.execute(text(
+            "ALTER TABLE IF EXISTS alerts "
+            "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
+        ))
     yield
 
 # ── Create the FastAPI application ────────────────────────────────────────────

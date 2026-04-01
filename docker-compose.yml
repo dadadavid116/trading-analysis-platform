@@ -1,11 +1,12 @@
 # docker-compose.yml — Local development stack
 #
-# Starts six services:
+# Starts seven services:
 #   db        — PostgreSQL 16 (persistent data volume)
 #   api       — FastAPI backend (built from backend/Dockerfile)
 #   collector — Live Binance WebSocket data collectors
 #   analysis  — AI market summary worker (Claude API, requires ANTHROPIC_API_KEY)
 #   alerts    — Alert evaluation worker (checks conditions every minute)
+#   telegram  — Telegram bot (requires TELEGRAM_BOT_TOKEN; no-op if not set)
 #   frontend  — React/Vite dev server (built from frontend/Dockerfile, dev stage)
 #
 # Prerequisites:
@@ -117,6 +118,23 @@ services:
       db:
         condition: service_healthy
     # No ports — the alert worker reads from DB and writes back trigger times.
+
+  # ── Telegram bot ────────────────────────────────────────────────────────────
+  telegram:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "telegram_bot.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+    # No ports — the bot uses long polling (outbound only, no inbound connections).
+    # If TELEGRAM_BOT_TOKEN is not set, the service waits and logs a warning.
 
   # ── Live data collectors ─────────────────────────────────────────────────────
   collector:

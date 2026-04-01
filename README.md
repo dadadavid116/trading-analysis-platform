@@ -70,11 +70,11 @@ dependencies. Subsequent starts (without `--build`) are much faster.
 
 ### 4. Open the app
 
-| Service  | URL                        |
-|----------|----------------------------|
-| Frontend | http://localhost:5173      |
-| API docs | http://localhost:8000/docs |
-| API root | http://localhost:8000      |
+| Service    | URL                        |
+|------------|----------------------------|
+| Frontend   | http://localhost:5173      |
+| API docs   | http://localhost:8000/docs |
+| API health | http://localhost:8000/health |
 
 The frontend dev server proxies all `/api/*` requests to the backend automatically.
 
@@ -180,20 +180,20 @@ guide.
 
 ## Status
 
-**Phase 9 complete — VPS deployment foundation.**
-The full stack runs locally via Docker Compose (six services). Live BTC data is
-collected from Binance WebSocket streams, stored continuously, and displayed
-across all five dashboard panels. An AI analysis worker generates market
-summaries every 10 minutes. An alert evaluation worker checks configured price
-and liquidation thresholds every minute (logging-only notifications for now).
+**Phase 10 complete — Telegram bot.**
+The full stack runs locally via Docker Compose (seven services). Live BTC data
+is collected from Binance WebSocket streams and displayed across all five
+dashboard panels. An AI analysis worker generates market summaries every 10
+minutes. An alert evaluation worker checks thresholds every minute. A Telegram
+bot provides `/price`, `/analysis`, `/alerts`, and `/status` commands, and
+sends alert notifications to a configured chat.
 
-A production deployment path now exists: `docker-compose.prod.yml` with Caddy
-as a reverse proxy, automatic HTTPS via Let's Encrypt, and a production Nginx
-frontend build. See [`docs/deployment.md`](docs/deployment.md) for the full
-VPS deployment guide.
+A production deployment path exists via `docker-compose.prod.yml` with Caddy,
+automatic HTTPS, and Nginx serving the frontend. See
+[`docs/deployment.md`](docs/deployment.md) for the full VPS deployment guide.
 
-**Still to come:** Telegram alert notifications, auth, Alembic migrations,
-automated backups.
+**Still to come:** Telegram Mini App, auth, Alembic migrations,
+automated backups, CI/CD.
 
 ---
 

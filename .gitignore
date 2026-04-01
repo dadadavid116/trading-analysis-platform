@@ -22,9 +22,11 @@ frontend/.vite/
 # ── Docker ────────────────────────────────────────────────────
 # (no files to ignore — volumes are managed by Docker)
 
-# ── Editor / OS ───────────────────────────────────────────────
+# ── Editor / OS / local tooling ───────────────────────────────
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
+# Claude Code local session data — never commit or include in review bundles
+.claude/

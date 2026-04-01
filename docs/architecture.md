@@ -136,15 +136,16 @@ trading-analysis-platform/
 
 ## 4. Services in Docker Compose
 
-| Service      | Image / Build       | Port (internal) | Phase     | Notes                                       |
-|--------------|---------------------|-----------------|-----------|---------------------------------------------|
-| `db`         | `postgres:16`       | 5432            | Complete  | Persistent volume; never exposed publicly   |
-| `api`        | `./backend`         | 8000            | Complete  | FastAPI + Uvicorn                           |
-| `collector`  | `./backend`         | —               | Complete  | Runs all three Binance WS collectors        |
-| `analysis`   | `./backend`         | —               | Complete  | Scheduled Claude API analysis worker        |
-| `alerts`     | `./backend`         | —               | Complete  | Alert evaluation worker (logging-only notif)|
-| `frontend`   | `./frontend`        | 5173 (dev) / 80 | Complete  | Vite dev server or Nginx static (prod)      |
-| `caddy`      | `caddy:2-alpine`    | 80, 443         | Complete  | Production only — reverse proxy + HTTPS     |
+| Service      | Image / Build       | Port (internal) | Phase     | Notes                                          |
+|--------------|---------------------|-----------------|-----------|------------------------------------------------|
+| `db`         | `postgres:16`       | 5432            | Complete  | Persistent volume; never exposed publicly      |
+| `api`        | `./backend`         | 8000            | Complete  | FastAPI + Uvicorn                              |
+| `collector`  | `./backend`         | —               | Complete  | Runs all three Binance WS collectors           |
+| `analysis`   | `./backend`         | —               | Complete  | Scheduled Claude API analysis worker           |
+| `alerts`     | `./backend`         | —               | Complete  | Alert evaluation worker + Telegram notif       |
+| `telegram`   | `./backend`         | —               | Complete  | Telegram bot (long polling; optional)          |
+| `frontend`   | `./frontend`        | 5173 (dev) / 80 | Complete  | Vite dev server or Nginx static (prod)         |
+| `caddy`      | `caddy:2-alpine`    | 80, 443         | Complete  | Production only — reverse proxy + HTTPS        |
 
 All services share one Docker network. `api`, `collector`, `analysis`, and `alerts` use the
 same backend image but different `CMD` entries. In production, only `caddy` is exposed publicly.
@@ -300,9 +301,11 @@ These will be addressed in post-MVP phases documented in `docs/roadmap.md`.
 7. ✅ **Alerts** — Alert evaluation logic, DB table, API endpoints, AlertsPanel with create form.
 8. ✅ **Phase 8 cleanup** — Validation, trigger_mode (once/rearm), CORS config, TS fixes.
 9. ✅ **VPS deployment foundation** — `docker-compose.prod.yml`, Caddy reverse proxy, production Nginx config, deployment guide.
+10. ✅ **Telegram bot** — Long-polling bot with `/price`, `/analysis`, `/alerts`, `/status` commands; alert notifications via Telegram when triggered.
 
 **Remaining for post-MVP:**
-- Telegram alert notifications
+- Telegram Mini App
+- Telegram webhook mode and richer bot controls
 - Auth / multi-user support
 - Alembic migrations
 - Automated backups

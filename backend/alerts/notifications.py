@@ -1,30 +1,44 @@
 """
 alerts/notifications.py — Send notifications when an alert triggers.
 
-Currently logs a warning message only.
-[Later] Add Telegram integration using ALERT_TELEGRAM_TOKEN and
-ALERT_TELEGRAM_CHAT_ID from the environment.
+Always logs the trigger to the alerts worker output.
+Also sends a Telegram message if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
+are set in .env (Phase 10).
+
+If Telegram credentials are missing or the send fails, the error is logged
+and the alert trigger is still recorded in the database.
 """
 
 import logging
+
+import httpx
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
 async def notify(alert_name: str, condition: str, message: str) -> None:
-    """Log an alert trigger. Replace or extend this to send real notifications."""
+    """Log an alert trigger and send a Telegram message if configured."""
     logger.warning(
         "ALERT TRIGGERED: [%s] %s — %s",
         alert_name,
         condition,
         message,
     )
-    # [Later] Telegram:
-    # token   = settings.alert_telegram_token
-    # chat_id = settings.alert_telegram_chat_id
-    # if token and chat_id:
-    #     async with httpx.AsyncClient() as client:
-    #         await client.post(
-    #             f"https://api.telegram.org/bot{token}/sendMessage",
-    #             json={"chat_id": chat_id, "text": f"🚨 {alert_name}: {message}"},
-    #         )
+
+    token   = settings.telegram_bot_token
+    chat_id = settings.telegram_chat_id
+    if not token or not chat_id:
+        return
+
+    text = f"\U0001f6a8 Alert: {alert_name}\n{message}"
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                json={"chat_id": chat_id, "text": text},
+            )
+            resp.raise_for_status()
+    except Exception as exc:
+        logger.error("Failed to send Telegram notification: %s", exc)

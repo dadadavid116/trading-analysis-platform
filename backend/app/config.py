@@ -52,11 +52,13 @@ class Settings(BaseSettings):
     # How often the alert evaluator checks conditions (in minutes).
     alert_evaluation_interval_minutes: int = 1
 
-    # Telegram notification credentials — leave blank to use logging-only mode.
-    # Telegram integration is not yet implemented. Triggered alerts are written
-    # to the alerts worker container logs only.
-    alert_telegram_token: str = ""
-    alert_telegram_chat_id: str = ""
+    # ── Telegram ─────────────────────────────────────────────────────────────
+    # Bot token from @BotFather — used by the telegram_bot service and for
+    # alert notifications. Leave blank to disable Telegram features.
+    telegram_bot_token: str = ""
+    # Chat ID for alert notifications — your Telegram user ID or group ID.
+    # Find your chat ID by messaging @userinfobot on Telegram.
+    telegram_chat_id: str = ""
 
 
 # Create a single shared settings instance.
