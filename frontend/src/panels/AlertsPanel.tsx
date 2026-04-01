@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, CSSProperties, FormEvent } from 'react';
 import { fetchAlerts, createAlert, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
@@ -12,6 +12,13 @@ import { panelStyles } from './panelStyles';
  *   price_above       — triggers when BTC close > threshold
  *   price_below       — triggers when BTC close < threshold
  *   liquidation_spike — triggers when event count in window_minutes > threshold
+ *
+ * Trigger modes:
+ *   once  — triggers once, stays triggered until the alert is deleted
+ *   rearm — resets when the condition is no longer met, can trigger again
+ *
+ * Notifications are logged to the alerts worker container logs (logging-only).
+ * Telegram and other external notification channels are not yet implemented.
  */
 function AlertsPanel() {
   const [alerts, setAlerts]   = useState<Alert[]>([]);
@@ -19,12 +26,13 @@ function AlertsPanel() {
   const [error, setError]     = useState<string | null>(null);
 
   // ── Form state ─────────────────────────────────────────────────────────────
-  const [formName,      setFormName]      = useState('');
-  const [formType,      setFormType]      = useState('price_above');
-  const [formThreshold, setFormThreshold] = useState('');
-  const [formWindow,    setFormWindow]    = useState('');
-  const [formError,     setFormError]     = useState<string | null>(null);
-  const [submitting,    setSubmitting]    = useState(false);
+  const [formName,        setFormName]        = useState('');
+  const [formType,        setFormType]        = useState('price_above');
+  const [formThreshold,   setFormThreshold]   = useState('');
+  const [formWindow,      setFormWindow]      = useState('');
+  const [formTriggerMode, setFormTriggerMode] = useState('once');
+  const [formError,       setFormError]       = useState<string | null>(null);
+  const [submitting,      setSubmitting]      = useState(false);
 
   // ── Polling ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -47,7 +55,7 @@ function AlertsPanel() {
   }, []);
 
   // ── Create alert ───────────────────────────────────────────────────────────
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -72,13 +80,14 @@ function AlertsPanel() {
         condition_type: formType,
         threshold,
         window_minutes: formType === 'liquidation_spike' ? parseInt(formWindow, 10) : null,
+        trigger_mode:   formTriggerMode,
       });
-      // Refresh list and reset form
       const updated = await fetchAlerts();
       setAlerts(updated);
       setFormName('');
       setFormThreshold('');
       setFormWindow('');
+      setFormTriggerMode('once');
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Could not create alert.');
     } finally {
@@ -95,8 +104,8 @@ function AlertsPanel() {
   };
 
   const conditionLabel = (type: string) => {
-    if (type === 'price_above') return 'Price above';
-    if (type === 'price_below') return 'Price below';
+    if (type === 'price_above')       return 'Price >';
+    if (type === 'price_below')       return 'Price <';
     if (type === 'liquidation_spike') return 'Liq spike';
     return type;
   };
@@ -106,7 +115,6 @@ function AlertsPanel() {
     <div style={panelStyles.card}>
       <h2 style={panelStyles.title}>Alerts — BTC/USDT</h2>
 
-      {/* Alert list */}
       {loading && <p style={panelStyles.muted}>Loading…</p>}
 
       {error && (
@@ -126,6 +134,7 @@ function AlertsPanel() {
               <th style={panelStyles.th}>Name</th>
               <th style={panelStyles.th}>Condition</th>
               <th style={panelStyles.th}>Threshold</th>
+              <th style={panelStyles.th}>Mode</th>
               <th style={panelStyles.th}>Status</th>
             </tr>
           </thead>
@@ -135,6 +144,7 @@ function AlertsPanel() {
                 <td style={panelStyles.td}>{a.name}</td>
                 <td style={panelStyles.td}>{conditionLabel(a.condition_type)}</td>
                 <td style={panelStyles.td}>{formatThreshold(a)}</td>
+                <td style={panelStyles.td}>{a.trigger_mode}</td>
                 <td style={panelStyles.td}>
                   {a.triggered_at ? (
                     <span style={{ color: '#f44336' }}>
@@ -171,7 +181,11 @@ function AlertsPanel() {
           </select>
           <input
             style={inputStyle}
-            placeholder={formType === 'liquidation_spike' ? 'Event count threshold' : 'Price threshold (USD)'}
+            placeholder={
+              formType === 'liquidation_spike'
+                ? 'Event count threshold'
+                : 'Price threshold (USD)'
+            }
             value={formThreshold}
             onChange={(e) => setFormThreshold(e.target.value)}
             type="number"
@@ -189,6 +203,14 @@ function AlertsPanel() {
               step="1"
             />
           )}
+          <select
+            style={inputStyle}
+            value={formTriggerMode}
+            onChange={(e) => setFormTriggerMode(e.target.value)}
+          >
+            <option value="once">Once — trigger once, then stay triggered</option>
+            <option value="rearm">Rearm — reset and trigger again when condition returns</option>
+          </select>
           {formError && <p style={panelStyles.error}>{formError}</p>}
           <button type="submit" style={buttonStyle} disabled={submitting}>
             {submitting ? 'Creating…' : 'Create alert'}
@@ -199,7 +221,7 @@ function AlertsPanel() {
   );
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   backgroundColor: '#111114',
   border: '1px solid #2a2a2e',
   borderRadius: '4px',
@@ -210,7 +232,7 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const buttonStyle: React.CSSProperties = {
+const buttonStyle: CSSProperties = {
   backgroundColor: '#2a4a7f',
   border: 'none',
   borderRadius: '4px',

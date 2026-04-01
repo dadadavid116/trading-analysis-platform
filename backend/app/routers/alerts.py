@@ -4,6 +4,9 @@ routers/alerts.py — API endpoints for alert management.
 Endpoints:
     GET  /api/alerts/  — list all alerts
     POST /api/alerts/  — create a new alert rule
+
+Validation is handled by AlertCreate (Pydantic).
+FastAPI returns a 422 with details if the body is invalid.
 """
 
 from datetime import datetime, timezone
@@ -31,13 +34,18 @@ async def list_alerts(db: AsyncSession = Depends(get_db)):
 
 @router.post("/", response_model=AlertSchema, status_code=201)
 async def create_alert(body: AlertCreate, db: AsyncSession = Depends(get_db)):
-    """Create a new alert rule."""
+    """Create a new alert rule.
+
+    Returns 422 if the body fails validation (invalid condition_type,
+    non-positive threshold, missing window_minutes for liquidation_spike, etc.).
+    """
     alert = Alert(
         name=body.name,
         symbol=body.symbol,
         condition_type=body.condition_type,
         threshold=body.threshold,
         window_minutes=body.window_minutes,
+        trigger_mode=body.trigger_mode,
         created_at=datetime.now(tz=timezone.utc),
     )
     db.add(alert)

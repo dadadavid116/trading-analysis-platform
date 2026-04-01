@@ -1,9 +1,8 @@
 # Architecture — Trading Analysis Platform (MVP)
 
-> **Status: Approved as working blueprint.**
-> This document defines the intended architecture for the full MVP. Not every listed component
-> must be fully implemented in the immediate next phase. See Section 11 (Build Order) for the
-> intended sequence. Items marked **[Later]** are planned but not required for initial scaffolding.
+> **Status: Phase 9 complete — VPS deployment foundation.**
+> This document reflects the current implemented architecture. Items marked **[Later]**
+> are planned but not yet implemented. See Section 11 (Build Order) for the phase sequence.
 
 ---
 
@@ -43,8 +42,8 @@ Data flow:
 1. Collectors poll/stream exchange APIs → write raw + processed data to PostgreSQL.
 2. FastAPI reads from PostgreSQL → serves REST endpoints to the frontend.
 3. React dashboard fetches from the API and renders panels.
-4. **[Later]** Alert workers query the DB on a schedule → send notifications.
-5. **[Later]** Analysis worker calls the Claude API → stores summaries → API exposes them.
+4. Alert worker queries DB on a schedule → logs notifications when thresholds are crossed.
+5. Analysis worker calls Claude API → stores summaries → API exposes them in the Analysis panel.
 
 ---
 
@@ -137,17 +136,18 @@ trading-analysis-platform/
 
 ## 4. Services in Docker Compose
 
-| Service      | Image / Build       | Port (internal) | Phase      | Notes                              |
-|--------------|---------------------|-----------------|------------|------------------------------------|
-| `db`         | `postgres:16`       | 5432            | Immediate  | Persistent volume for data         |
-| `api`        | `./backend`         | 8000            | Immediate  | FastAPI + Uvicorn                  |
-| `collector`  | `./backend`         | —               | Immediate  | Runs collector scripts, no HTTP    |
-| `analysis`   | `./backend`         | —               | **[Later]**| Scheduled analysis worker          |
-| `frontend`   | `./frontend`        | 3000 (dev) / 80 | Immediate  | Vite dev server or Nginx for prod  |
+| Service      | Image / Build       | Port (internal) | Phase     | Notes                                       |
+|--------------|---------------------|-----------------|-----------|---------------------------------------------|
+| `db`         | `postgres:16`       | 5432            | Complete  | Persistent volume; never exposed publicly   |
+| `api`        | `./backend`         | 8000            | Complete  | FastAPI + Uvicorn                           |
+| `collector`  | `./backend`         | —               | Complete  | Runs all three Binance WS collectors        |
+| `analysis`   | `./backend`         | —               | Complete  | Scheduled Claude API analysis worker        |
+| `alerts`     | `./backend`         | —               | Complete  | Alert evaluation worker (logging-only notif)|
+| `frontend`   | `./frontend`        | 5173 (dev) / 80 | Complete  | Vite dev server or Nginx static (prod)      |
+| `caddy`      | `caddy:2-alpine`    | 80, 443         | Complete  | Production only — reverse proxy + HTTPS     |
 
-All services share one Docker network. The `api`, `collector`, and `analysis` services use the
-same backend image but different `CMD` entries. Only `frontend` (and optionally `api`) are
-exposed on the host.
+All services share one Docker network. `api`, `collector`, `analysis`, and `alerts` use the
+same backend image but different `CMD` entries. In production, only `caddy` is exposed publicly.
 
 ---
 
@@ -237,15 +237,15 @@ schema stabilises.
 ## 8. Deployment (VPS)
 
 1. Clone the repo on the VPS.
-2. Copy `.env.example` → `.env` and fill in real values.
-3. Run `docker compose up -d --build`.
-4. A reverse proxy (Nginx or Caddy, outside Compose) handles SSL and routes:
-   - `yourdomain.com` → frontend (port 80)
-   - `yourdomain.com/api` → backend API (port 8000)
+2. Copy `.env.example` → `.env` and fill in real values (domain, DB password, API key).
+3. Run `docker compose -f docker-compose.prod.yml up -d --build`.
+4. Caddy (inside Compose) handles HTTPS via Let's Encrypt automatically:
+   - `https://yourdomain.com/api/*` → FastAPI backend (`api:8000`, internal)
+   - `https://yourdomain.com/*` → Nginx-served React app (`frontend:80`, internal)
 
-No Kubernetes, no CI/CD pipeline for MVP. Manual `git pull && docker compose up -d --build`
-for updates. VPS deployment refinement (SSL, reverse proxy config, hardening) is the final
-phase in the build order below.
+No Kubernetes, no CI/CD pipeline for MVP. Manual `git pull && docker compose -f docker-compose.prod.yml up -d --build` for updates.
+
+See [`docs/deployment.md`](deployment.md) for the full step-by-step VPS guide.
 
 ---
 
@@ -291,14 +291,19 @@ These will be addressed in post-MVP phases documented in `docs/roadmap.md`.
 
 ## 11. Build Order / Phase Sequence
 
-The following sequence defines the intended order of implementation. Each phase should be
-working and testable before moving to the next.
+1. ✅ **Backend scaffold** — FastAPI skeleton, DB models, stub endpoints.
+2. ✅ **Frontend scaffold** — Vite + React + TypeScript, panel layout, placeholders.
+3. ✅ **Docker / local runtime** — `docker-compose.yml` with db, api, frontend.
+4. ✅ **First end-to-end mock data flow** — Seed DB, confirm full stack renders.
+5. ✅ **Live collectors** — Real Binance WebSocket collectors for price, liquidations, order-book.
+6. ✅ **Analysis worker** — Claude API integration; summaries stored and surfaced in Analysis panel.
+7. ✅ **Alerts** — Alert evaluation logic, DB table, API endpoints, AlertsPanel with create form.
+8. ✅ **Phase 8 cleanup** — Validation, trigger_mode (once/rearm), CORS config, TS fixes.
+9. ✅ **VPS deployment foundation** — `docker-compose.prod.yml`, Caddy reverse proxy, production Nginx config, deployment guide.
 
-1. **Backend scaffold** — FastAPI app skeleton, DB connection, models for price/liquidations/orderbook, stub endpoints returning mock data.
-2. **Frontend scaffold** — Vite + React + TypeScript app, panel layout wired to the stub API, all panels visible (some as placeholders).
-3. **Docker / local runtime** — `docker-compose.yml` with `db`, `api`, and `frontend` services running end-to-end locally.
-4. **First end-to-end mock data flow** — Seed the DB with static test data; confirm the frontend renders it correctly through the full stack.
-5. **Live collectors** — Replace mock data with real Binance WebSocket collectors for price, liquidations, and order-book.
-6. **Analysis worker** — Wire up the Claude API integration; store and surface AI summaries via the analysis endpoint.
-7. **Alerts** — Implement alert evaluation logic, the alerts DB table, and the alerts API + panel.
-8. **VPS deployment refinement** — Final Docker Compose tuning, reverse proxy (Nginx/Caddy), SSL, environment hardening.
+**Remaining for post-MVP:**
+- Telegram alert notifications
+- Auth / multi-user support
+- Alembic migrations
+- Automated backups
+- CI/CD pipeline

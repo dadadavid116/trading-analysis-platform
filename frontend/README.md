@@ -70,5 +70,6 @@ The dev server starts at http://localhost:5173 by default.
 
 ## Next Phase
 
-Phase 9 — VPS deployment. Caddy reverse proxy, production Dockerfile stages,
-and domain/TLS configuration for running the full stack on a VPS.
+Post-MVP: Telegram alert notifications, auth/access control, Alembic migrations,
+and automated backups. See [`docs/deployment.md`](../docs/deployment.md) for the
+current VPS deployment guide.

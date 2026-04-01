@@ -138,36 +138,62 @@ docker compose exec db psql -U trading -d trading_db
 
 ---
 
+## Deploying to a VPS
+
+See [`docs/deployment.md`](docs/deployment.md) for the full guide.
+
+Quick summary:
+
+```bash
+# On your VPS
+git clone https://github.com/dadadavid116/trading-analysis-platform.git
+cd trading-analysis-platform
+cp .env.example .env
+# Edit .env: set DOMAIN, POSTGRES_PASSWORD, ANTHROPIC_API_KEY, CORS_ALLOWED_ORIGINS
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Caddy handles HTTPS automatically via Let's Encrypt. No manual certificate setup needed.
+
+---
+
 ## Project Structure
 
 ```
 trading-analysis-platform/
-├── backend/          # FastAPI app, collectors, models, routers, schemas
-├── frontend/         # React + TypeScript + Vite dashboard
-├── scripts/          # init_db.sql — table creation and seed data
-├── docs/             # Architecture and roadmap docs
-├── docker-compose.yml
+├── backend/               # FastAPI app, collectors, models, routers, schemas
+├── frontend/              # React + TypeScript + Vite dashboard
+├── caddy/                 # Caddyfile — production reverse proxy config
+├── scripts/               # init_db.sql — table creation and seed data
+├── docs/                  # Architecture, deployment guide, roadmap
+├── docker-compose.yml     # Local development stack
+├── docker-compose.prod.yml  # Production VPS stack (Caddy + prod builds)
 ├── .env.example
 └── README.md
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for the full technical
-blueprint and build order.
+blueprint and [`docs/deployment.md`](docs/deployment.md) for the VPS deployment
+guide.
 
 ---
 
 ## Status
 
-**Phase 8 complete — Alerts.**
-The full stack runs locally via Docker Compose with six services. Live BTC data
-is collected from Binance WebSocket streams and stored continuously. An AI
-analysis worker calls the Claude API every 10 minutes to generate a market
-summary. An alert evaluation worker checks configured price and liquidation
-thresholds every minute and logs notifications when conditions are met.
-All five dashboard panels are implemented and live.
+**Phase 9 complete — VPS deployment foundation.**
+The full stack runs locally via Docker Compose (six services). Live BTC data is
+collected from Binance WebSocket streams, stored continuously, and displayed
+across all five dashboard panels. An AI analysis worker generates market
+summaries every 10 minutes. An alert evaluation worker checks configured price
+and liquidation thresholds every minute (logging-only notifications for now).
 
-Next: Phase 9 — VPS deployment (Caddy reverse proxy, production Docker stages,
-domain and TLS configuration).
+A production deployment path now exists: `docker-compose.prod.yml` with Caddy
+as a reverse proxy, automatic HTTPS via Let's Encrypt, and a production Nginx
+frontend build. See [`docs/deployment.md`](docs/deployment.md) for the full
+VPS deployment guide.
+
+**Still to come:** Telegram alert notifications, auth, Alembic migrations,
+automated backups.
 
 ---
 

@@ -22,6 +22,7 @@ backend/
 │   ├── claude_client.py         # Reads market data, calls Claude, stores summary
 │   └── run.py                   # Entry point: runs the analysis loop
 ├── alerts/             # Alert evaluation worker (evaluator, notifications, run loop)
+│   │                   # Notifications are logging-only — Telegram is not yet implemented
 ├── migrations/         # [Later] Alembic database migration scripts
 ├── tests/              # Pytest tests for the backend
 ├── requirements.txt    # Python dependencies

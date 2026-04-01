@@ -1,0 +1,153 @@
+# docker-compose.prod.yml — Production stack for VPS deployment
+#
+# Use this file on a VPS instead of docker-compose.yml.
+#
+# Key differences from the local dev setup:
+#   - Frontend is built as a static bundle and served by Nginx (no Vite dev server)
+#   - Caddy is the only public-facing service — it handles HTTPS and routes traffic
+#   - Internal services (db, api, workers) are NOT exposed on host ports
+#   - No source-code volume mounts — everything is baked into the images
+#
+# Prerequisites:
+#   1. A domain pointing to your VPS (e.g. yourdomain.com → VPS IP)
+#   2. Ports 80 and 443 open in your VPS firewall
+#   3. A .env file with at minimum:
+#        DOMAIN=yourdomain.com
+#        CORS_ALLOWED_ORIGINS=https://yourdomain.com
+#        POSTGRES_USER=trading
+#        POSTGRES_PASSWORD=<strong password>
+#        POSTGRES_DB=trading_db
+#        DATABASE_URL=postgresql+asyncpg://trading:<password>@db:5432/trading_db
+#        ANTHROPIC_API_KEY=<your key>
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# To update after a git pull:
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# To view logs:
+#   docker compose -f docker-compose.prod.yml logs -f
+
+services:
+
+  # ── PostgreSQL database ──────────────────────────────────────────────────────
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts:/docker-entrypoint-initdb.d
+    # No host port exposure — db is internal only.
+    # Ensure your VPS firewall blocks port 5432 from public access.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── FastAPI backend ──────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    # No host port exposure — api is accessed through Caddy only.
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── React frontend (production build — Nginx static files) ───────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: prod   # Use the multi-stage Nginx build, not the Vite dev server
+    restart: unless-stopped
+    # No host port exposure — frontend is served through Caddy only.
+    depends_on:
+      - api
+
+  # ── AI analysis worker ────────────────────────────────────────────────────────
+  analysis:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "analysis.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Alert evaluation worker ───────────────────────────────────────────────────
+  alerts:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "alerts.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Live data collectors ──────────────────────────────────────────────────────
+  collector:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "collectors.run_all"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ── Caddy — public entry point (HTTPS + reverse proxy) ───────────────────────
+  #
+  # Caddy automatically obtains and renews Let's Encrypt certificates for DOMAIN.
+  # No manual SSL setup is needed — just point your domain at this VPS and start.
+  #
+  # Routing:
+  #   /api/* → api:8000   (FastAPI backend)
+  #   /*     → frontend:80 (Nginx-served React app)
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 (QUIC)
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # Stores Let's Encrypt certificates
+      - caddy_config:/config    # Caddy runtime config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on:
+      - api
+      - frontend
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

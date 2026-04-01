@@ -108,17 +108,19 @@ export interface Alert {
   condition_type: string;
   threshold:      number;
   window_minutes: number | null;
+  trigger_mode:   string;   // 'once' | 'rearm'
   is_active:      boolean;
   triggered_at:   string | null;
   created_at:     string;
 }
 
 export interface AlertCreate {
-  name:           string;
-  symbol?:        string;
-  condition_type: string;
-  threshold:      number;
+  name:            string;
+  symbol?:         string;
+  condition_type:  string;
+  threshold:       number;
   window_minutes?: number | null;
+  trigger_mode?:   string;  // defaults to 'once' on the backend
 }
 
 /** Fetch all alert rules. */

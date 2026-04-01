@@ -39,19 +39,20 @@ app = FastAPI(
 )
 
 # ── CORS middleware ───────────────────────────────────────────────────────────
-# Allow the React dev server (Vite default: port 5173) and a plain localhost
-# origin to call this API during local development.
+# Allowed origins are read from CORS_ALLOWED_ORIGINS in .env (comma-separated).
+# Defaults to localhost dev origins. For production, set the env var to your
+# domain, e.g.:  CORS_ALLOWED_ORIGINS=https://yourdomain.com
 #
-# Note: allow_origins=["*"] cannot be combined with allow_credentials=True
-# (browsers will reject the response). Use an explicit origin list instead.
+# In production with Caddy, the browser sees a single origin (your domain) for
+# both the frontend and /api/* requests, so CORS is not strictly required —
+# but it is kept here so the API remains usable from other origins (e.g. tools,
+# future Telegram integrations) without code changes.
 #
-# When deploying to a VPS, add your production domain to this list or move it
-# to an environment variable.
+# Note: allow_origins=["*"] cannot be combined with allow_credentials=True.
 ALLOWED_ORIGINS = [
-    "http://localhost:5173",   # Vite dev server (React frontend)
-    "http://localhost:3000",   # Alternative dev port
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:3000",
+    o.strip()
+    for o in settings.cors_allowed_origins.split(",")
+    if o.strip()
 ]
 
 app.add_middleware(

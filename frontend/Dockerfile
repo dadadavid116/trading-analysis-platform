@@ -42,7 +42,11 @@ FROM nginx:alpine AS prod
 # Copy built static files from build stage
 COPY --from=build /app/dist /usr/share/nginx/html
 
-# Expose port 80 for the reverse proxy
+# Replace the default Nginx config with our SPA-aware config.
+# This ensures all routes serve index.html (required for React client-side routing).
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Expose port 80 for the reverse proxy (Caddy in production)
 EXPOSE 80
 
 CMD ["nginx", "-g", "daemon off;"]

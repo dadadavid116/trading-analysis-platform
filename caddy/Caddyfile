@@ -1,0 +1,21 @@
+# Caddyfile — Reverse proxy for the Trading Analysis Platform
+#
+# Caddy is the single public entry point on the VPS.
+# It handles HTTPS automatically via Let's Encrypt (no manual cert setup needed).
+#
+# DOMAIN is read from the environment (set DOMAIN=yourdomain.com in .env).
+#
+# Public routing:
+#   /api/*   → FastAPI backend (api:8000, internal Docker network only)
+#   /*       → React frontend  (frontend:80, internal Docker network only)
+#
+# Internal services (db, api, collector, analysis, alerts) are not exposed
+# on public ports — only Caddy binds to 80 and 443.
+
+{$DOMAIN} {
+    # Route API requests to the FastAPI backend service.
+    reverse_proxy /api/* api:8000
+
+    # Route all other requests to the Nginx-served React frontend.
+    reverse_proxy * frontend:80
+}
