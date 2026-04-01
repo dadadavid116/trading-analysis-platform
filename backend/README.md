@@ -124,6 +124,15 @@ python -m collectors.run_all
 python -m analysis.run
 ```
 
+## Access control
+
+All `/api/*` endpoints require an `X-API-Key` header when `DASHBOARD_API_KEY`
+is set in `.env`. The dependency is applied in `app/main.py` via
+`app/auth.py`. The `/health` endpoint is intentionally unauthenticated.
+
+When `DASHBOARD_API_KEY` is empty (local dev default) auth is disabled and a
+warning is logged at startup. Set a strong key before VPS deployment.
+
 ## Environment Variables
 
 See `../.env.example` for all required variables.

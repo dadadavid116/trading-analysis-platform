@@ -71,6 +71,11 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       target: prod   # Use the multi-stage Nginx build, not the Vite dev server
+      args:
+        # Vite inlines this value into the static bundle at build time.
+        # It must match DASHBOARD_API_KEY set for the api service.
+        # Leave empty to disable auth (not recommended for VPS).
+        VITE_DASHBOARD_API_KEY: ${VITE_DASHBOARD_API_KEY:-}
     restart: unless-stopped
     # No host port exposure — frontend is served through Caddy only.
     depends_on:

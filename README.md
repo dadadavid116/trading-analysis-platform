@@ -14,7 +14,9 @@ into a shareable and customisable platform.
 - Multiple dashboard panels
 - Historical data storage in PostgreSQL
 - AI-assisted market summaries via Claude API
-- Configurable price and liquidation alerts
+- Configurable price and liquidation alerts with full lifecycle management (create, list, delete)
+- Telegram bot for remote monitoring and alert management (restricted to configured chat ID)
+- Static API key access control protecting the dashboard and all API routes
 
 ## Stack
 
@@ -48,7 +50,8 @@ cp .env.example .env
 ```
 
 The defaults in `.env.example` work out of the box for local development.
-You only need to change `POSTGRES_PASSWORD` if you want a stronger password.
+`DASHBOARD_API_KEY` and `VITE_DASHBOARD_API_KEY` are intentionally empty —
+authentication is disabled in local dev. Set them only for VPS deployment.
 
 ### 3. Start the stack
 
@@ -149,7 +152,8 @@ Quick summary:
 git clone https://github.com/dadadavid116/trading-analysis-platform.git
 cd trading-analysis-platform
 cp .env.example .env
-# Edit .env: set DOMAIN, POSTGRES_PASSWORD, ANTHROPIC_API_KEY, CORS_ALLOWED_ORIGINS
+# Edit .env: set DOMAIN, POSTGRES_PASSWORD, ANTHROPIC_API_KEY,
+#             CORS_ALLOWED_ORIGINS, DASHBOARD_API_KEY, VITE_DASHBOARD_API_KEY
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
@@ -180,7 +184,7 @@ guide.
 
 ## Status
 
-**Phase 11 complete — Alert lifecycle management.**
+**Phase 12 complete — Access control / public hardening.**
 The full stack runs locally via Docker Compose (seven services). Live BTC data
 is collected from Binance WebSocket streams and displayed across all five
 dashboard panels. An AI analysis worker generates market summaries every 10
@@ -190,11 +194,15 @@ commands (restricted to the configured `TELEGRAM_CHAT_ID`), and sends alert
 notifications to a configured chat. Alerts can be deleted from the dashboard or
 via `DELETE /api/alerts/{id}`.
 
+All `/api/*` routes are protected by a static API key (`X-API-Key` header).
+Set `DASHBOARD_API_KEY` and `VITE_DASHBOARD_API_KEY` in `.env` before VPS
+deployment. Auth is disabled automatically in local development (empty key).
+
 A production deployment path exists via `docker-compose.prod.yml` with Caddy,
 automatic HTTPS, and Nginx serving the frontend. See
 [`docs/deployment.md`](docs/deployment.md) for the full VPS deployment guide.
 
-**Still to come:** Telegram Mini App, auth, Alembic migrations,
+**Still to come:** Telegram Mini App, Alembic migrations,
 automated backups, CI/CD.
 
 ---

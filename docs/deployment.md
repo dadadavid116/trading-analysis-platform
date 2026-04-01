@@ -60,6 +60,10 @@ DOMAIN=yourdomain.com
 
 # CORS — set to your domain only (no localhost origins in production)
 CORS_ALLOWED_ORIGINS=https://yourdomain.com
+
+# Dashboard access control — generate a strong key and set both values
+DASHBOARD_API_KEY=<generate with: python -c "import secrets; print(secrets.token_urlsafe(32))">
+VITE_DASHBOARD_API_KEY=<same value as DASHBOARD_API_KEY>
 ```
 
 To enable the Telegram bot and alert notifications, also set:
@@ -84,6 +88,7 @@ Docker will:
 1. Pull `postgres:16` and initialise the database.
 2. Build and start the FastAPI backend (`api`).
 3. Build the React app as a static bundle and serve it via Nginx (`frontend`).
+   The `VITE_DASHBOARD_API_KEY` value is inlined into the bundle at this step.
 4. Start the `collector`, `analysis`, and `alerts` workers.
 5. Start `caddy` — which immediately requests a Let's Encrypt certificate for
    your domain and begins proxying traffic.
@@ -122,7 +127,37 @@ live BTC data within a minute.
 
 ---
 
-## 7. Firewall recommendations
+## 7. Access control
+
+The dashboard and all `/api/*` routes are protected by a static API key
+(`X-API-Key` header). The key is configured via two environment variables
+that must be set to the same value:
+
+| Variable | Where used |
+|---|---|
+| `DASHBOARD_API_KEY` | Backend — validates incoming requests |
+| `VITE_DASHBOARD_API_KEY` | Frontend — inlined at build time, sent with every request |
+
+The `/health` endpoint is intentionally unauthenticated so that uptime
+monitoring tools can reach it without a key.
+
+**Generate a key:**
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+**When auth is disabled (key not set):**
+A warning is logged at startup. This is acceptable for local development
+but must not be used in production.
+
+**Local development:**
+Leave both variables empty in `.env`. The backend skips key validation and
+the frontend sends no `X-API-Key` header. The full dev stack works without
+any credential setup.
+
+---
+
+## 8. Firewall recommendations
 
 Configure your VPS firewall (e.g. `ufw`) to only allow public traffic on
 ports 22, 80, and 443:
@@ -140,7 +175,7 @@ rule is an additional safety layer.
 
 ---
 
-## 8. Updating the platform
+## 9. Updating the platform
 
 ```bash
 cd trading-analysis-platform
@@ -151,9 +186,12 @@ docker compose -f docker-compose.prod.yml up -d --build
 This rebuilds only the services whose image has changed (Docker layer cache),
 which is usually just `api` and `frontend` after code changes.
 
+> **Note:** After a `git pull`, rebuild with `--build` to ensure the frontend
+> bundle is rebuilt with the current `VITE_DASHBOARD_API_KEY` value.
+
 ---
 
-## 9. Useful commands
+## 10. Useful commands
 
 ```bash
 # View logs from a specific service
@@ -172,7 +210,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ---
 
-## 10. Telegram bot setup
+## 11. Telegram bot setup
 
 The `telegram` service runs a long-polling bot. No public URL or webhook is needed.
 
@@ -212,26 +250,27 @@ docker compose -f docker-compose.prod.yml restart telegram
 | `/delete_alert <id>` | Delete an alert by ID |
 | `/status` | Data freshness overview |
 
+All bot commands are restricted to the configured `TELEGRAM_CHAT_ID`. Commands
+from any other chat are silently ignored and logged as a warning on the server.
 Alert notifications are sent automatically to `TELEGRAM_CHAT_ID` when an alert
 condition is met. Logs are always written regardless of Telegram configuration.
 
 ---
 
-## 11. What is intentionally not done yet
+## 12. What is intentionally not done yet
 
 | Feature | Status |
 |---|---|
-| Telegram Mini App | Deferred — plain bot is Phase 10 foundation |
+| Telegram Mini App | Deferred — plain bot is the Phase 10 foundation |
 | Telegram webhook mode | Deferred — long polling is simpler and works fine for now |
 | Richer bot controls (create alerts from Telegram, etc.) | Deferred |
 | Automated backups | Not implemented — back up the `postgres_data` volume manually |
-| Auth / access control | Not implemented — the dashboard is currently open |
 | Alembic DB migrations | Not implemented — tables are created via `init_db.sql` and `create_all` |
 | CI/CD pipeline | Not implemented — updates are manual `git pull + compose up` |
 
 ---
 
-## 12. Local development
+## 13. Local development
 
 For local development, use `docker-compose.yml` (the default):
 
@@ -239,4 +278,19 @@ For local development, use `docker-compose.yml` (the default):
 docker compose up --build
 ```
 
+Leave `DASHBOARD_API_KEY` and `VITE_DASHBOARD_API_KEY` empty in `.env`.
+Authentication is automatically disabled when the key is not set.
+
 See the main [README.md](../README.md) for full local dev instructions.
+
+---
+
+## 14. Export / review bundle hygiene
+
+When sharing code for review, **never include**:
+- `.env` — contains real secrets
+- `node_modules/` — large binary artefact, not part of source
+- `.claude/` or any local IDE/tool settings directories
+
+The `.gitignore` already excludes `.env` and `node_modules/`. Double-check
+before creating a zip or uploading to any external tool.

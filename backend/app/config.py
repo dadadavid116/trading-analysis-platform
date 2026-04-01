@@ -60,6 +60,14 @@ class Settings(BaseSettings):
     # Find your chat ID by messaging @userinfobot on Telegram.
     telegram_chat_id: str = ""
 
+    # ── Dashboard access control ──────────────────────────────────────────────
+    # Static API key required on all /api/* requests (X-API-Key header).
+    # When empty (the default), authentication is disabled — suitable for
+    # local development only. Set a strong random value before VPS deployment.
+    # The frontend reads the matching VITE_DASHBOARD_API_KEY env var and sends
+    # the key automatically. Both values must be identical in production.
+    dashboard_api_key: str = ""
+
 
 # Create a single shared settings instance.
 # Import this anywhere in the app:  from app.config import settings

@@ -6,12 +6,15 @@ Start the server with:
     uvicorn app.main:app --reload
 """
 
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
+from app.auth import require_api_key
+from app.config import settings
 from app.database import engine, Base
 # Import models so SQLAlchemy registers them with Base before create_all runs.
 import app.models.price        # noqa: F401
@@ -20,6 +23,8 @@ import app.models.orderbook    # noqa: F401
 import app.models.analysis     # noqa: F401
 import app.models.alert        # noqa: F401
 from app.routers import price, liquidations, orderbook, analysis, alerts
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -35,6 +40,16 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE IF EXISTS alerts "
             "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
         ))
+
+    # Log authentication status so operators can confirm the key is active.
+    if settings.dashboard_api_key.strip():
+        logger.info("Dashboard API authentication is ENABLED (X-API-Key required).")
+    else:
+        logger.warning(
+            "DASHBOARD_API_KEY is not set — API authentication is DISABLED. "
+            "Set DASHBOARD_API_KEY in .env before VPS deployment."
+        )
+
     yield
 
 # ── Create the FastAPI application ────────────────────────────────────────────
@@ -72,6 +87,7 @@ app.add_middleware(
 
 
 # ── Health check endpoint ─────────────────────────────────────────────────────
+# Intentionally unauthenticated — monitoring tools can use this without a key.
 @app.get("/health", tags=["health"])
 async def health_check():
     """
@@ -82,8 +98,11 @@ async def health_check():
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-app.include_router(price.router,        prefix="/api")
-app.include_router(liquidations.router, prefix="/api")
-app.include_router(orderbook.router,    prefix="/api")
-app.include_router(analysis.router,     prefix="/api")
-app.include_router(alerts.router,       prefix="/api")
+# All /api/* routes require a valid X-API-Key header when DASHBOARD_API_KEY is set.
+_auth = [Depends(require_api_key)]
+
+app.include_router(price.router,        prefix="/api", dependencies=_auth)
+app.include_router(liquidations.router, prefix="/api", dependencies=_auth)
+app.include_router(orderbook.router,    prefix="/api", dependencies=_auth)
+app.include_router(analysis.router,     prefix="/api", dependencies=_auth)
+app.include_router(alerts.router,       prefix="/api", dependencies=_auth)

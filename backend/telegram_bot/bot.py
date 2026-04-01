@@ -34,8 +34,10 @@ logger = logging.getLogger(__name__)
 def _is_authorized(update: Update) -> bool:
     """Return True if the message came from the configured TELEGRAM_CHAT_ID.
 
-    Unauthorized messages are silently ignored — no reply is sent to them.
-    This keeps the bot invisible to anyone who is not the configured owner.
+    Unauthorized chats receive no reply — the bot stays invisible to them.
+    The attempt is logged at WARNING level so operators can spot
+    misconfiguration or unsolicited messages without any platform data
+    (prices, keys, etc.) appearing in the log.
 
     If TELEGRAM_CHAT_ID is not set, all commands are blocked and a warning
     is logged on each attempt.
@@ -47,7 +49,13 @@ def _is_authorized(update: Update) -> bool:
             "Set TELEGRAM_CHAT_ID in .env to enable command handling."
         )
         return False
-    return str(update.effective_chat.id) == chat_id.strip()
+    authorized = str(update.effective_chat.id) == chat_id.strip()
+    if not authorized:
+        logger.warning(
+            "Unauthorized command attempt from chat %s — ignored.",
+            update.effective_chat.id,
+        )
+    return authorized
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

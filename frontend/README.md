@@ -4,9 +4,10 @@ This folder contains the React + TypeScript + Vite frontend for the trading anal
 
 ## Phase Status
 
-Phase 8 (alerts) is complete. The full stack runs locally via Docker Compose with live BTC
-data ingestion, scheduled AI analysis, and alert evaluation. All five dashboard panels are
-implemented — Price, Liquidation, Order Book, Analysis, and Alerts.
+Phase 12 (access control) is complete. The full stack runs locally via Docker Compose with
+live BTC data ingestion, scheduled AI analysis, alert evaluation, Telegram bot, and API key
+access control. All five dashboard panels are implemented — Price, Liquidation, Order Book,
+Analysis, and Alerts.
 
 ## Folder Structure
 
@@ -68,8 +69,18 @@ The dev server starts at http://localhost:5173 by default.
 - Recharts is the current charting library. It can be swapped [Later] without changing panel structure.
 - Styling is kept minimal and functional. No design system is used in this phase.
 
+## Authentication
+
+All API calls include an `X-API-Key` header when `VITE_DASHBOARD_API_KEY` is
+set at build time. In local development the env var is left empty and the
+backend skips key validation automatically.
+
+For VPS production builds, `VITE_DASHBOARD_API_KEY` is passed as a Docker
+build arg (see `docker-compose.prod.yml`) and inlined into the bundle by Vite.
+It must match the `DASHBOARD_API_KEY` set for the backend service.
+
 ## Next Phase
 
-Post-MVP: Telegram alert notifications, auth/access control, Alembic migrations,
-and automated backups. See [`docs/deployment.md`](../docs/deployment.md) for the
-current VPS deployment guide.
+Post-MVP: Alembic migrations, automated backups, CI/CD pipeline.
+See [`docs/deployment.md`](../docs/deployment.md) for the current VPS
+deployment guide.

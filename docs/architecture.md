@@ -1,6 +1,6 @@
 # Architecture — Trading Analysis Platform (MVP)
 
-> **Status: Phase 9 complete — VPS deployment foundation.**
+> **Status: Phase 12 complete — Access control / public hardening.**
 > This document reflects the current implemented architecture. Items marked **[Later]**
 > are planned but not yet implemented. See Section 11 (Build Order) for the phase sequence.
 
@@ -304,11 +304,12 @@ These will be addressed in post-MVP phases documented in `docs/roadmap.md`.
 9. ✅ **VPS deployment foundation** — `docker-compose.prod.yml`, Caddy reverse proxy, production Nginx config, deployment guide.
 10. ✅ **Telegram bot** — Long-polling bot with `/price`, `/analysis`, `/alerts`, `/status` commands; alert notifications via Telegram when triggered.
 11. ✅ **Alert lifecycle** — `DELETE /api/alerts/{id}` endpoint; delete button in AlertsPanel; `/delete_alert <id>` bot command; bot commands restricted to configured `TELEGRAM_CHAT_ID`.
+12. ✅ **Access control / public hardening** — Static API key (`DASHBOARD_API_KEY` / `X-API-Key` header) protects all `/api/*` routes; frontend sends key via `VITE_DASHBOARD_API_KEY`; auth disabled by default for local dev; startup warning when key is not set; Telegram bot logs unauthorized command attempts.
 
 **Remaining for post-MVP:**
 - Telegram Mini App
 - Telegram webhook mode and richer bot controls
-- Auth / multi-user support
+- Multi-user support
 - Alembic migrations
 - Automated backups
 - CI/CD pipeline
