@@ -4,10 +4,10 @@ This folder contains the React + TypeScript + Vite frontend for the trading anal
 
 ## Phase Status
 
-Phase 12 (access control) is complete. The full stack runs locally via Docker Compose with
-live BTC data ingestion, scheduled AI analysis, alert evaluation, Telegram bot, and API key
-access control. All five dashboard panels are implemented — Price, Liquidation, Order Book,
-Analysis, and Alerts.
+Phase 13 (auth hardening + release hygiene) is complete. The full stack runs locally via
+Docker Compose with live BTC data ingestion, scheduled AI analysis, alert evaluation,
+Telegram bot, and Caddy Basic Auth access control. All five dashboard panels are implemented
+— Price, Liquidation, Order Book, Analysis, and Alerts.
 
 ## Folder Structure
 
@@ -79,6 +79,6 @@ the bundle or in the source code. `VITE_DASHBOARD_API_KEY` has been removed.
 
 ## Next Phase
 
-Post-MVP: Alembic migrations, automated backups, CI/CD pipeline.
-See [`docs/deployment.md`](../docs/deployment.md) for the current VPS
-deployment guide.
+Phase 14: staging VPS validation and deployment verification.
+Post-MVP (later): Alembic migrations, automated backups, CI/CD pipeline.
+See [`docs/deployment.md`](../docs/deployment.md) for the VPS deployment guide.

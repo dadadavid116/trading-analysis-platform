@@ -1,6 +1,6 @@
 # Architecture — Trading Analysis Platform (MVP)
 
-> **Status: Phase 13 complete — Auth hardening + release hygiene.**
+> **Status: Phase 14 complete — Staging VPS validation.**
 > This document reflects the current implemented architecture. Items marked **[Later]**
 > are planned but not yet implemented. See Section 11 (Build Order) for the phase sequence.
 
@@ -260,7 +260,7 @@ POSTGRES_PASSWORD=changeme
 POSTGRES_DB=trading_db
 DATABASE_URL=postgresql+asyncpg://trading:changeme@db:5432/trading_db
 
-# API
+# API server
 API_HOST=0.0.0.0
 API_PORT=8000
 
@@ -268,13 +268,33 @@ API_PORT=8000
 EXCHANGE=binance
 SYMBOL=BTCUSDT
 
-# Claude API (for analysis panel) [Later]
+# Claude API (required for AI analysis panel)
 ANTHROPIC_API_KEY=
+ANALYSIS_INTERVAL_MINUTES=10
 
-# Alerts (optional — Telegram or email) [Later]
-ALERT_TELEGRAM_TOKEN=
-ALERT_TELEGRAM_CHAT_ID=
+# Alert evaluation interval
+ALERT_EVALUATION_INTERVAL_MINUTES=1
+
+# Telegram bot (optional — leave blank to disable)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_CHAT_ID=
+
+# CORS (local dev defaults; set to your domain in production)
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+
+# Caddy Basic Auth — required for VPS deployment (not used in local dev)
+CADDY_USER=
+CADDY_HASHED_PASSWORD=
+
+# Production domain — Caddy uses this for automatic HTTPS
+DOMAIN=yourdomain.com
+
+# Optional secondary backend API key (X-API-Key header on /api/*)
+# Not required — Caddy Basic Auth is the primary gate. Leave blank for local dev.
+DASHBOARD_API_KEY=
 ```
+
+See `.env.example` for the full file with comments.
 
 ---
 
@@ -306,6 +326,8 @@ These will be addressed in post-MVP phases documented in `docs/roadmap.md`.
 11. ✅ **Alert lifecycle** — `DELETE /api/alerts/{id}` endpoint; delete button in AlertsPanel; `/delete_alert <id>` bot command; bot commands restricted to configured `TELEGRAM_CHAT_ID`.
 12. ✅ **Access control / public hardening** — Static API key (`DASHBOARD_API_KEY` / `X-API-Key` header) on all `/api/*` routes; startup warning when key not set; Telegram bot logs unauthorized command attempts. (Superseded by Phase 13.)
 13. ✅ **Auth hardening + release hygiene** — Caddy Basic Auth is now the primary access gate, protecting both the frontend and the API before any request reaches the application. `VITE_DASHBOARD_API_KEY` (build-time bundle secret) removed. `DASHBOARD_API_KEY` retained as an optional secondary backend layer. `scripts/export.sh` added for clean review bundles via `git archive`. `hmac.compare_digest` used for timing-safe key comparison.
+
+14. ✅ **Staging VPS validation** — pre-flight check script, API healthcheck in prod compose, orderbook pruning, deployment verification docs.
 
 **Remaining for post-MVP:**
 - Telegram Mini App

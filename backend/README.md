@@ -98,9 +98,9 @@ docker compose restart analysis
 
 ## Note on orderbook_snapshots growth
 
-The `orderbook_snapshots` table accumulates ~1 row every 5 seconds. For local
-development this is fine. Before VPS deployment, a periodic pruning strategy
-(e.g. keep only the last 24 hours) should be added.
+The `orderbook_snapshots` table accumulates ~1 row every 5 seconds. The collector
+automatically prunes rows older than 24 hours after each write, keeping the table
+at a stable size (~17 k rows / day maximum). No manual cleanup is needed.
 
 ## Running Locally (without Docker)
 

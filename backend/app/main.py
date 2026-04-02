@@ -41,13 +41,13 @@ async def lifespan(app: FastAPI):
             "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
         ))
 
-    # Log authentication status so operators can confirm the key is active.
+    # Log secondary API key status. Primary access control is Caddy Basic Auth.
     if settings.dashboard_api_key.strip():
-        logger.info("Dashboard API authentication is ENABLED (X-API-Key required).")
+        logger.info("Secondary API key layer ENABLED (X-API-Key required on /api/*).")
     else:
-        logger.warning(
-            "DASHBOARD_API_KEY is not set — API authentication is DISABLED. "
-            "Set DASHBOARD_API_KEY in .env before VPS deployment."
+        logger.info(
+            "DASHBOARD_API_KEY not set — secondary API key layer is inactive. "
+            "Primary access control is Caddy Basic Auth (production only)."
         )
 
     yield

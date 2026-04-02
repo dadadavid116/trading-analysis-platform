@@ -61,11 +61,11 @@ class Settings(BaseSettings):
     telegram_chat_id: str = ""
 
     # ── Dashboard access control ──────────────────────────────────────────────
-    # Static API key required on all /api/* requests (X-API-Key header).
-    # When empty (the default), authentication is disabled — suitable for
-    # local development only. Set a strong random value before VPS deployment.
-    # The frontend reads the matching VITE_DASHBOARD_API_KEY env var and sends
-    # the key automatically. Both values must be identical in production.
+    # Optional secondary backend API key. When set, FastAPI validates an
+    # X-API-Key header on all /api/* requests in addition to Caddy Basic Auth.
+    # This is not required — Caddy Basic Auth is the primary access gate.
+    # Leave empty (the default) to rely on Caddy auth alone.
+    # Not used by the frontend — no secret is embedded in the browser bundle.
     dashboard_api_key: str = ""
 
 

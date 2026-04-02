@@ -184,7 +184,7 @@ guide.
 
 ## Status
 
-**Phase 13 complete — Auth hardening + release hygiene.**
+**Phase 14 complete — Staging VPS validation.**
 The full stack runs locally via Docker Compose (seven services). Live BTC data
 is collected from Binance WebSocket streams and displayed across all five
 dashboard panels. An AI analysis worker generates market summaries every 10
@@ -201,7 +201,8 @@ and `CADDY_HASHED_PASSWORD` in `.env` before VPS deployment. Local development
 requires no auth setup.
 
 A production deployment path exists via `docker-compose.prod.yml` with Caddy,
-automatic HTTPS, and Nginx serving the frontend. See
+automatic HTTPS, and Nginx serving the frontend. Before deploying to a VPS, run
+`bash scripts/staging_check.sh` to validate your `.env` configuration. See
 [`docs/deployment.md`](docs/deployment.md) for the full VPS deployment guide.
 
 Use `bash scripts/export.sh` to create a clean review bundle (no secrets, no

@@ -311,7 +311,88 @@ See the main [README.md](../README.md) for full local dev instructions.
 
 ---
 
-## 14. Export / review bundle hygiene
+## 14. Staging VPS validation
+
+Before going live, run the pre-flight check script on your VPS:
+
+```bash
+bash scripts/staging_check.sh
+```
+
+This verifies:
+- All required env vars are set and non-empty
+- `DOMAIN` is not the placeholder value
+- `CADDY_HASHED_PASSWORD` looks like a valid bcrypt hash
+- `POSTGRES_PASSWORD` is not the default `changeme`
+- `CORS_ALLOWED_ORIGINS` does not contain `localhost`
+- Docker and Docker Compose are installed
+- Ports 80 and 443 are available
+
+Fix any `[FAIL]` items before deploying. `[WARN]` items are worth reviewing but
+will not block the stack from starting.
+
+### Post-startup verification
+
+After `docker compose -f docker-compose.prod.yml up -d --build`:
+
+**1. Check all containers are up and healthy**
+```bash
+docker compose -f docker-compose.prod.yml ps
+```
+All services should show `Up` (workers) or `Up (healthy)` (api, db).
+
+**2. Check the public health endpoint (no auth required)**
+```bash
+curl -f https://yourdomain.com/health
+# Expected: {"status":"ok"}
+```
+
+**3. Check that the dashboard requires auth**
+```bash
+curl -i https://yourdomain.com/
+# Expected: HTTP 401 with WWW-Authenticate: Basic header
+```
+
+**4. Verify Caddy obtained a certificate**
+```bash
+docker compose -f docker-compose.prod.yml logs caddy | grep -i "certificate\|tls\|acme"
+```
+Caddy logs a success message when Let's Encrypt issues the certificate (usually within 30 s
+of first start, provided DNS is correctly pointed at the VPS).
+
+**5. Verify live data is flowing**
+```bash
+# Check collector
+docker compose -f docker-compose.prod.yml logs --tail=20 collector
+
+# Check analysis worker
+docker compose -f docker-compose.prod.yml logs --tail=20 analysis
+
+# Quick API test (with your credentials)
+curl -u admin:yourpassword https://yourdomain.com/api/price/latest
+```
+
+**6. Verify the frontend loads**
+
+Open `https://yourdomain.com` in a browser. After entering credentials, the
+dashboard should load with data in all five panels within ~1 minute.
+
+### Common failure modes
+
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| Caddy fails to start | `CADDY_USER` or `CADDY_HASHED_PASSWORD` not set | Add to `.env`, restart caddy |
+| Caddy fails to start | `CADDY_HASHED_PASSWORD` is a plain password, not a hash | Re-generate with `caddy hash-password` |
+| `/health` returns connection refused | `api` container not started | Check `docker compose ps` and `logs api` |
+| HTTPS certificate not issued | DNS A record not pointed at VPS | Check with `dig yourdomain.com` |
+| HTTPS certificate not issued | Ports 80/443 blocked by VPS firewall | Run `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp` |
+| Panels show no data | Collector not running | Check `docker compose logs collector` |
+| Analysis panel empty | `ANTHROPIC_API_KEY` not set | Add key to `.env`, restart analysis |
+| Database connection errors | `DATABASE_URL` uses `localhost` instead of `db` | Fix `DATABASE_URL` host to `db` |
+
+---
+
+## 15. Export / review bundle hygiene
 
 When sharing code for review, use the export script to create a clean bundle:
 

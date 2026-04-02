@@ -16,9 +16,10 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import websockets
+from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
 from app.models.orderbook import OrderBookSnapshot
@@ -30,6 +31,10 @@ STREAM_URL = "wss://stream.binance.com:9443/ws/btcusdt@depth20"
 # Write a new snapshot at most once every N seconds.
 # The stream updates ~every second; we do not need to store every frame.
 WRITE_INTERVAL = 5.0
+
+# Delete snapshots older than this many hours after each write.
+# Prevents unbounded table growth (~1 row/5s = ~17k rows/day).
+PRUNE_KEEP_HOURS = 24
 
 
 async def run() -> None:
@@ -60,8 +65,14 @@ async def run() -> None:
                         bids=bids,
                         asks=asks,
                     )
+                    cutoff = datetime.now(tz=timezone.utc) - timedelta(hours=PRUNE_KEEP_HOURS)
                     async with AsyncSessionLocal() as session:
                         session.add(snapshot)
+                        await session.execute(
+                            delete(OrderBookSnapshot).where(
+                                OrderBookSnapshot.timestamp < cutoff
+                            )
+                        )
                         await session.commit()
 
                     logger.info("Order book snapshot stored.")

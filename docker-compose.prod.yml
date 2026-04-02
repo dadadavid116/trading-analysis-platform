@@ -67,6 +67,13 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # Use Python (already in the image) instead of curl (not in python:slim).
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ── React frontend (production build — Nginx static files) ───────────────────
   frontend:
@@ -78,7 +85,8 @@ services:
     restart: unless-stopped
     # No host port exposure — frontend is served through Caddy only.
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   # ── AI analysis worker ────────────────────────────────────────────────────────
   analysis:
@@ -171,8 +179,10 @@ services:
       CADDY_USER: ${CADDY_USER}
       CADDY_HASHED_PASSWORD: ${CADDY_HASHED_PASSWORD}
     depends_on:
-      - api
-      - frontend
+      api:
+        condition: service_healthy
+      frontend:
+        condition: service_started
 
 # ── Named volumes ─────────────────────────────────────────────────────────────
 volumes:
