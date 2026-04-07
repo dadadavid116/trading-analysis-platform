@@ -57,7 +57,7 @@ function PricePanel() {
   const [latestError, setLatestError] = useState<string | null>(null);
   const [latestLoading, setLatestLoading] = useState(true);
 
-  const [interval, setInterval] = useState<IntervalValue>('5m');
+  const [timeframe, setTimeframe] = useState<IntervalValue>('5m');
   const [chartLoading, setChartLoading] = useState(true);
   const [chartError, setChartError] = useState<string | null>(null);
 
@@ -143,11 +143,11 @@ function PricePanel() {
   useEffect(() => {
     if (!seriesRef.current) return;
 
-    const cfg = INTERVALS.find((i) => i.value === interval)!;
+    const cfg = INTERVALS.find((i) => i.value === timeframe)!;
     setChartLoading(true);
     setChartError(null);
 
-    fetchKlines(interval, cfg.limit)
+    fetchKlines(timeframe, cfg.limit)
       .then((data: KlineCandle[]) => {
         const chartData: CandlestickData[] = data.map((c) => ({
           time:  c.time as UTCTimestamp,
@@ -164,7 +164,7 @@ function PricePanel() {
         setChartError(err.message);
         setChartLoading(false);
       });
-  }, [interval]);
+  }, [timeframe]);
 
   return (
     <div style={panelStyles.card}>
@@ -177,8 +177,8 @@ function PricePanel() {
           {INTERVALS.map((iv) => (
             <button
               key={iv.value}
-              style={styles.switcherBtn(interval === iv.value)}
-              onClick={() => setInterval(iv.value)}
+              style={styles.switcherBtn(timeframe === iv.value)}
+              onClick={() => setTimeframe(iv.value)}
             >
               {iv.label}
             </button>
