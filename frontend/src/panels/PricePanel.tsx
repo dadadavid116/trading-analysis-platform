@@ -1,51 +1,197 @@
-import { useState, useEffect } from 'react';
-import { fetchLatestPrice, PriceCandle } from '../api';
+import { useState, useEffect, useRef } from 'react';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp } from 'lightweight-charts';
+import { fetchLatestPrice, fetchKlines, PriceCandle, KlineCandle } from '../api';
 import { panelStyles } from './panelStyles';
 
-/**
- * PricePanel — displays the latest BTC/USDT 1-minute price candle.
- *
- * Data source: live Binance kline stream via the price collector (Phase 6).
- * Polls the API every 15 seconds. A new candle is available roughly every minute.
- * A Recharts line chart can be added here [Later] using fetchPriceHistory().
- */
+// ── Time-period definitions ────────────────────────────────────────────────────
+
+const INTERVALS = [
+  { label: '3m',  value: '3m',  limit: 100 },
+  { label: '5m',  value: '5m',  limit: 100 },
+  { label: '15m', value: '15m', limit: 100 },
+  { label: '1H',  value: '1h',  limit: 100 },
+  { label: '4H',  value: '4h',  limit: 100 },
+  { label: '1D',  value: '1d',  limit: 90  },
+  { label: '1M',  value: '1M',  limit: 24  },
+] as const;
+
+type IntervalValue = typeof INTERVALS[number]['value'];
+
+// ── Styles ─────────────────────────────────────────────────────────────────────
+
+const styles: Record<string, React.CSSProperties> = {
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #2a2a2e',
+    paddingBottom: '8px',
+  },
+  switcherRow: {
+    display: 'flex',
+    gap: '4px',
+  },
+  switcherBtn: (active: boolean): React.CSSProperties => ({
+    backgroundColor: active ? '#1e3a5f' : '#111114',
+    border: `1px solid ${active ? '#3a6a9f' : '#2a2a2e'}`,
+    borderRadius: '4px',
+    color: active ? '#90b8e0' : '#888',
+    cursor: 'pointer',
+    fontSize: '11px',
+    fontWeight: active ? 600 : 400,
+    padding: '3px 8px',
+    transition: 'all 0.15s',
+  }),
+  chartContainer: {
+    width: '100%',
+    height: '260px',
+    borderRadius: '4px',
+    overflow: 'hidden',
+  },
+};
+
+// ── Component ──────────────────────────────────────────────────────────────────
+
 function PricePanel() {
   const [candle, setCandle] = useState<PriceCandle | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [latestError, setLatestError] = useState<string | null>(null);
+  const [latestLoading, setLatestLoading] = useState(true);
 
+  const [interval, setInterval] = useState<IntervalValue>('5m');
+  const [chartLoading, setChartLoading] = useState(true);
+  const [chartError, setChartError] = useState<string | null>(null);
+
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+
+  // ── Poll the latest price tick every 15 s ──────────────────────────────────
   useEffect(() => {
     const fetchData = () => {
       fetchLatestPrice()
         .then((data) => {
           setCandle(data);
-          setError(null);   // clear any previous error on success
-          setLoading(false);
+          setLatestError(null);
+          setLatestLoading(false);
         })
         .catch((err: Error) => {
-          setError(err.message);
-          setLoading(false);
+          setLatestError(err.message);
+          setLatestLoading(false);
         });
     };
-
-    fetchData();                                  // fetch immediately on mount
-    const interval = setInterval(fetchData, 15_000); // then re-fetch every 15 s
-    return () => clearInterval(interval);         // clean up on unmount
+    fetchData();
+    const id = setInterval(fetchData, 15_000);
+    return () => clearInterval(id);
   }, []);
+
+  // ── Create the chart once on mount ─────────────────────────────────────────
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { color: '#1a1a1f' },
+        textColor: '#888',
+      },
+      grid: {
+        vertLines: { color: '#222226' },
+        horzLines: { color: '#222226' },
+      },
+      crosshair: {
+        vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+      },
+      rightPriceScale: { borderColor: '#2a2a2e' },
+      timeScale: {
+        borderColor: '#2a2a2e',
+        timeVisible: true,
+        secondsVisible: false,
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 260,
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor:          '#26a69a',
+      downColor:        '#ef5350',
+      borderUpColor:    '#26a69a',
+      borderDownColor:  '#ef5350',
+      wickUpColor:      '#26a69a',
+      wickDownColor:    '#ef5350',
+    });
+
+    chartRef.current  = chart;
+    seriesRef.current = series;
+
+    // Resize observer keeps the chart in sync with panel width changes.
+    const ro = new ResizeObserver(() => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+      }
+    });
+    ro.observe(chartContainerRef.current);
+
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      chartRef.current  = null;
+      seriesRef.current = null;
+    };
+  }, []);
+
+  // ── Load candle data whenever interval changes ─────────────────────────────
+  useEffect(() => {
+    if (!seriesRef.current) return;
+
+    const cfg = INTERVALS.find((i) => i.value === interval)!;
+    setChartLoading(true);
+    setChartError(null);
+
+    fetchKlines(interval, cfg.limit)
+      .then((data: KlineCandle[]) => {
+        const chartData: CandlestickData[] = data.map((c) => ({
+          time:  c.time as UTCTimestamp,
+          open:  c.open,
+          high:  c.high,
+          low:   c.low,
+          close: c.close,
+        }));
+        seriesRef.current!.setData(chartData);
+        chartRef.current!.timeScale().fitContent();
+        setChartLoading(false);
+      })
+      .catch((err: Error) => {
+        setChartError(err.message);
+        setChartLoading(false);
+      });
+  }, [interval]);
 
   return (
     <div style={panelStyles.card}>
-      <h2 style={panelStyles.title}>Price — BTC/USDT</h2>
+      {/* Header row: title + interval switcher */}
+      <div style={styles.header}>
+        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
+          Price — BTC/USDT
+        </h2>
+        <div style={styles.switcherRow}>
+          {INTERVALS.map((iv) => (
+            <button
+              key={iv.value}
+              style={styles.switcherBtn(interval === iv.value)}
+              onClick={() => setInterval(iv.value)}
+            >
+              {iv.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {loading && <p style={panelStyles.muted}>Loading…</p>}
-
-      {error && (
-        <p style={panelStyles.error}>
-          Could not load price data — check that the API is running.
-        </p>
+      {/* Latest price data grid */}
+      {latestLoading && <p style={panelStyles.muted}>Loading…</p>}
+      {latestError && (
+        <p style={panelStyles.error}>Could not load price data — check that the API is running.</p>
       )}
-
-      {candle && !loading && (
+      {candle && !latestLoading && (
         <div style={panelStyles.dataGrid}>
           <DataRow label="Close"  value={`$${candle.close.toLocaleString()}`} highlight />
           <DataRow label="Open"   value={`$${candle.open.toLocaleString()}`} />
@@ -56,14 +202,27 @@ function PricePanel() {
         </div>
       )}
 
-      {/* [Later] Add a Recharts LineChart here using fetchPriceHistory() */}
+      {/* K-line candlestick chart */}
+      <div style={{ position: 'relative' }}>
+        {chartLoading && (
+          <p style={{ ...panelStyles.muted, position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
+            Loading chart…
+          </p>
+        )}
+        {chartError && (
+          <p style={{ ...panelStyles.error, position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
+            Chart error: {chartError}
+          </p>
+        )}
+        <div ref={chartContainerRef} style={styles.chartContainer} />
+      </div>
     </div>
   );
 }
 
 export default PricePanel;
 
-// ── Tiny helper component ─────────────────────────────────────────────────────
+// ── Helper ─────────────────────────────────────────────────────────────────────
 
 function DataRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (

@@ -72,6 +72,20 @@ export function fetchPriceHistory(limit = 60): Promise<PriceCandle[]> {
   return apiFetch<PriceCandle[]>(`/price/history?limit=${limit}`);
 }
 
+export interface KlineCandle {
+  time: number;   // Unix timestamp in seconds
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/** Fetch OHLCV candles for a given interval from Binance (via the backend). */
+export function fetchKlines(interval: string, limit = 100): Promise<KlineCandle[]> {
+  return apiFetch<KlineCandle[]>(`/price/klines?interval=${interval}&limit=${limit}`);
+}
+
 /** Fetch recent liquidation events. */
 export function fetchRecentLiquidations(limit = 20): Promise<LiquidationEvent[]> {
   return apiFetch<LiquidationEvent[]>(`/liquidations/recent?limit=${limit}`);
