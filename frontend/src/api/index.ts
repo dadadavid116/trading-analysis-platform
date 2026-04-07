@@ -153,3 +153,35 @@ export async function deleteAlert(id: number): Promise<void> {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
   }
 }
+
+// ── Chat ───────────────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+}
+
+/**
+ * Send a message to the AI chatbot. Returns Claude's reply.
+ * history is the prior turns in the conversation (not including the new message).
+ */
+export async function sendChatMessage(
+  message: string,
+  history: ChatMessage[],
+  model = 'claude',
+): Promise<ChatResponse> {
+  const response = await fetch(`${BASE_URL}/chat/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history, model }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail?.detail ?? `API error ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<ChatResponse>;
+}

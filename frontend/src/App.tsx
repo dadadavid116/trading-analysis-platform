@@ -3,7 +3,7 @@ import PricePanel from './panels/PricePanel';
 import LiquidationPanel from './panels/LiquidationPanel';
 import OrderBookPanel from './panels/OrderBookPanel';
 import AlertsPanel from './panels/AlertsPanel';
-import AnalysisPanel from './panels/AnalysisPanel';
+import ChatPanel from './panels/ChatPanel';
 
 /**
  * App — root component.
@@ -19,7 +19,7 @@ function App() {
       <LiquidationPanel />
       <OrderBookPanel />
       <AlertsPanel />
-      <AnalysisPanel />
+      <ChatPanel />
     </Layout>
   );
 }
