@@ -112,9 +112,9 @@ const styles: Record<string, React.CSSProperties> = {
     resize: 'none' as const,
     outline: 'none',
     fontFamily: 'inherit',
-    minHeight: '38px',
-    maxHeight: '110px',
     lineHeight: '1.4',
+    minHeight: '38px',
+    overflowY: 'hidden' as const,  // JS overrides to 'auto' once content exceeds the cap
   },
   sendButton: (disabled: boolean): React.CSSProperties => ({
     backgroundColor: disabled ? '#1e1e26' : '#1e3a5f',
@@ -323,11 +323,20 @@ function ChatPanel() {
   ]);
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Scroll to the latest message whenever the list changes.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Grow the textarea to fit its content up to MAX_INPUT_HEIGHT, then scroll.
+  const MAX_INPUT_HEIGHT = 140;
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = 'auto';                                      // shrink first so scrollHeight is accurate
+    el.style.height = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT) + 'px';
+    el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden';
+  }
 
   function buildHistory(): { role: 'user' | 'assistant'; content: string }[] {
     return messages
@@ -342,6 +351,11 @@ function ChatPanel() {
 
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setInput('');
+    // Reset textarea height back to one line after sending.
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.overflowY = 'hidden';
+    }
     setLoading(true);
 
     try {
@@ -412,10 +426,14 @@ function ChatPanel() {
       {/* ── Input row ── */}
       <div style={styles.inputRow}>
         <textarea
+          ref={textareaRef}
           style={styles.input}
           placeholder="Ask about BTC or set a price alert… (Enter to send)"
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            autoResize(e.target);
+          }}
           onKeyDown={handleKeyDown}
           disabled={loading}
           rows={1}
