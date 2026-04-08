@@ -139,11 +139,13 @@ function PricePanel() {
     };
   }, []);
 
-  // ── Load candle data whenever interval changes ─────────────────────────────
+  // ── Load candle data whenever timeframe changes ────────────────────────────
   useEffect(() => {
     if (!seriesRef.current) return;
 
-    const cfg = INTERVALS.find((i) => i.value === timeframe)!;
+    const cfg = INTERVALS.find((i) => i.value === timeframe);
+    if (!cfg) return;
+
     setChartLoading(true);
     setChartError(null);
 
