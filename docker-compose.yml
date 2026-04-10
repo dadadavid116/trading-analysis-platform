@@ -84,23 +84,24 @@ services:
       # Prevent the host node_modules from overwriting the container's copy
       - /app/node_modules
 
-  # ── AI analysis worker ───────────────────────────────────────────────────────
-  analysis:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-    # Override the default CMD (uvicorn) to run the analysis worker instead.
-    command: ["python", "-m", "analysis.run"]
-    depends_on:
-      db:
-        condition: service_healthy
-    # No ports — the analysis worker reads from DB and writes summaries back.
-    # Requires ANTHROPIC_API_KEY to be set in .env — worker skips silently if missing.
+  # ── AI analysis worker — DISABLED (on-demand only) ──────────────────────────
+  # Auto-generation removed: the platform is now data-driven and passive.
+  # AI analysis is only triggered by explicit user requests via the ChatPanel.
+  # To re-enable: uncomment this block and run docker compose up -d analysis.
+  #
+  # analysis:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     DATABASE_URL: ${DATABASE_URL}
+  #   command: ["python", "-m", "analysis.run"]
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
 
   # ── Alert evaluation worker ─────────────────────────────────────────────────
   alerts:

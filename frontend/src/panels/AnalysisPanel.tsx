@@ -3,39 +3,31 @@ import { fetchLatestAnalysis, AnalysisSummary } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
- * AnalysisPanel — displays the latest AI-generated BTC market summary.
+ * AnalysisPanel — displays the most recent AI-generated market summary.
  *
- * Data source: Claude API via the analysis worker (Phase 7).
- * The worker generates a new summary every ANALYSIS_INTERVAL_MINUTES (default: 10 min).
- * This panel polls the API every 60 seconds to pick up new summaries automatically.
+ * AI analysis is now on-demand only — the automatic 10-minute worker has been
+ * disabled. Summaries are generated when the user explicitly requests one via
+ * the Chat panel (e.g. "give me a market analysis").
  *
- * If no summary is available yet (worker hasn't run), a friendly message is shown.
+ * This panel fetches once on mount and shows whatever is already stored.
+ * It does not poll — there is nothing to poll for until the user triggers one.
  */
 function AnalysisPanel() {
   const [summary, setSummary] = useState<AnalysisSummary | null>(null);
-  const [notReady, setNotReady] = useState(false);  // true = 404, worker not run yet
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]     = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = () => {
-      fetchLatestAnalysis()
-        .then((data) => {
-          setSummary(data);           // data is null if worker hasn't run yet
-          setNotReady(data === null);
-          setError(null);
-          setLoading(false);
-        })
-        .catch((err: Error) => {
-          setError(err.message);
-          setLoading(false);
-        });
-    };
-
-    fetchData();
-    // Poll every 60 s — summaries are generated every ~10 min so this is plenty.
-    const interval = setInterval(fetchData, 60_000);
-    return () => clearInterval(interval);
+    fetchLatestAnalysis()
+      .then((data) => {
+        setSummary(data);
+        setError(null);
+        setLoading(false);
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, []);
 
   return (
@@ -50,11 +42,35 @@ function AnalysisPanel() {
         </p>
       )}
 
-      {!loading && !error && notReady && (
-        <p style={panelStyles.muted}>
-          No summary available yet. The analysis worker generates summaries every
-          ~10 minutes — check back shortly after the stack starts.
-        </p>
+      {!loading && !error && !summary && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <p style={panelStyles.muted}>
+            No analysis generated yet.
+          </p>
+          <p style={{ ...panelStyles.value, lineHeight: '1.6', fontSize: '12px' }}>
+            AI analysis is on-demand. Use the <strong style={{ color: '#90b8e0' }}>Chat panel</strong> to
+            request it — for example:
+          </p>
+          <div style={{
+            backgroundColor: '#111118',
+            border: '1px solid #2a2a3e',
+            borderRadius: '6px',
+            padding: '8px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '5px',
+          }}>
+            {[
+              '"Give me a BTC market analysis"',
+              '"What does the current price action suggest?"',
+              '"Summarise recent liquidation activity"',
+            ].map((example, i) => (
+              <span key={i} style={{ color: '#6a9fd8', fontSize: '11px', fontStyle: 'italic' }}>
+                {example}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {summary && !loading && (
