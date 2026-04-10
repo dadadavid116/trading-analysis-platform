@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp } from 'lightweight-charts';
-import { fetchLatestPrice, fetchKlines, PriceCandle, KlineCandle } from '../api';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine } from 'lightweight-charts';
+import { fetchLatestPrice, fetchKlines, fetchAlerts, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
 // ── Time-period definitions ────────────────────────────────────────────────────
@@ -64,6 +64,8 @@ function PricePanel() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  // Tracks the IPriceLine handle for each alert ID so we can remove them cleanly.
+  const alertLinesRef = useRef<Map<number, IPriceLine>>(new Map());
 
   // ── Poll the latest price tick every 15 s ──────────────────────────────────
   useEffect(() => {
@@ -81,6 +83,56 @@ function PricePanel() {
     };
     fetchData();
     const id = setInterval(fetchData, 15_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Sync alert price lines onto the chart every 15 s ──────────────────────
+  useEffect(() => {
+    const syncLines = () => {
+      fetchAlerts()
+        .then((data: Alert[]) => {
+          if (!seriesRef.current) return; // chart not mounted yet
+
+          // Only price alerts that haven't triggered yet get a line.
+          const priceAlerts = data.filter(
+            (a) =>
+              a.is_active &&
+              !a.triggered_at &&
+              (a.condition_type === 'price_above' || a.condition_type === 'price_below'),
+          );
+
+          const series    = seriesRef.current;
+          const linesMap  = alertLinesRef.current;
+          const activeIds = new Set(priceAlerts.map((a) => a.id));
+
+          // Remove lines whose alerts no longer appear in the active list.
+          for (const [id, line] of linesMap) {
+            if (!activeIds.has(id)) {
+              series.removePriceLine(line);
+              linesMap.delete(id);
+            }
+          }
+
+          // Add a new line for every alert we haven't drawn yet.
+          for (const alert of priceAlerts) {
+            if (linesMap.has(alert.id)) continue;
+            const isAbove = alert.condition_type === 'price_above';
+            const line = series.createPriceLine({
+              price:            alert.threshold,
+              color:            '#f5a623',
+              lineWidth:        1,
+              lineStyle:        LineStyle.Dashed,
+              axisLabelVisible: true,
+              title:            `${isAbove ? '↑' : '↓'} ${alert.name}`,
+            });
+            linesMap.set(alert.id, line);
+          }
+        })
+        .catch(() => {}); // non-critical — silently skip on error
+    };
+
+    syncLines();
+    const id = setInterval(syncLines, 15_000);
     return () => clearInterval(id);
   }, []);
 
