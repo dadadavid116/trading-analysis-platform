@@ -35,10 +35,17 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # Schema migration: add trigger_mode to any alerts table that was created
-        # before Phase 9. Safe to run on every startup (PostgreSQL IF NOT EXISTS).
+        # before Phase 9. Safe to run on new tables too (PostgreSQL IF NOT EXISTS).
         await conn.execute(text(
             "ALTER TABLE IF EXISTS alerts "
             "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
+        ))
+        # Schema migration: unique index on (symbol, timestamp) so the collector
+        # can upsert live candle data on every tick instead of only on close.
+        # IF NOT EXISTS makes this safe to run on every startup.
+        await conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_price_candles_symbol_ts "
+            "ON price_candles(symbol, timestamp)"
         ))
 
     # Log secondary API key status. Primary access control is Caddy Basic Auth.

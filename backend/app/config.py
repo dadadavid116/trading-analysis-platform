@@ -52,8 +52,9 @@ class Settings(BaseSettings):
     )
 
     # ── Alerts ────────────────────────────────────────────────────────────────
-    # How often the alert evaluator checks conditions (in minutes).
-    alert_evaluation_interval_minutes: int = 1
+    # How often the alert evaluator checks conditions (in seconds).
+    # Default 15 s — evaluator is lightweight so running frequently is fine.
+    alert_evaluation_interval_seconds: int = 15
 
     # ── Telegram ─────────────────────────────────────────────────────────────
     # Bot token from @BotFather — used by the telegram_bot service and for

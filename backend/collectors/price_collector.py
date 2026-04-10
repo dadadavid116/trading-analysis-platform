@@ -1,13 +1,18 @@
 """
-price_collector.py — Live BTC/USDT 1-minute candle collector.
+price_collector.py — Live BTC/USDT price collector with real-time upserts.
 
-Connects to the Binance kline WebSocket stream and writes a new row to
-price_candles each time a 1-minute candle closes.
+Connects to the Binance kline WebSocket stream and upserts the current candle
+on EVERY tick — not just on candle close. This keeps the DB within ~250 ms
+of the live Binance price at all times.
+
+The upsert uses ON CONFLICT (symbol, timestamp) DO UPDATE, so:
+  - Each tick within a 1-minute window overwrites the same row with the latest
+    open, high, low, close, and volume values.
+  - When the candle closes (kline["x"] == True), the final definitive values
+    are written and the row becomes a permanent closed candle.
+  - The next tick starts a new row at the next candle's timestamp.
 
 Stream: wss://stream.binance.com:9443/ws/btcusdt@kline_1m
-
-A new row is inserted once per minute (on candle close).
-Open/in-progress candles are ignored so the table stays clean.
 """
 
 import asyncio
@@ -16,6 +21,7 @@ import logging
 from datetime import datetime, timezone
 
 import websockets
+from sqlalchemy.dialects.postgresql import insert
 
 from app.database import AsyncSessionLocal
 from app.models.price import PriceCandle
@@ -26,8 +32,8 @@ STREAM_URL = "wss://stream.binance.com:9443/ws/btcusdt@kline_1m"
 
 
 async def run() -> None:
-    """Connect to the Binance kline stream and store closed candles."""
-    logger.info("Price collector starting...")
+    """Connect to the Binance kline stream and upsert every tick."""
+    logger.info("Price collector starting (live-tick mode)...")
     while True:
         try:
             async with websockets.connect(STREAM_URL) as ws:
@@ -36,34 +42,46 @@ async def run() -> None:
                     msg = json.loads(raw)
                     kline = msg["k"]
 
-                    # kline["x"] is True only when the candle has closed.
-                    # Skip updates for the still-open candle — we only want finals.
-                    if not kline["x"]:
-                        continue
+                    # kline["T"] is the candle close time — constant for all
+                    # ticks within the same 1-minute candle, so it's our upsert key.
+                    ts = datetime.fromtimestamp(kline["T"] / 1000, tz=timezone.utc)
 
-                    candle = PriceCandle(
-                        symbol=kline["s"],
-                        # kline["T"] is the candle close time (end of the 1m window).
-                        # We use close time because we only store completed candles.
-                        timestamp=datetime.fromtimestamp(
-                            kline["T"] / 1000, tz=timezone.utc
-                        ),
-                        open=float(kline["o"]),
-                        high=float(kline["h"]),
-                        low=float(kline["l"]),
-                        close=float(kline["c"]),
-                        volume=float(kline["v"]),
+                    stmt = (
+                        insert(PriceCandle)
+                        .values(
+                            symbol    = kline["s"],
+                            timestamp = ts,
+                            open      = float(kline["o"]),
+                            high      = float(kline["h"]),
+                            low       = float(kline["l"]),
+                            close     = float(kline["c"]),
+                            volume    = float(kline["v"]),
+                        )
+                        .on_conflict_do_update(
+                            # Matches the unique index created on startup.
+                            index_elements=["symbol", "timestamp"],
+                            set_={
+                                "open":   float(kline["o"]),
+                                "high":   float(kline["h"]),
+                                "low":    float(kline["l"]),
+                                "close":  float(kline["c"]),
+                                "volume": float(kline["v"]),
+                            },
+                        )
                     )
+
                     async with AsyncSessionLocal() as session:
-                        session.add(candle)
+                        await session.execute(stmt)
                         await session.commit()
 
-                    logger.info(
-                        "Candle stored: %s  close=%.2f  volume=%.4f",
-                        candle.symbol,
-                        candle.close,
-                        candle.volume,
-                    )
+                    if kline["x"]:
+                        # Log only on candle close to avoid log spam.
+                        logger.info(
+                            "Candle closed: %s  close=%.2f  volume=%.4f",
+                            kline["s"],
+                            float(kline["c"]),
+                            float(kline["v"]),
+                        )
 
         except Exception as exc:
             logger.error("Price collector error: %s — reconnecting in 5 s.", exc)

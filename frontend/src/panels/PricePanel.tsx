@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine } from 'lightweight-charts';
-import { fetchLatestPrice, fetchKlines, fetchAlerts, createAlert, PriceCandle, KlineCandle, Alert } from '../api';
+import { fetchKlines, fetchAlerts, createAlert, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
 // ── Time-period definitions ────────────────────────────────────────────────────
@@ -72,23 +72,30 @@ function PricePanel() {
   const [popoverSaving, setPopoverSaving] = useState(false);
   const [popoverError, setPopoverError] = useState<string | null>(null);
 
-  // ── Poll the latest price tick every 15 s ──────────────────────────────────
+  // ── Live price via Server-Sent Events ─────────────────────────────────────
+  // The backend pushes the latest DB candle every ~1 s. The collector now
+  // upserts on every Binance tick, so the displayed price is effectively live.
+  // EventSource reconnects automatically on connection drop.
   useEffect(() => {
-    const fetchData = () => {
-      fetchLatestPrice()
-        .then((data) => {
-          setCandle(data);
-          setLatestError(null);
-          setLatestLoading(false);
-        })
-        .catch((err: Error) => {
-          setLatestError(err.message);
-          setLatestLoading(false);
-        });
+    const es = new EventSource('/api/price/stream');
+
+    es.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data) as PriceCandle;
+        setCandle(data);
+        setLatestError(null);
+        setLatestLoading(false);
+      } catch {
+        // malformed frame — skip
+      }
     };
-    fetchData();
-    const id = setInterval(fetchData, 15_000);
-    return () => clearInterval(id);
+
+    es.onerror = () => {
+      setLatestError('Live stream reconnecting…');
+      // EventSource auto-reconnects — no manual retry needed
+    };
+
+    return () => es.close();
   }, []);
 
   // ── Sync alert price lines onto the chart every 15 s ──────────────────────
@@ -205,6 +212,35 @@ function PricePanel() {
       seriesRef.current = null;
     };
   }, []);
+
+  // ── Refresh the live (rightmost) candle on the chart every 10 s ───────────
+  // Full chart data is loaded once per timeframe switch (setData below).
+  // This effect only updates the LAST candle so the chart stays current
+  // without re-rendering the entire series.
+  useEffect(() => {
+    const refreshLiveCandle = () => {
+      if (!seriesRef.current) return;
+      const cfg = INTERVALS.find((i) => i.value === timeframe);
+      if (!cfg) return;
+
+      fetchKlines(timeframe, 1)
+        .then((data: KlineCandle[]) => {
+          if (!seriesRef.current || data.length === 0) return;
+          const c = data[0];
+          seriesRef.current.update({
+            time:  c.time as UTCTimestamp,
+            open:  c.open,
+            high:  c.high,
+            low:   c.low,
+            close: c.close,
+          });
+        })
+        .catch(() => {}); // non-critical — skip on error
+    };
+
+    const id = setInterval(refreshLiveCandle, 10_000);
+    return () => clearInterval(id);
+  }, [timeframe]);
 
   // ── Load candle data whenever timeframe changes ────────────────────────────
   useEffect(() => {

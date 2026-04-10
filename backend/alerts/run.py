@@ -49,15 +49,15 @@ async def _ensure_tables() -> None:
 async def main() -> None:
     await _ensure_tables()
 
-    interval = settings.alert_evaluation_interval_minutes
+    interval = settings.alert_evaluation_interval_seconds
     logger.info(
-        "Alerts worker starting. Evaluating every %d minute(s).",
+        "Alerts worker starting. Evaluating every %d second(s).",
         interval,
     )
 
     while True:
         await evaluate_all()
-        await asyncio.sleep(interval * 60)
+        await asyncio.sleep(interval)
 
 
 if __name__ == "__main__":

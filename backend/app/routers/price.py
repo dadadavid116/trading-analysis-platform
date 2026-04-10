@@ -7,14 +7,17 @@ Endpoints:
     GET /api/price/klines    — OHLCV candles for a given interval from Binance
 """
 
+import asyncio
+import json
 from typing import List, Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, AsyncSessionLocal
 from app.models.price import PriceCandle
 from app.schemas.price import PriceCandleSchema
 
@@ -24,6 +27,59 @@ router = APIRouter(prefix="/price", tags=["price"])
 VALID_INTERVALS = {"3m", "5m", "15m", "1h", "4h", "1d", "1M"}
 
 BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+
+
+@router.get("/stream")
+async def stream_price():
+    """
+    Server-Sent Events (SSE) stream for live BTC price.
+
+    Pushes the latest candle from the DB every second. The collector now upserts
+    on every Binance tick (~250 ms), so this stream is effectively live.
+
+    The frontend connects once and receives continuous updates without polling.
+    Reconnects automatically if the connection drops (built into EventSource).
+    """
+    async def generator():
+        while True:
+            try:
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(
+                        select(PriceCandle)
+                        .where(PriceCandle.symbol == "BTCUSDT")
+                        .order_by(desc(PriceCandle.timestamp))
+                        .limit(1)
+                    )
+                    candle = result.scalar_one_or_none()
+
+                if candle:
+                    payload = {
+                        "id":        candle.id,
+                        "symbol":    candle.symbol,
+                        "timestamp": candle.timestamp.isoformat(),
+                        "open":      float(candle.open),
+                        "high":      float(candle.high),
+                        "low":       float(candle.low),
+                        "close":     float(candle.close),
+                        "volume":    float(candle.volume),
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n"
+            except asyncio.CancelledError:
+                return   # client disconnected
+            except Exception:
+                pass     # DB blip — skip this tick, retry next second
+
+            await asyncio.sleep(1)
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control":    "no-cache",
+            "X-Accel-Buffering": "no",    # disable Nginx / Caddy buffering
+            "Connection":       "keep-alive",
+        },
+    )
 
 
 @router.get("/latest", response_model=PriceCandleSchema)
