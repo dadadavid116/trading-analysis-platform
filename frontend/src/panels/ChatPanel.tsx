@@ -298,8 +298,8 @@ function renderMarkdown(text: string): React.ReactNode {
 
 const MODELS = [
   { value: 'claude', label: 'Claude' },
-  // { value: 'chatgpt', label: 'ChatGPT' },
-  // { value: 'grok',   label: 'Grok'    },
+  { value: 'openai', label: 'ChatGPT' },
+  // { value: 'grok', label: 'Grok' },  // coming in a future phase
 ];
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -318,7 +318,7 @@ function ChatPanel() {
     {
       role: 'assistant',
       content:
-        "Hi! I'm your BTC trading assistant. I have access to live market data and can manage your price alerts.\n\nTry asking:\n• \"What's the current BTC price?\"\n• \"Set an alert when BTC goes above $70,000\"\n• \"Show my alerts\"\n• \"Delete alert #3\"",
+        "Hi! I'm your BTC trading assistant. Use the selector above to switch between **Claude** and **ChatGPT** — both have access to live market data and can manage your price alerts.\n\nTry asking:\n• \"What's the current BTC price?\"\n• \"Set an alert when BTC goes above $70,000\"\n• \"Show my alerts\"\n• \"Delete alert #3\"",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -402,7 +402,9 @@ function ChatPanel() {
           <div key={i} style={styles.messageGroup(msg.role)}>
             {msg.role !== 'error' && (
               <span style={styles.roleLabel(msg.role === 'user' ? 'user' : 'assistant')}>
-                {msg.role === 'user' ? 'You' : 'Claude'}
+                {msg.role === 'user'
+                  ? 'You'
+                  : MODELS.find((m) => m.value === model)?.label ?? 'Assistant'}
               </span>
             )}
 
@@ -418,7 +420,11 @@ function ChatPanel() {
           </div>
         ))}
 
-        {loading && <span style={styles.typing}>Claude is thinking…</span>}
+        {loading && (
+          <span style={styles.typing}>
+            {MODELS.find((m) => m.value === model)?.label ?? 'Assistant'} is thinking…
+          </span>
+        )}
 
         <div ref={bottomRef} />
       </div>

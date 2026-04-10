@@ -29,8 +29,11 @@ class Settings(BaseSettings):
     exchange: str = "binance"
     symbol: str = "BTCUSDT"
 
-    # ── Claude API (analysis worker) ─────────────────────────────────────────
+    # ── Claude API (analysis worker + chatbot) ───────────────────────────────
     anthropic_api_key: str = ""
+
+    # ── OpenAI API (ChatGPT chatbot + strategy validation) ───────────────────
+    openai_api_key: str = ""
 
     # How often the analysis worker generates a new summary (in minutes).
     # Set ANALYSIS_INTERVAL_MINUTES in .env to override.
