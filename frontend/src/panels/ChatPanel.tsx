@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { sendChatMessage, ChatMessage } from '../api';
+import { sendChatMessage, validateStrategy, ChatMessage, StrategyResult } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
@@ -127,6 +127,19 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0 18px',
     flexShrink: 0,
     transition: 'all 0.15s',
+  }),
+  strategyButton: (disabled: boolean): React.CSSProperties => ({
+    backgroundColor: disabled ? '#1e1e26' : '#1e2a1e',
+    border: `1px solid ${disabled ? '#2a2a2e' : '#2a5f2a'}`,
+    borderRadius: '6px',
+    color: disabled ? '#444' : '#66bb6a',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    fontSize: '11px',
+    fontWeight: 600,
+    padding: '0 10px',
+    flexShrink: 0,
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap' as const,
   }),
 };
 
@@ -305,8 +318,10 @@ const MODELS = [
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface DisplayMessage {
-  role: 'user' | 'assistant' | 'error';
+  role: 'user' | 'assistant' | 'error' | 'strategy';
   content: string;
+  strategyData?: StrategyResult;   // only present for role === 'strategy'
+  strategyApproved?: boolean;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -322,6 +337,7 @@ function ChatPanel() {
     },
   ]);
   const [loading, setLoading] = useState(false);
+  const [loadingType, setLoadingType] = useState<'chat' | 'strategy'>('chat');
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -338,35 +354,79 @@ function ChatPanel() {
     el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden';
   }
 
-  function buildHistory(): { role: 'user' | 'assistant'; content: string }[] {
+  function buildHistory(): ChatMessage[] {
     return messages
-      .filter((m) => m.role !== 'error')
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
       .slice(1) // skip hardcoded greeting
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+  }
+
+  function resetTextarea() {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.overflowY = 'hidden';
+    }
+  }
+
+  // Core chat send — reused by both the Send button and Approve & Set Alert.
+  async function sendMessage(text: string) {
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    setLoading(true);
+    setLoadingType('chat');
+    try {
+      const response = await sendChatMessage(text, buildHistory(), model);
+      setMessages((prev) => [...prev, { role: 'assistant', content: response.reply }]);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setMessages((prev) => [...prev, { role: 'error', content: `Error: ${msg}` }]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleSend() {
     const text = input.trim();
     if (!text || loading) return;
+    setInput('');
+    resetTextarea();
+    await sendMessage(text);
+  }
 
+  // Validate Strategy — sends to the OpenAI→Claude pipeline.
+  async function handleValidateStrategy() {
+    const text = input.trim();
+    if (!text || loading) return;
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setInput('');
-    // Reset textarea height back to one line after sending.
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.overflowY = 'hidden';
-    }
+    resetTextarea();
     setLoading(true);
-
+    setLoadingType('strategy');
     try {
-      const response = await sendChatMessage(text, buildHistory(), model);
-      setMessages((prev) => [...prev, { role: 'assistant', content: response.reply }]);
+      const result = await validateStrategy(text);
+      setMessages((prev) => [
+        ...prev,
+        { role: 'strategy', content: result.name ?? 'Strategy', strategyData: result, strategyApproved: false },
+      ]);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      setMessages((prev) => [...prev, { role: 'error', content: `Error: ${message}` }]);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setMessages((prev) => [...prev, { role: 'error', content: `Strategy validation error: ${msg}` }]);
     } finally {
       setLoading(false);
     }
+  }
+
+  // Approve & Set Alert — marks the card approved and auto-sends to Claude.
+  function handleApproveStrategy(msgIndex: number, data: StrategyResult) {
+    setMessages((prev) =>
+      prev.map((m, i) => (i === msgIndex ? { ...m, strategyApproved: true } : m)),
+    );
+    const approvalMsg =
+      `I've approved this trading strategy: "${data.name}". ` +
+      `Entry: ${data.entry_condition}. Exit: ${data.exit_condition}. ` +
+      `Timeframe: ${data.timeframe}. ` +
+      `Take profit: ${data.take_profit}. Stop loss: ${data.stop_loss}. ` +
+      `Based on these parameters, please suggest and create appropriate price alerts.`;
+    sendMessage(approvalMsg);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -399,8 +459,8 @@ function ChatPanel() {
       {/* ── Scrollable message list ── */}
       <div style={styles.messageList}>
         {messages.map((msg, i) => (
-          <div key={i} style={styles.messageGroup(msg.role)}>
-            {msg.role !== 'error' && (
+          <div key={i} style={styles.messageGroup(msg.role === 'strategy' ? 'assistant' : msg.role)}>
+            {msg.role !== 'error' && msg.role !== 'strategy' && (
               <span style={styles.roleLabel(msg.role === 'user' ? 'user' : 'assistant')}>
                 {msg.role === 'user'
                   ? 'You'
@@ -410,11 +470,15 @@ function ChatPanel() {
 
             {msg.role === 'error' ? (
               <div style={styles.errorBubble}>{msg.content}</div>
+            ) : msg.role === 'strategy' ? (
+              <StrategyCard
+                result={msg.strategyData!}
+                approved={msg.strategyApproved ?? false}
+                onApprove={() => handleApproveStrategy(i, msg.strategyData!)}
+              />
             ) : msg.role === 'user' ? (
-              // User messages: plain text, no markdown needed.
               <div style={styles.bubble('user')}>{msg.content}</div>
             ) : (
-              // Assistant messages: full markdown rendering.
               <div style={styles.bubble('assistant')}>{renderMarkdown(msg.content)}</div>
             )}
           </div>
@@ -422,7 +486,9 @@ function ChatPanel() {
 
         {loading && (
           <span style={styles.typing}>
-            {MODELS.find((m) => m.value === model)?.label ?? 'Assistant'} is thinking…
+            {loadingType === 'strategy'
+              ? 'Validating strategy…'
+              : `${MODELS.find((m) => m.value === model)?.label ?? 'Assistant'} is thinking…`}
           </span>
         )}
 
@@ -451,9 +517,113 @@ function ChatPanel() {
         >
           Send
         </button>
+        <button
+          style={styles.strategyButton(loading || !input.trim())}
+          onClick={handleValidateStrategy}
+          disabled={loading || !input.trim()}
+          title="Validate this text as a trading strategy (OpenAI → Claude pipeline)"
+        >
+          Validate Strategy
+        </button>
       </div>
     </div>
   );
 }
 
 export default ChatPanel;
+
+// ── Strategy card ──────────────────────────────────────────────────────────────
+
+interface StrategyCardProps {
+  result: StrategyResult;
+  approved: boolean;
+  onApprove: () => void;
+}
+
+function StrategyCard({ result, approved, onApprove }: StrategyCardProps) {
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: '#111118',
+    border: `1px solid ${result.valid ? '#2a5f2a' : '#5f2a2a'}`,
+    borderRadius: '10px',
+    padding: '12px 14px',
+    maxWidth: '92%',
+    fontSize: '12px',
+  };
+
+  if (!result.valid) {
+    return (
+      <div style={cardStyle}>
+        <div style={{ color: '#f44336', fontWeight: 700, marginBottom: '6px', fontSize: '13px' }}>
+          Invalid Strategy
+        </div>
+        <p style={{ color: '#aaa', margin: 0, lineHeight: '1.5' }}>{result.reason}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={cardStyle}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <span style={{ color: '#f5a623', fontWeight: 700, fontSize: '13px' }}>{result.name}</span>
+        <span style={{ color: '#66bb6a', fontSize: '11px' }}>✓ Validated by OpenAI</span>
+      </div>
+
+      {/* Claude's summary */}
+      <p style={{ color: '#c8c8c8', margin: '0 0 10px', lineHeight: '1.55' }}>
+        {result.summary}
+      </p>
+
+      {/* Parameters grid */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '90px 1fr',
+        gap: '3px 8px',
+        backgroundColor: '#0e0e14',
+        border: '1px solid #1e1e28',
+        borderRadius: '6px',
+        padding: '8px 10px',
+        marginBottom: '10px',
+        lineHeight: '1.6',
+      }}>
+        <Param label="Entry"      value={result.entry_condition ?? ''} />
+        <Param label="Exit"       value={result.exit_condition  ?? ''} />
+        <Param label="Timeframe"  value={result.timeframe       ?? ''} />
+        <Param label="Stop Loss"  value={result.stop_loss       ?? ''} />
+        <Param label="Take Profit" value={result.take_profit    ?? ''} />
+      </div>
+
+      {/* Action */}
+      {approved ? (
+        <span style={{ color: '#66bb6a', fontSize: '11px' }}>
+          Approved — Claude is setting your alerts…
+        </span>
+      ) : (
+        <button onClick={onApprove} style={approveButtonStyle}>
+          Approve &amp; Set Alert
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Param({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <span style={{ color: '#666', fontSize: '11px' }}>{label}</span>
+      <span style={{ color: '#c0c0c0', fontSize: '11px' }}>{value}</span>
+    </>
+  );
+}
+
+const approveButtonStyle: React.CSSProperties = {
+  backgroundColor: '#1e2a1e',
+  border: '1px solid #2a5f2a',
+  borderRadius: '6px',
+  color: '#66bb6a',
+  cursor: 'pointer',
+  fontSize: '12px',
+  fontWeight: 600,
+  padding: '5px 14px',
+  transition: 'all 0.15s',
+};

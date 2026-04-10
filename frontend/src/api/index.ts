@@ -168,6 +168,34 @@ export async function deleteAlert(id: number): Promise<void> {
   }
 }
 
+// ── Strategy ───────────────────────────────────────────────────────────────────
+
+export interface StrategyResult {
+  valid: boolean;
+  reason?: string;
+  name?: string;
+  entry_condition?: string;
+  exit_condition?: string;
+  timeframe?: string;
+  stop_loss?: string;
+  take_profit?: string;
+  summary?: string;
+}
+
+/** Validate a trading strategy description via OpenAI → Claude pipeline. */
+export async function validateStrategy(description: string): Promise<StrategyResult> {
+  const response = await fetch(`${BASE_URL}/strategy/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail?.detail ?? `API error ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<StrategyResult>;
+}
+
 // ── Chat ───────────────────────────────────────────────────────────────────────
 
 export interface ChatMessage {

@@ -22,7 +22,7 @@ import app.models.liquidation  # noqa: F401
 import app.models.orderbook    # noqa: F401
 import app.models.analysis     # noqa: F401
 import app.models.alert        # noqa: F401
-from app.routers import price, liquidations, orderbook, analysis, alerts, chat
+from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy
 
 logger = logging.getLogger(__name__)
 
@@ -107,3 +107,4 @@ app.include_router(orderbook.router,    prefix="/api", dependencies=_auth)
 app.include_router(analysis.router,     prefix="/api", dependencies=_auth)
 app.include_router(alerts.router,       prefix="/api", dependencies=_auth)
 app.include_router(chat.router,         prefix="/api", dependencies=_auth)
+app.include_router(strategy.router,     prefix="/api", dependencies=_auth)
