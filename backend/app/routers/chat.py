@@ -20,7 +20,7 @@ Tool calls are executed server-side; the final reply is returned to the frontend
 import json
 import logging
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 import anthropic
 import openai as openai_lib
@@ -34,6 +34,7 @@ from app.database import get_db
 from app.models.alert import Alert
 from app.models.price import PriceCandle
 from app.models.liquidation import Liquidation
+from app.services.chat_history import add_message, get_or_create_session
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -52,11 +53,13 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     history: List[ChatMessage] = []
-    model: str = "claude"   # "claude" | "openai"
+    model: str = "claude"        # "claude" | "openai"
+    session_id: Optional[int] = None   # omit on first message; backend creates a session
 
 
 class ChatResponse(BaseModel):
-    reply: str
+    reply:      str
+    session_id: int   # returned on every response so the frontend can track the session
 
 
 # ── Tool definitions — Anthropic format ───────────────────────────────────────
@@ -472,4 +475,15 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
             )
         reply = await _reply_via_claude(body.message, body.history, system_prompt, db)
 
-    return ChatResponse(reply=reply)
+    # Persist the exchange to the chat history DB.
+    session = await get_or_create_session(
+        db,
+        platform="web",
+        model=body.model,
+        session_id=body.session_id,
+        first_message=body.message,
+    )
+    await add_message(db, session.id, "user",      body.message)
+    await add_message(db, session.id, "assistant", reply)
+
+    return ChatResponse(reply=reply, session_id=session.id)

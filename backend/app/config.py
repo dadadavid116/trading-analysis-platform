@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # Find your chat ID by messaging @userinfobot on Telegram.
     telegram_chat_id: str = ""
 
+    # ── Chat history retention ────────────────────────────────────────────────
+    # Sessions older than this many days are deleted by the nightly export worker.
+    # Adjust via CHAT_HISTORY_RETENTION_DAYS in .env (Phase 25 settings panel).
+    chat_history_retention_days: int = 60
+
     # ── Dashboard access control ──────────────────────────────────────────────
     # Optional secondary backend API key. When set, FastAPI validates an
     # X-API-Key header on all /api/* requests in addition to Caddy Basic Auth.

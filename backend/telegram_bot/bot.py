@@ -63,6 +63,7 @@ from app.models.alert import Alert
 from app.models.analysis import AnalysisSummary
 from app.models.price import PriceCandle
 from app.models.liquidation import Liquidation
+from app.services.chat_history import add_message, get_or_create_session
 
 logger = logging.getLogger(__name__)
 
@@ -350,6 +351,22 @@ async def _ai_reply(message: str, context: ContextTypes.DEFAULT_TYPE) -> str:
         if not settings.anthropic_api_key:
             return "ANTHROPIC_API_KEY is not configured. Add it to .env."
         reply = await _reply_via_claude(history, system_prompt)
+
+    # Persist the exchange to the chat history DB.
+    try:
+        async with AsyncSessionLocal() as db:
+            session = await get_or_create_session(
+                db,
+                platform="telegram",
+                model=model,
+                session_id=context.chat_data.get("session_id"),  # type: ignore[attr-defined]
+                first_message=message,
+            )
+            context.chat_data["session_id"] = session.id  # type: ignore[index]
+            await add_message(db, session.id, "user",      message)
+            await add_message(db, session.id, "assistant", reply)
+    except Exception as exc:
+        logger.warning("Could not persist chat message: %s", exc)
 
     # Save updated history (cap at MAX_HISTORY_TURNS pairs).
     history.append({"role": "assistant", "content": reply})
@@ -699,7 +716,8 @@ async def cmd_chatgpt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 async def cmd_clear(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not _is_authorized(update): return
-    context.chat_data["history"] = []  # type: ignore[index]
+    context.chat_data["history"]    = []   # type: ignore[index]
+    context.chat_data["session_id"] = None  # type: ignore[index] — next message starts a fresh session
     await update.message.reply_text("Conversation history cleared.")
 
 

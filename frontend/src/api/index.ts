@@ -204,26 +204,74 @@ export interface ChatMessage {
 }
 
 export interface ChatResponse {
-  reply: string;
+  reply:      string;
+  session_id: number;
 }
 
 /**
- * Send a message to the AI chatbot. Returns Claude's reply.
- * history is the prior turns in the conversation (not including the new message).
+ * Send a message to the AI chatbot. Returns the reply and the session ID.
+ * Pass sessionId on subsequent messages to continue the same persisted session.
  */
 export async function sendChatMessage(
   message: string,
   history: ChatMessage[],
   model = 'claude',
+  sessionId?: number,
 ): Promise<ChatResponse> {
   const response = await fetch(`${BASE_URL}/chat/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, model }),
+    body: JSON.stringify({ message, history, model, session_id: sessionId ?? null }),
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     throw new Error(detail?.detail ?? `API error ${response.status}: ${response.statusText}`);
   }
   return response.json() as Promise<ChatResponse>;
+}
+
+// ── Chat history ───────────────────────────────────────────────────────────────
+
+export interface ChatSessionSummary {
+  id:             number;
+  platform:       string;
+  model:          string;
+  title:          string | null;
+  created_at:     string;
+  last_active_at: string;
+}
+
+export interface ChatSessionDetail extends ChatSessionSummary {
+  messages: ChatMessage[];
+}
+
+/** List recent sessions (newest first). */
+export function fetchChatSessions(limit = 50): Promise<ChatSessionSummary[]> {
+  return apiFetch<ChatSessionSummary[]>(`/chat-history/sessions?limit=${limit}`);
+}
+
+/** Load a full session with all messages. */
+export function fetchChatSession(id: number): Promise<ChatSessionDetail> {
+  return apiFetch<ChatSessionDetail>(`/chat-history/sessions/${id}`);
+}
+
+/** Manually save a session to a .md file. */
+export async function saveChatSession(id: number): Promise<{ saved_to: string }> {
+  const response = await fetch(`${BASE_URL}/chat-history/sessions/${id}/save`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    throw new Error(`API error ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<{ saved_to: string }>;
+}
+
+/** Delete a chat session. */
+export async function deleteChatSession(id: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/chat-history/sessions/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`API error ${response.status}: ${response.statusText}`);
+  }
 }

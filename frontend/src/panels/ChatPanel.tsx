@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { sendChatMessage, validateStrategy, ChatMessage, StrategyResult } from '../api';
+import { sendChatMessage, validateStrategy, ChatMessage, StrategyResult, saveChatSession } from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
@@ -338,6 +338,7 @@ function ChatPanel() {
   ]);
   const [loading, setLoading] = useState(false);
   const [loadingType, setLoadingType] = useState<'chat' | 'strategy'>('chat');
+  const sessionIdRef = useRef<number | null>(null);  // persisted session ID from backend
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -374,7 +375,8 @@ function ChatPanel() {
     setLoading(true);
     setLoadingType('chat');
     try {
-      const response = await sendChatMessage(text, buildHistory(), model);
+      const response = await sendChatMessage(text, buildHistory(), model, sessionIdRef.current ?? undefined);
+      sessionIdRef.current = response.session_id;  // track session for persistence
       setMessages((prev) => [...prev, { role: 'assistant', content: response.reply }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';

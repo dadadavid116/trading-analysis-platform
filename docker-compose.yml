@@ -59,6 +59,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      # Share the chat_history folder so manual saves via the API write to the same place.
+      - ./chat_history:/app/chat_history
 
   # ── React / Vite frontend (dev stage) ───────────────────────────────────
   frontend:
@@ -136,6 +139,25 @@ services:
         condition: service_healthy
     # No ports — the bot uses long polling (outbound only, no inbound connections).
     # If TELEGRAM_BOT_TOKEN is not set, the service waits and logs a warning.
+
+  # ── Chat history export worker ──────────────────────────────────────────────
+  # Wakes at 00:00 UTC daily, exports yesterday's conversations to Markdown files,
+  # and prunes sessions older than CHAT_HISTORY_RETENTION_DAYS (default 60 days).
+  chat_export:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "chat_export.run"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./chat_history:/app/chat_history
 
   # ── Live data collectors ─────────────────────────────────────────────────────
   collector:
