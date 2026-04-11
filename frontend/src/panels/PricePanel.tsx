@@ -44,7 +44,7 @@ const styles: Record<string, React.CSSProperties> = {
   }),
   chartContainer: {
     width: '100%',
-    height: '260px',
+    height: '320px',
     borderRadius: '4px',
     overflow: 'hidden',
   },
@@ -172,7 +172,7 @@ function PricePanel() {
         secondsVisible: false,
       },
       width: chartContainerRef.current.clientWidth,
-      height: 260,
+      height: 320,
     });
 
     const series = chart.addCandlestickSeries({
