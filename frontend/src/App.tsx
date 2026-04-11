@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Layout from './components/Layout';
 import PricePanel from './panels/PricePanel';
 import LiquidationPanel from './panels/LiquidationPanel';
@@ -8,18 +9,23 @@ import ChatPanel from './panels/ChatPanel';
 /**
  * App — root component.
  *
- * Renders the shared Layout shell and passes all dashboard panels as children.
- * All five panels are always rendered so the layout is complete, even if
- * some are just placeholders at this phase.
+ * Manages the chat panel open/close state and passes it down to Layout.
+ * The four dashboard panels live in the left scrollable grid.
+ * ChatPanel lives in the fixed right column.
  */
 function App() {
+  const [chatOpen, setChatOpen] = useState(true);
+
   return (
-    <Layout>
+    <Layout
+      chatOpen={chatOpen}
+      onToggleChat={() => setChatOpen((prev) => !prev)}
+      chatPanel={<ChatPanel />}
+    >
       <PricePanel />
       <LiquidationPanel />
       <OrderBookPanel />
       <AlertsPanel />
-      <ChatPanel />
     </Layout>
   );
 }

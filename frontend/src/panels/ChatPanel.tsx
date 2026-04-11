@@ -1,63 +1,100 @@
-import { useState, useRef, useEffect } from 'react';
-import { sendChatMessage, validateStrategy, ChatMessage, StrategyResult, saveChatSession } from '../api';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import {
+  sendChatMessage,
+  validateStrategy,
+  saveChatSession,
+  fetchChatSessions,
+  fetchChatSession,
+  ChatMessage,
+  StrategyResult,
+  ChatSessionSummary,
+} from '../api';
 import { panelStyles } from './panelStyles';
 
 /**
- * ChatPanel — AI chatbot panel powered by Claude.
+ * ChatPanel — full-height AI chat panel, docked to the right side of the dashboard.
  *
- * Renders a fixed-height scrollable conversation. Claude's markdown responses
- * (headings, bold, bullets, numbered lists, inline code) are formatted
- * for readability rather than displayed as raw symbols.
+ * Header:  title + "Chat Settings" toggle button.
+ *
+ * Chat Settings panel (collapsible):
+ *   - Model selector (Claude / ChatGPT)
+ *   - Save this chat  / Clear this chat buttons
+ *   - Recent session list — click any session to resume it
+ *
+ * Message area: scrollable conversation with Claude markdown rendering.
+ * Input row:    auto-growing textarea + Send + Validate Strategy buttons.
  */
+
+// ── Available models ───────────────────────────────────────────────────────────
+
+const MODELS = [
+  { value: 'claude', label: 'Claude' },
+  { value: 'openai', label: 'ChatGPT' },
+  // { value: 'grok', label: 'Grok' },  // Phase 24
+];
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface DisplayMessage {
+  role: 'user' | 'assistant' | 'error' | 'strategy';
+  content: string;
+  strategyData?: StrategyResult;
+  strategyApproved?: boolean;
+}
+
+const GREETING: DisplayMessage = {
+  role: 'assistant',
+  content:
+    "Hi! I'm your BTC trading assistant. Click **Chat Settings** above to switch models, save or clear this chat, or resume a past session.\n\nTry asking:\n• \"What's the current BTC price?\"\n• \"Set an alert when BTC goes above $70,000\"\n• \"Show my alerts\"\n• \"Analyse the current market conditions\"",
+};
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const styles: Record<string, React.CSSProperties> = {
+const S: Record<string, React.CSSProperties> = {
+  // Outer container — fills the right column completely.
   panel: {
-    // Fixed height so the message area scrolls instead of pushing the page down.
-    height: '640px',
+    height: '100%',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: '#1a1a1f',
-    border: '1px solid #2a2a2e',
-    borderRadius: '8px',
-    padding: '16px',
-    gap: '0',
+    overflow: 'hidden',
   },
+
+  // Top header bar.
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: '12px 16px',
     borderBottom: '1px solid #2a2a2e',
-    paddingBottom: '10px',
-    marginBottom: '10px',
     flexShrink: 0,
+    backgroundColor: '#16161f',
   },
-  modelSelector: {
-    backgroundColor: '#111114',
-    border: '1px solid #2a2a2e',
-    borderRadius: '4px',
-    color: '#c8c8c8',
-    fontSize: '11px',
-    padding: '3px 6px',
-    cursor: 'pointer',
+
+  headerTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#d0d0d0',
+    margin: 0,
   },
-  // The scrollable message area — flex: 1 + minHeight: 0 is the key to making
-  // a flex child scroll instead of overflow its parent.
+
+  // The scrollable message list — flex:1 + minHeight:0 makes it scroll.
   messageList: {
     flex: 1,
     overflowY: 'auto' as const,
     display: 'flex',
     flexDirection: 'column' as const,
     gap: '12px',
-    padding: '4px 2px',
+    padding: '12px 14px',
     minHeight: 0,
   },
+
   messageGroup: (role: 'user' | 'assistant' | 'error'): React.CSSProperties => ({
     display: 'flex',
     flexDirection: 'column',
     alignItems: role === 'user' ? 'flex-end' : 'flex-start',
   }),
+
   roleLabel: (role: 'user' | 'assistant'): React.CSSProperties => ({
     fontSize: '10px',
     color: '#555',
@@ -65,9 +102,10 @@ const styles: Record<string, React.CSSProperties> = {
     paddingLeft: role === 'assistant' ? '2px' : '0',
     paddingRight: role === 'user' ? '2px' : '0',
   }),
+
   bubble: (role: 'user' | 'assistant'): React.CSSProperties => ({
-    maxWidth: '88%',
-    padding: role === 'user' ? '9px 13px' : '10px 14px',
+    maxWidth: '92%',
+    padding: role === 'user' ? '8px 12px' : '10px 13px',
     borderRadius: role === 'user' ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
     backgroundColor: role === 'user' ? '#1e3a5f' : '#1e1e28',
     color: '#d4d4d4',
@@ -76,8 +114,9 @@ const styles: Record<string, React.CSSProperties> = {
     border: role === 'assistant' ? '1px solid #2a2a38' : 'none',
     wordBreak: 'break-word' as const,
   }),
+
   errorBubble: {
-    maxWidth: '88%',
+    maxWidth: '92%',
     alignSelf: 'flex-start',
     backgroundColor: '#2a1a1a',
     border: '1px solid #5f2a2a',
@@ -86,6 +125,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     padding: '7px 11px',
   },
+
   typing: {
     color: '#555',
     fontSize: '12px',
@@ -93,14 +133,16 @@ const styles: Record<string, React.CSSProperties> = {
     alignSelf: 'flex-start',
     paddingLeft: '4px',
   },
+
   inputRow: {
     display: 'flex',
-    gap: '8px',
-    marginTop: '10px',
-    paddingTop: '10px',
+    gap: '6px',
+    padding: '10px 14px',
     borderTop: '1px solid #2a2a2e',
     flexShrink: 0,
+    backgroundColor: '#16161f',
   },
+
   input: {
     flex: 1,
     backgroundColor: '#111114',
@@ -108,82 +150,67 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     color: '#d0d0d0',
     fontSize: '13px',
-    padding: '9px 11px',
+    padding: '8px 10px',
     resize: 'none' as const,
     outline: 'none',
     fontFamily: 'inherit',
     lineHeight: '1.4',
-    minHeight: '38px',
-    overflowY: 'hidden' as const,  // JS overrides to 'auto' once content exceeds the cap
+    minHeight: '36px',
+    overflowY: 'hidden' as const,
   },
-  sendButton: (disabled: boolean): React.CSSProperties => ({
-    backgroundColor: disabled ? '#1e1e26' : '#1e3a5f',
-    border: `1px solid ${disabled ? '#2a2a2e' : '#2a4a7f'}`,
-    borderRadius: '6px',
-    color: disabled ? '#444' : '#90b8e0',
+};
+
+// Small helpers for button styles.
+const settingsBtn = (active: boolean): React.CSSProperties => ({
+  backgroundColor: active ? '#1e2a3a' : 'transparent',
+  border: `1px solid ${active ? '#3a5a7a' : '#2a2a3e'}`,
+  borderRadius: '5px',
+  color: active ? '#90b8e0' : '#666',
+  cursor: 'pointer',
+  fontSize: '11px',
+  fontWeight: 600,
+  padding: '4px 10px',
+  transition: 'all 0.15s',
+});
+
+const actionBtn = (variant: 'send' | 'strategy' | 'save' | 'clear', disabled = false): React.CSSProperties => {
+  const base: React.CSSProperties = {
+    border: '1px solid',
+    borderRadius: '5px',
     cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: '13px',
+    fontSize: '12px',
     fontWeight: 600,
-    padding: '0 18px',
-    flexShrink: 0,
     transition: 'all 0.15s',
-  }),
-  strategyButton: (disabled: boolean): React.CSSProperties => ({
-    backgroundColor: disabled ? '#1e1e26' : '#1e2a1e',
-    border: `1px solid ${disabled ? '#2a2a2e' : '#2a5f2a'}`,
-    borderRadius: '6px',
-    color: disabled ? '#444' : '#66bb6a',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    fontSize: '11px',
-    fontWeight: 600,
-    padding: '0 10px',
+    padding: '0 14px',
     flexShrink: 0,
-    transition: 'all 0.15s',
-    whiteSpace: 'nowrap' as const,
-  }),
+    opacity: disabled ? 0.45 : 1,
+  };
+  const map = {
+    send:     { backgroundColor: '#1e3a5f', borderColor: '#2a4a7f', color: '#90b8e0' },
+    strategy: { backgroundColor: '#1e2a1e', borderColor: '#2a5f2a', color: '#66bb6a', fontSize: '11px', padding: '0 8px' },
+    save:     { backgroundColor: '#1e2a1e', borderColor: '#2a5f2a', color: '#66bb6a', padding: '6px 12px', width: '100%' },
+    clear:    { backgroundColor: '#2a1a1a', borderColor: '#5f2a2a', color: '#ef5350', padding: '6px 12px', width: '100%' },
+  };
+  return { ...base, ...map[variant] };
 };
 
 // ── Markdown renderer ──────────────────────────────────────────────────────────
-//
-// Parses the subset of markdown Claude typically emits:
-//   ## / ### headings, **bold**, *italic*, `code`, - / • / 1. lists
-//
-// Returns React nodes — no external dependency needed.
 
 function renderInline(text: string, key?: number): React.ReactNode {
-  // Split on **bold**, *italic*, `code` spans.
   const parts = text.split(/(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g);
   return (
     <span key={key}>
       {parts.map((part, i) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return (
-            <strong key={i} style={{ color: '#f0c040', fontWeight: 700 }}>
-              {part.slice(2, -2)}
-            </strong>
-          );
-        }
-        if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+        if (part.startsWith('**') && part.endsWith('**'))
+          return <strong key={i} style={{ color: '#f0c040', fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith('*') && part.endsWith('*') && part.length > 2)
           return <em key={i} style={{ color: '#b0c8e8' }}>{part.slice(1, -1)}</em>;
-        }
-        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+        if (part.startsWith('`') && part.endsWith('`') && part.length > 2)
           return (
-            <code
-              key={i}
-              style={{
-                backgroundColor: '#111114',
-                color: '#90b8e0',
-                fontSize: '12px',
-                padding: '1px 5px',
-                borderRadius: '3px',
-                border: '1px solid #2a2a3e',
-                fontFamily: 'monospace',
-              }}
-            >
+            <code key={i} style={{ backgroundColor: '#111114', color: '#90b8e0', fontSize: '12px', padding: '1px 5px', borderRadius: '3px', border: '1px solid #2a2a3e', fontFamily: 'monospace' }}>
               {part.slice(1, -1)}
             </code>
           );
-        }
         return part;
       })}
     </span>
@@ -194,174 +221,71 @@ function renderMarkdown(text: string): React.ReactNode {
   const lines = text.split('\n');
   const nodes: React.ReactNode[] = [];
   let i = 0;
-
   while (i < lines.length) {
-    const raw = lines[i];
-    const line = raw.trimEnd();
-
-    // ── H2 heading ──
+    const line = lines[i].trimEnd();
     if (line.startsWith('## ')) {
-      nodes.push(
-        <div
-          key={i}
-          style={{
-            fontWeight: 700,
-            fontSize: '14px',
-            color: '#e8e8e8',
-            marginTop: nodes.length > 0 ? '12px' : '0',
-            marginBottom: '4px',
-            borderBottom: '1px solid #2a2a38',
-            paddingBottom: '3px',
-          }}
-        >
-          {renderInline(line.slice(3))}
-        </div>
-      );
-      i++;
-      continue;
+      nodes.push(<div key={i} style={{ fontWeight: 700, fontSize: '13px', color: '#e8e8e8', marginTop: nodes.length > 0 ? '10px' : '0', marginBottom: '3px', borderBottom: '1px solid #2a2a38', paddingBottom: '2px' }}>{renderInline(line.slice(3))}</div>);
+    } else if (line.startsWith('### ')) {
+      nodes.push(<div key={i} style={{ fontWeight: 600, fontSize: '12px', color: '#c8c8e0', marginTop: '6px', marginBottom: '2px' }}>{renderInline(line.slice(4))}</div>);
+    } else if (/^[-•*]\s/.test(line)) {
+      nodes.push(<div key={i} style={{ display: 'flex', gap: '7px', paddingLeft: '2px' }}><span style={{ color: '#4a90d9', flexShrink: 0 }}>•</span><span style={{ flex: 1 }}>{renderInline(line.replace(/^[-•*]\s+/, ''))}</span></div>);
+    } else if (/^(\d+)\.\s+(.+)/.test(line)) {
+      const m = line.match(/^(\d+)\.\s+(.+)/)!;
+      nodes.push(<div key={i} style={{ display: 'flex', gap: '7px', paddingLeft: '2px' }}><span style={{ color: '#4a90d9', flexShrink: 0, minWidth: '16px', textAlign: 'right' }}>{m[1]}.</span><span style={{ flex: 1 }}>{renderInline(m[2])}</span></div>);
+    } else if (/^---+$/.test(line.trim())) {
+      nodes.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid #2a2a38', margin: '6px 0' }} />);
+    } else if (line.trim() === '') {
+      if (nodes.length > 0) nodes.push(<div key={i} style={{ height: '5px' }} />);
+    } else {
+      nodes.push(<div key={i} style={{ lineHeight: '1.6' }}>{renderInline(line)}</div>);
     }
-
-    // ── H3 heading ──
-    if (line.startsWith('### ')) {
-      nodes.push(
-        <div
-          key={i}
-          style={{
-            fontWeight: 600,
-            fontSize: '13px',
-            color: '#c8c8e0',
-            marginTop: nodes.length > 0 ? '8px' : '0',
-            marginBottom: '2px',
-          }}
-        >
-          {renderInline(line.slice(4))}
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    // ── Unordered bullet: -, •, or * at line start ──
-    if (/^[-•*]\s/.test(line)) {
-      nodes.push(
-        <div key={i} style={{ display: 'flex', gap: '8px', paddingLeft: '4px' }}>
-          <span style={{ color: '#4a90d9', flexShrink: 0, marginTop: '1px' }}>•</span>
-          <span style={{ flex: 1 }}>{renderInline(line.replace(/^[-•*]\s+/, ''))}</span>
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    // ── Ordered list: "1. " ──
-    const numMatch = line.match(/^(\d+)\.\s+(.+)/);
-    if (numMatch) {
-      nodes.push(
-        <div key={i} style={{ display: 'flex', gap: '8px', paddingLeft: '4px' }}>
-          <span
-            style={{
-              color: '#4a90d9',
-              flexShrink: 0,
-              minWidth: '18px',
-              textAlign: 'right',
-              marginTop: '1px',
-            }}
-          >
-            {numMatch[1]}.
-          </span>
-          <span style={{ flex: 1 }}>{renderInline(numMatch[2])}</span>
-        </div>
-      );
-      i++;
-      continue;
-    }
-
-    // ── Horizontal rule ──
-    if (/^---+$/.test(line.trim())) {
-      nodes.push(<hr key={i} style={{ border: 'none', borderTop: '1px solid #2a2a38', margin: '8px 0' }} />);
-      i++;
-      continue;
-    }
-
-    // ── Blank line → small gap ──
-    if (line.trim() === '') {
-      // Avoid stacking multiple gaps
-      const last = nodes[nodes.length - 1];
-      const isGap = last && (last as React.ReactElement)?.props?.style?.height !== undefined;
-      if (!isGap && nodes.length > 0) {
-        nodes.push(<div key={i} style={{ height: '6px' }} />);
-      }
-      i++;
-      continue;
-    }
-
-    // ── Regular paragraph line ──
-    nodes.push(
-      <div key={i} style={{ lineHeight: '1.65' }}>
-        {renderInline(line)}
-      </div>
-    );
     i++;
   }
-
   return <>{nodes}</>;
-}
-
-// ── Available models ───────────────────────────────────────────────────────────
-
-const MODELS = [
-  { value: 'claude', label: 'Claude' },
-  { value: 'openai', label: 'ChatGPT' },
-  // { value: 'grok', label: 'Grok' },  // coming in a future phase
-];
-
-// ── Types ──────────────────────────────────────────────────────────────────────
-
-interface DisplayMessage {
-  role: 'user' | 'assistant' | 'error' | 'strategy';
-  content: string;
-  strategyData?: StrategyResult;   // only present for role === 'strategy'
-  strategyApproved?: boolean;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 function ChatPanel() {
-  const [model, setModel] = useState('claude');
-  const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<DisplayMessage[]>([
-    {
-      role: 'assistant',
-      content:
-        "Hi! I'm your BTC trading assistant. Use the selector above to switch between **Claude** and **ChatGPT** — both have access to live market data and can manage your price alerts.\n\nTry asking:\n• \"What's the current BTC price?\"\n• \"Set an alert when BTC goes above $70,000\"\n• \"Show my alerts\"\n• \"Delete alert #3\"",
-    },
-  ]);
-  const [loading, setLoading] = useState(false);
+  const [model, setModel]       = useState('claude');
+  const [input, setInput]       = useState('');
+  const [messages, setMessages] = useState<DisplayMessage[]>([GREETING]);
+  const [loading, setLoading]   = useState(false);
   const [loadingType, setLoadingType] = useState<'chat' | 'strategy'>('chat');
-  const sessionIdRef = useRef<number | null>(null);  // persisted session ID from backend
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Scroll to the latest message whenever the list changes.
+  // Chat Settings panel state
+  const [settingsOpen, setSettingsOpen]     = useState(false);
+  const [sessions, setSessions]             = useState<ChatSessionSummary[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [saveStatus, setSaveStatus]         = useState<string | null>(null);
+
+  const sessionIdRef  = useRef<number | null>(null);
+  const bottomRef     = useRef<HTMLDivElement>(null);
+  const textareaRef   = useRef<HTMLTextAreaElement>(null);
+
+  // Scroll to bottom on new messages.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Grow the textarea to fit its content up to MAX_INPUT_HEIGHT, then scroll.
-  const MAX_INPUT_HEIGHT = 140;
+  // Load recent sessions whenever the settings panel opens.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    setSessionsLoading(true);
+    fetchChatSessions(15)
+      .then(setSessions)
+      .catch(() => setSessions([]))
+      .finally(() => setSessionsLoading(false));
+  }, [settingsOpen]);
+
+  // ── Textarea auto-resize ────────────────────────────────────────────────────
+
+  const MAX_INPUT_HEIGHT = 130;
   function autoResize(el: HTMLTextAreaElement) {
-    el.style.height = 'auto';                                      // shrink first so scrollHeight is accurate
+    el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, MAX_INPUT_HEIGHT) + 'px';
     el.style.overflowY = el.scrollHeight > MAX_INPUT_HEIGHT ? 'auto' : 'hidden';
   }
-
-  function buildHistory(): ChatMessage[] {
-    return messages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .slice(1) // skip hardcoded greeting
-      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
-  }
-
   function resetTextarea() {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -369,22 +293,33 @@ function ChatPanel() {
     }
   }
 
-  // Core chat send — reused by both the Send button and Approve & Set Alert.
-  async function sendMessage(text: string) {
+  // ── History builder (excludes greeting + strategy/error messages) ───────────
+
+  function buildHistory(): ChatMessage[] {
+    return messages
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(1) // skip the hardcoded greeting
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+  }
+
+  // ── Core send ───────────────────────────────────────────────────────────────
+
+  const sendMessage = useCallback(async (text: string) => {
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setLoading(true);
     setLoadingType('chat');
     try {
-      const response = await sendChatMessage(text, buildHistory(), model, sessionIdRef.current ?? undefined);
-      sessionIdRef.current = response.session_id;  // track session for persistence
-      setMessages((prev) => [...prev, { role: 'assistant', content: response.reply }]);
+      const res = await sendChatMessage(text, buildHistory(), model, sessionIdRef.current ?? undefined);
+      sessionIdRef.current = res.session_id;
+      setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       setMessages((prev) => [...prev, { role: 'error', content: `Error: ${msg}` }]);
     } finally {
       setLoading(false);
     }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model]);
 
   async function handleSend() {
     const text = input.trim();
@@ -394,7 +329,6 @@ function ChatPanel() {
     await sendMessage(text);
   }
 
-  // Validate Strategy — sends to the OpenAI→Claude pipeline.
   async function handleValidateStrategy() {
     const text = input.trim();
     if (!text || loading) return;
@@ -411,17 +345,14 @@ function ChatPanel() {
       ]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      setMessages((prev) => [...prev, { role: 'error', content: `Strategy validation error: ${msg}` }]);
+      setMessages((prev) => [...prev, { role: 'error', content: `Strategy error: ${msg}` }]);
     } finally {
       setLoading(false);
     }
   }
 
-  // Approve & Set Alert — marks the card approved and auto-sends to Claude.
   function handleApproveStrategy(msgIndex: number, data: StrategyResult) {
-    setMessages((prev) =>
-      prev.map((m, i) => (i === msgIndex ? { ...m, strategyApproved: true } : m)),
-    );
+    setMessages((prev) => prev.map((m, i) => (i === msgIndex ? { ...m, strategyApproved: true } : m)));
     const approvalMsg =
       `I've approved this trading strategy: "${data.name}". ` +
       `Entry: ${data.entry_condition}. Exit: ${data.exit_condition}. ` +
@@ -432,46 +363,176 @@ function ChatPanel() {
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  }
+
+  // ── Chat Settings actions ───────────────────────────────────────────────────
+
+  async function handleSaveChat() {
+    if (!sessionIdRef.current) {
+      setSaveStatus('Send a message first to start a session.');
+      setTimeout(() => setSaveStatus(null), 3000);
+      return;
+    }
+    try {
+      await saveChatSession(sessionIdRef.current);
+      setSaveStatus('Saved to chat_history folder.');
+    } catch {
+      setSaveStatus('Save failed — try again.');
+    }
+    setTimeout(() => setSaveStatus(null), 3000);
+  }
+
+  function handleClearChat() {
+    sessionIdRef.current = null;
+    setMessages([GREETING]);
+    setSessions([]);
+    setSettingsOpen(false);
+  }
+
+  async function handleLoadSession(id: number) {
+    try {
+      const detail = await fetchChatSession(id);
+      const loaded: DisplayMessage[] = detail.messages.map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }));
+      setMessages(loaded.length > 0 ? loaded : [GREETING]);
+      sessionIdRef.current = id;
+      const matchedModel = MODELS.find((m) => m.value === detail.model);
+      if (matchedModel) setModel(matchedModel.value);
+      setSettingsOpen(false);
+    } catch {
+      setSaveStatus('Could not load session.');
+      setTimeout(() => setSaveStatus(null), 3000);
     }
   }
 
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  const modelLabel = MODELS.find((m) => m.value === model)?.label ?? 'Assistant';
+
   return (
-    <div style={styles.panel}>
+    <div style={S.panel}>
+
       {/* ── Header ── */}
-      <div style={styles.header}>
-        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
-          AI Chat — BTC/USDT
-        </h2>
-        <select
-          style={styles.modelSelector}
-          value={model}
-          onChange={(e) => setModel(e.target.value)}
-        >
-          {MODELS.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
+      <div style={S.header}>
+        <span style={S.headerTitle}>AI Chat</span>
+        <button style={settingsBtn(settingsOpen)} onClick={() => setSettingsOpen((v) => !v)}>
+          {settingsOpen ? '✕ Close Settings' : '⚙ Chat Settings'}
+        </button>
+      </div>
+
+      {/* ── Chat Settings panel (collapsible) ── */}
+      <div style={{
+        maxHeight: settingsOpen ? '420px' : '0',
+        overflow: 'hidden',
+        transition: 'max-height 0.25s ease',
+        borderBottom: settingsOpen ? '1px solid #2a2a2e' : 'none',
+        backgroundColor: '#13131a',
+        flexShrink: 0,
+      }}>
+        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+          {/* Model selector */}
+          <div>
+            <div style={{ fontSize: '10px', color: '#555', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Model</div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {MODELS.map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => setModel(m.value)}
+                  style={{
+                    backgroundColor: model === m.value ? '#1e3a5f' : '#111114',
+                    border: `1px solid ${model === m.value ? '#3a6a9f' : '#2a2a2e'}`,
+                    borderRadius: '4px',
+                    color: model === m.value ? '#90b8e0' : '#666',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: model === m.value ? 600 : 400,
+                    padding: '5px 14px',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Save / Clear buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <button style={actionBtn('save')} onClick={handleSaveChat} disabled={loading}>
+              Save this chat
+            </button>
+            <button style={actionBtn('clear')} onClick={handleClearChat} disabled={loading}>
+              Clear this chat
+            </button>
+          </div>
+
+          {/* Status message (save result) */}
+          {saveStatus && (
+            <div style={{ fontSize: '11px', color: saveStatus.includes('failed') || saveStatus.includes('first') ? '#ef5350' : '#66bb6a', textAlign: 'center' }}>
+              {saveStatus}
+            </div>
+          )}
+
+          {/* Recent sessions */}
+          <div>
+            <div style={{ fontSize: '10px', color: '#555', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Recent Sessions
+            </div>
+            {sessionsLoading ? (
+              <div style={{ fontSize: '12px', color: '#555', fontStyle: 'italic' }}>Loading…</div>
+            ) : sessions.length === 0 ? (
+              <div style={{ fontSize: '12px', color: '#555', fontStyle: 'italic' }}>No saved sessions yet.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '160px', overflowY: 'auto' }}>
+                {sessions.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleLoadSession(s.id)}
+                    style={{
+                      backgroundColor: '#111118',
+                      border: '1px solid #2a2a38',
+                      borderRadius: '5px',
+                      color: '#b0b0c0',
+                      cursor: 'pointer',
+                      fontSize: '11px',
+                      padding: '6px 10px',
+                      textAlign: 'left',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      transition: 'border-color 0.15s',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      {s.title ?? 'Untitled session'}
+                    </span>
+                    <span style={{ color: '#444', flexShrink: 0 }}>
+                      {new Date(s.last_active_at).toLocaleDateString()}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
 
       {/* ── Scrollable message list ── */}
-      <div style={styles.messageList}>
+      <div style={S.messageList}>
         {messages.map((msg, i) => (
-          <div key={i} style={styles.messageGroup(msg.role === 'strategy' ? 'assistant' : msg.role)}>
+          <div key={i} style={S.messageGroup(msg.role === 'strategy' ? 'assistant' : msg.role as 'user' | 'assistant' | 'error')}>
             {msg.role !== 'error' && msg.role !== 'strategy' && (
-              <span style={styles.roleLabel(msg.role === 'user' ? 'user' : 'assistant')}>
-                {msg.role === 'user'
-                  ? 'You'
-                  : MODELS.find((m) => m.value === model)?.label ?? 'Assistant'}
+              <span style={S.roleLabel(msg.role === 'user' ? 'user' : 'assistant')}>
+                {msg.role === 'user' ? 'You' : modelLabel}
               </span>
             )}
-
             {msg.role === 'error' ? (
-              <div style={styles.errorBubble}>{msg.content}</div>
+              <div style={S.errorBubble}>{msg.content}</div>
             ) : msg.role === 'strategy' ? (
               <StrategyCard
                 result={msg.strategyData!}
@@ -479,18 +540,16 @@ function ChatPanel() {
                 onApprove={() => handleApproveStrategy(i, msg.strategyData!)}
               />
             ) : msg.role === 'user' ? (
-              <div style={styles.bubble('user')}>{msg.content}</div>
+              <div style={S.bubble('user')}>{msg.content}</div>
             ) : (
-              <div style={styles.bubble('assistant')}>{renderMarkdown(msg.content)}</div>
+              <div style={S.bubble('assistant')}>{renderMarkdown(msg.content)}</div>
             )}
           </div>
         ))}
 
         {loading && (
-          <span style={styles.typing}>
-            {loadingType === 'strategy'
-              ? 'Validating strategy…'
-              : `${MODELS.find((m) => m.value === model)?.label ?? 'Assistant'} is thinking…`}
+          <span style={S.typing}>
+            {loadingType === 'strategy' ? 'Validating strategy…' : `${modelLabel} is thinking…`}
           </span>
         )}
 
@@ -498,36 +557,30 @@ function ChatPanel() {
       </div>
 
       {/* ── Input row ── */}
-      <div style={styles.inputRow}>
+      <div style={S.inputRow}>
         <textarea
           ref={textareaRef}
-          style={styles.input}
-          placeholder="Ask about BTC or set a price alert… (Enter to send)"
+          style={S.input}
+          placeholder="Ask about BTC… (Enter to send)"
           value={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-            autoResize(e.target);
-          }}
+          onChange={(e) => { setInput(e.target.value); autoResize(e.target); }}
           onKeyDown={handleKeyDown}
           disabled={loading}
           rows={1}
         />
-        <button
-          style={styles.sendButton(loading || !input.trim())}
-          onClick={handleSend}
-          disabled={loading || !input.trim()}
-        >
+        <button style={actionBtn('send', loading || !input.trim())} onClick={handleSend} disabled={loading || !input.trim()}>
           Send
         </button>
         <button
-          style={styles.strategyButton(loading || !input.trim())}
+          style={actionBtn('strategy', loading || !input.trim())}
           onClick={handleValidateStrategy}
           disabled={loading || !input.trim()}
-          title="Validate this text as a trading strategy (OpenAI → Claude pipeline)"
+          title="Validate as trading strategy (OpenAI → Claude)"
         >
-          Validate Strategy
+          Strategy
         </button>
       </div>
+
     </div>
   );
 }
@@ -548,60 +601,35 @@ function StrategyCard({ result, approved, onApprove }: StrategyCardProps) {
     border: `1px solid ${result.valid ? '#2a5f2a' : '#5f2a2a'}`,
     borderRadius: '10px',
     padding: '12px 14px',
-    maxWidth: '92%',
+    maxWidth: '95%',
     fontSize: '12px',
   };
-
   if (!result.valid) {
     return (
       <div style={cardStyle}>
-        <div style={{ color: '#f44336', fontWeight: 700, marginBottom: '6px', fontSize: '13px' }}>
-          Invalid Strategy
-        </div>
+        <div style={{ color: '#f44336', fontWeight: 700, marginBottom: '5px', fontSize: '13px' }}>Invalid Strategy</div>
         <p style={{ color: '#aaa', margin: 0, lineHeight: '1.5' }}>{result.reason}</p>
       </div>
     );
   }
-
   return (
     <div style={cardStyle}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '7px' }}>
         <span style={{ color: '#f5a623', fontWeight: 700, fontSize: '13px' }}>{result.name}</span>
-        <span style={{ color: '#66bb6a', fontSize: '11px' }}>✓ Validated by OpenAI</span>
+        <span style={{ color: '#66bb6a', fontSize: '10px' }}>✓ OpenAI validated</span>
       </div>
-
-      {/* Claude's summary */}
-      <p style={{ color: '#c8c8c8', margin: '0 0 10px', lineHeight: '1.55' }}>
-        {result.summary}
-      </p>
-
-      {/* Parameters grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '90px 1fr',
-        gap: '3px 8px',
-        backgroundColor: '#0e0e14',
-        border: '1px solid #1e1e28',
-        borderRadius: '6px',
-        padding: '8px 10px',
-        marginBottom: '10px',
-        lineHeight: '1.6',
-      }}>
-        <Param label="Entry"      value={result.entry_condition ?? ''} />
-        <Param label="Exit"       value={result.exit_condition  ?? ''} />
-        <Param label="Timeframe"  value={result.timeframe       ?? ''} />
-        <Param label="Stop Loss"  value={result.stop_loss       ?? ''} />
-        <Param label="Take Profit" value={result.take_profit    ?? ''} />
+      <p style={{ color: '#c8c8c8', margin: '0 0 9px', lineHeight: '1.5', fontSize: '12px' }}>{result.summary}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '3px 8px', backgroundColor: '#0e0e14', border: '1px solid #1e1e28', borderRadius: '5px', padding: '7px 9px', marginBottom: '9px', lineHeight: '1.6' }}>
+        <Param label="Entry"       value={result.entry_condition ?? ''} />
+        <Param label="Exit"        value={result.exit_condition  ?? ''} />
+        <Param label="Timeframe"   value={result.timeframe       ?? ''} />
+        <Param label="Stop Loss"   value={result.stop_loss       ?? ''} />
+        <Param label="Take Profit" value={result.take_profit     ?? ''} />
       </div>
-
-      {/* Action */}
       {approved ? (
-        <span style={{ color: '#66bb6a', fontSize: '11px' }}>
-          Approved — Claude is setting your alerts…
-        </span>
+        <span style={{ color: '#66bb6a', fontSize: '11px' }}>Approved — Claude is setting your alerts…</span>
       ) : (
-        <button onClick={onApprove} style={approveButtonStyle}>
+        <button onClick={onApprove} style={{ backgroundColor: '#1e2a1e', border: '1px solid #2a5f2a', borderRadius: '5px', color: '#66bb6a', cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '5px 13px', transition: 'all 0.15s' }}>
           Approve &amp; Set Alert
         </button>
       )}
@@ -612,20 +640,8 @@ function StrategyCard({ result, approved, onApprove }: StrategyCardProps) {
 function Param({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <span style={{ color: '#666', fontSize: '11px' }}>{label}</span>
-      <span style={{ color: '#c0c0c0', fontSize: '11px' }}>{value}</span>
+      <span style={{ color: '#555', fontSize: '11px' }}>{label}</span>
+      <span style={{ color: '#b8b8b8', fontSize: '11px' }}>{value}</span>
     </>
   );
 }
-
-const approveButtonStyle: React.CSSProperties = {
-  backgroundColor: '#1e2a1e',
-  border: '1px solid #2a5f2a',
-  borderRadius: '6px',
-  color: '#66bb6a',
-  cursor: 'pointer',
-  fontSize: '12px',
-  fontWeight: 600,
-  padding: '5px 14px',
-  transition: 'all 0.15s',
-};

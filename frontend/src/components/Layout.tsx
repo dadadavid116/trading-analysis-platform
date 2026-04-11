@@ -2,76 +2,133 @@ import { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 
 interface LayoutProps {
+  /** Dashboard panels rendered in the left grid (Price, Liquidation, etc.) */
   children: ReactNode;
+  /** The ChatPanel component — rendered in the fixed right column. */
+  chatPanel: ReactNode;
+  /** Whether the right chat column is visible. */
+  chatOpen: boolean;
+  /** Callback to toggle the chat column. */
+  onToggleChat: () => void;
 }
 
 /**
- * Layout — shared dashboard shell.
+ * Layout — two-column dashboard shell.
  *
- * Renders a fixed header and a responsive panel grid.
- * All dashboard panels are passed as children from App.tsx.
+ * Left side  (~2/3): scrollable grid of dashboard panels.
+ * Right side (~1/3): fixed chat column, full viewport height.
  *
- * Styling is intentionally minimal for this scaffold phase.
- * A proper CSS solution (CSS Modules, Tailwind, etc.) can be added [Later].
+ * The chat column collapses to zero width when chatOpen is false,
+ * animated with a CSS transition. The toggle button lives in the header.
  */
-function Layout({ children }: LayoutProps) {
+function Layout({ children, chatPanel, chatOpen, onToggleChat }: LayoutProps) {
   return (
     <div style={styles.root}>
       {/* ── Header ── */}
       <header style={styles.header}>
         <span style={styles.logo}>📈</span>
         <h1 style={styles.title}>Trading Analysis Platform</h1>
-        <span style={styles.subtitle}>BTC · MVP Dashboard</span>
+        <span style={styles.subtitle}>BTC · Dashboard</span>
+
+        {/* Chat toggle — sits at the far right of the header */}
+        <button style={styles.chatToggle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
+          {chatOpen ? 'Chat ◀' : 'Chat ▶'}
+        </button>
       </header>
 
-      {/* ── Panel grid ── */}
-      <main style={styles.grid}>
-        {children}
-      </main>
+      {/* ── Body: left panel grid + right chat column ── */}
+      <div style={styles.body}>
+
+        {/* Left — scrollable dashboard panel grid */}
+        <div style={styles.panelArea}>
+          <div style={styles.grid}>
+            {children}
+          </div>
+        </div>
+
+        {/* Right — fixed-width chat column, collapses to 0 when hidden */}
+        <div style={styles.chatColumn(chatOpen)}>
+          {chatPanel}
+        </div>
+
+      </div>
     </div>
   );
 }
 
 export default Layout;
 
-// ── Inline styles (MVP — replace with CSS modules or Tailwind later) ──────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 
-const styles: Record<string, CSSProperties> = {
+const HEADER_HEIGHT = '56px';
+
+const styles: Record<string, CSSProperties | ((...args: never[]) => CSSProperties)> = {
   root: {
-    minHeight: '100vh',
+    height: '100vh',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: '#0f1117',
     color: '#e0e0e0',
-  },
+    overflow: 'hidden',
+  } as CSSProperties,
+
   header: {
+    height: HEADER_HEIGHT,
+    flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    padding: '16px 24px',
+    padding: '0 24px',
     borderBottom: '1px solid #2a2a2e',
     backgroundColor: '#16161a',
-  },
-  logo: {
-    fontSize: '24px',
-  },
-  title: {
-    fontSize: '18px',
+  } as CSSProperties,
+
+  logo:  { fontSize: '22px' } as CSSProperties,
+  title: { fontSize: '17px', fontWeight: 600, color: '#f0f0f0', margin: 0 } as CSSProperties,
+  subtitle: { fontSize: '12px', color: '#666', marginLeft: 'auto' } as CSSProperties,
+
+  chatToggle: (open: boolean): CSSProperties => ({
+    backgroundColor: open ? '#1e3a5f' : '#111114',
+    border: `1px solid ${open ? '#3a6a9f' : '#2a2a2e'}`,
+    borderRadius: '5px',
+    color: open ? '#90b8e0' : '#888',
+    cursor: 'pointer',
+    fontSize: '12px',
     fontWeight: 600,
-    color: '#f0f0f0',
-  },
-  subtitle: {
-    fontSize: '13px',
-    color: '#888',
-    marginLeft: 'auto',
-  },
+    padding: '5px 12px',
+    marginLeft: '8px',
+    transition: 'all 0.15s',
+    whiteSpace: 'nowrap',
+  }),
+
+  body: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'row',
+    overflow: 'hidden',
+    height: `calc(100vh - ${HEADER_HEIGHT})`,
+  } as CSSProperties,
+
+  panelArea: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '20px',
+  } as CSSProperties,
+
   grid: {
     display: 'grid',
-    // Two columns on wider screens; single column on narrow screens.
-    gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
     gap: '16px',
-    padding: '24px',
-    flex: 1,
     alignContent: 'start',
-  },
+  } as CSSProperties,
+
+  chatColumn: (open: boolean): CSSProperties => ({
+    width: open ? 'clamp(340px, 33vw, 480px)' : '0',
+    flexShrink: 0,
+    overflow: 'hidden',
+    borderLeft: open ? '1px solid #2a2a2e' : 'none',
+    transition: 'width 0.25s ease',
+    display: 'flex',
+    flexDirection: 'column',
+  }),
 };
