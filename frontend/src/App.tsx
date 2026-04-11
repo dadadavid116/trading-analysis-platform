@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import Layout from './components/Layout';
 import PricePanel from './panels/PricePanel';
 import LiquidationPanel from './panels/LiquidationPanel';
@@ -9,10 +10,20 @@ import ChatPanel from './panels/ChatPanel';
 /**
  * App — root component.
  *
- * Manages the chat panel open/close state and passes it down to Layout.
- * The four dashboard panels live in the left scrollable grid.
- * ChatPanel lives in the fixed right column.
+ * Each of the four dashboard panels is wrapped in a `cell` div that:
+ *   - fills its 2×2 grid slot (minHeight: 0 prevents grid-cell expansion)
+ *   - scrolls internally if content overflows
+ *   - provides the panel background colour (matches the page bg for a seamless look)
+ *
+ * ChatPanel lives in the fixed right column, toggled by the header button.
  */
+
+const cell: CSSProperties = {
+  overflow: 'auto',
+  minHeight: 0,
+  backgroundColor: '#0f1117',
+};
+
 function App() {
   const [chatOpen, setChatOpen] = useState(true);
 
@@ -22,10 +33,10 @@ function App() {
       onToggleChat={() => setChatOpen((prev) => !prev)}
       chatPanel={<ChatPanel />}
     >
-      <PricePanel />
-      <LiquidationPanel />
-      <OrderBookPanel />
-      <AlertsPanel />
+      <div style={cell}><PricePanel /></div>
+      <div style={cell}><LiquidationPanel /></div>
+      <div style={cell}><OrderBookPanel /></div>
+      <div style={cell}><AlertsPanel /></div>
     </Layout>
   );
 }

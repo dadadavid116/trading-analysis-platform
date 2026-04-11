@@ -109,17 +109,22 @@ const styles: Record<string, CSSProperties | ((...args: never[]) => CSSPropertie
     height: `calc(100vh - ${HEADER_HEIGHT})`,
   } as CSSProperties,
 
+  // Left area — no scroll, no padding; the 2×2 grid fills it completely.
   panelArea: {
     flex: 1,
-    overflowY: 'auto',
-    padding: '20px',
+    overflow: 'hidden',
+    minWidth: 0,
   } as CSSProperties,
 
+  // 2×2 grid that fills the full available height.
+  // gap:1px + backgroundColor creates the thin divider lines between panels.
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
-    gap: '16px',
-    alignContent: 'start',
+    gridTemplateColumns: '1fr 1fr',
+    gridTemplateRows: '1fr 1fr',
+    height: '100%',
+    gap: '1px',
+    backgroundColor: '#2a2a2e',
   } as CSSProperties,
 
   chatColumn: (open: boolean): CSSProperties => ({

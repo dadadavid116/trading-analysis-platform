@@ -9,15 +9,15 @@ import React from 'react';
  */
 export const panelStyles: Record<string, React.CSSProperties> = {
   // ── Panel card container ─────────────────────────────────────────────────
+  // Borderless, background-less — panels fill their grid cell seamlessly.
+  // The 1px gap lines between cells (set in Layout) act as the only dividers.
   card: {
-    backgroundColor: '#1a1a1f',
-    border: '1px solid #2a2a2e',
-    borderRadius: '8px',
-    padding: '20px',
+    padding: '16px',
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    minHeight: '200px',
+    height: '100%',
+    boxSizing: 'border-box' as const,
   },
 
   // ── [Later] placeholder card — slightly different border to indicate status ─
