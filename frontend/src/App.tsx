@@ -10,19 +10,30 @@ import ChatPanel from './panels/ChatPanel';
 /**
  * App — root component.
  *
- * Each of the four dashboard panels is wrapped in a `cell` div that:
- *   - fills its 2×2 grid slot (minHeight: 0 prevents grid-cell expansion)
- *   - scrolls internally if content overflows
- *   - provides the panel background colour (matches the page bg for a seamless look)
+ * Two independent flex columns so each column can have its own height split:
  *
- * ChatPanel lives in the fixed right column, toggled by the header button.
+ *   Left column:   Price (2/3 height)  |  Right column: Liquidation (3/5 height)
+ *                  OrderBook (1/3)     |                Alerts (2/5)
+ *
+ * This decouples the rows — changing Alerts' height no longer affects Price.
  */
 
-const cell: CSSProperties = {
-  overflow: 'auto',
-  minHeight: 0,
-  backgroundColor: '#0f1117',
+const col: CSSProperties = {
+  flex: 1,
+  display: 'flex',
+  flexDirection: 'column',
+  minWidth: 0,
+  overflow: 'hidden',
 };
+
+// Thin 1px dividers between panels.
+const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#2a2a2e' };
+const dividerV: CSSProperties = { width: '1px',  flexShrink: 0, backgroundColor: '#2a2a2e' };
+
+// Panel cell — takes a flex ratio and scrolls its content internally.
+function cell(flex: number): CSSProperties {
+  return { flex, overflow: 'auto', minHeight: 0, backgroundColor: '#0f1117' };
+}
 
 function App() {
   const [chatOpen, setChatOpen] = useState(true);
@@ -33,10 +44,22 @@ function App() {
       onToggleChat={() => setChatOpen((prev) => !prev)}
       chatPanel={<ChatPanel />}
     >
-      <div style={cell}><PricePanel /></div>
-      <div style={cell}><LiquidationPanel /></div>
-      <div style={cell}><OrderBookPanel /></div>
-      <div style={cell}><AlertsPanel /></div>
+      {/* Left column: Price takes 2/3, OrderBook takes 1/3 */}
+      <div style={col}>
+        <div style={cell(2)}><PricePanel /></div>
+        <div style={dividerH} />
+        <div style={cell(1)}><OrderBookPanel /></div>
+      </div>
+
+      {/* 1px vertical divider between the two columns */}
+      <div style={dividerV} />
+
+      {/* Right column: Liquidation takes 3/5, Alerts takes 2/5 */}
+      <div style={col}>
+        <div style={cell(3)}><LiquidationPanel /></div>
+        <div style={dividerH} />
+        <div style={cell(2)}><AlertsPanel /></div>
+      </div>
     </Layout>
   );
 }

@@ -39,11 +39,9 @@ function Layout({ children, chatPanel, chatOpen, onToggleChat }: LayoutProps) {
       {/* ── Body: left panel grid + right chat column ── */}
       <div style={styles.body}>
 
-        {/* Left — scrollable dashboard panel grid */}
+        {/* Left — two independent flex columns (children structured in App.tsx) */}
         <div style={styles.panelArea}>
-          <div style={styles.grid}>
-            {children}
-          </div>
+          {children}
         </div>
 
         {/* Right — fixed-width chat column, collapses to 0 when hidden */}
@@ -109,24 +107,15 @@ const styles: Record<string, CSSProperties | ((...args: never[]) => CSSPropertie
     height: `calc(100vh - ${HEADER_HEIGHT})`,
   } as CSSProperties,
 
-  // Left area — no scroll, no padding; the 2×2 grid fills it completely.
+  // Left area — two independent flex columns side by side.
+  // Each column manages its own row-height split, so Price/OrderBook and
+  // Liquidation/Alerts are decoupled from each other.
   panelArea: {
     flex: 1,
     overflow: 'hidden',
     minWidth: 0,
-  } as CSSProperties,
-
-  // 2×2 grid that fills the full available height.
-  // gap:1px + backgroundColor creates the thin divider lines between panels.
-  // Top row (Price + Liquidation): 3fr — chart needs the room.
-  // Bottom row (OrderBook + Alerts): 2fr — alerts form needs reasonable space.
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '3fr 2fr',
-    height: '100%',
-    gap: '1px',
-    backgroundColor: '#2a2a2e',
+    display: 'flex',
+    flexDirection: 'row',
   } as CSSProperties,
 
   chatColumn: (open: boolean): CSSProperties => ({
