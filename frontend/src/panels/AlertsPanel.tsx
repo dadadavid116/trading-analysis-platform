@@ -130,66 +130,69 @@ function AlertsPanel() {
     <div style={panelStyles.card}>
       <h2 style={panelStyles.title}>Alerts — BTC/USDT</h2>
 
-      {loading && <p style={panelStyles.muted}>Loading…</p>}
+      {/* Scrollable alert list — grows to fill available space */}
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+        {loading && <p style={panelStyles.muted}>Loading…</p>}
 
-      {error && (
-        <p style={panelStyles.error}>
-          Could not load alerts — check that the API is running.
-        </p>
-      )}
+        {error && (
+          <p style={panelStyles.error}>
+            Could not load alerts — check that the API is running.
+          </p>
+        )}
 
-      {!loading && !error && alerts.length === 0 && (
-        <p style={panelStyles.muted}>No alerts configured yet. Create one below.</p>
-      )}
+        {!loading && !error && alerts.length === 0 && (
+          <p style={panelStyles.muted}>No alerts configured yet. Create one below.</p>
+        )}
 
-      {!loading && !error && alerts.length > 0 && (
-        <table style={panelStyles.table}>
-          <thead>
-            <tr>
-              <th style={panelStyles.th}>Name</th>
-              <th style={panelStyles.th}>Condition</th>
-              <th style={panelStyles.th}>Threshold</th>
-              <th style={panelStyles.th}>Mode</th>
-              <th style={panelStyles.th}>Status</th>
-              <th style={panelStyles.th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {alerts.map((a) => (
-              <tr key={a.id}>
-                <td style={panelStyles.td}>{a.name}</td>
-                <td style={panelStyles.td}>{conditionLabel(a.condition_type)}</td>
-                <td style={panelStyles.td}>{formatThreshold(a)}</td>
-                <td style={panelStyles.td}>{a.trigger_mode}</td>
-                <td style={panelStyles.td}>
-                  {a.triggered_at ? (
-                    <span style={{ color: '#f44336' }}>
-                      Triggered {new Date(a.triggered_at).toLocaleTimeString()}
-                    </span>
-                  ) : (
-                    <span style={{ color: '#66bb6a' }}>Watching</span>
-                  )}
-                </td>
-                <td style={panelStyles.td}>
-                  <button
-                    onClick={() => handleDelete(a.id)}
-                    disabled={deletingId === a.id}
-                    style={deleteButtonStyle}
-                    title="Delete alert"
-                  >
-                    {deletingId === a.id ? '…' : '×'}
-                  </button>
-                </td>
+        {!loading && !error && alerts.length > 0 && (
+          <table style={panelStyles.table}>
+            <thead>
+              <tr>
+                <th style={panelStyles.th}>Name</th>
+                <th style={panelStyles.th}>Condition</th>
+                <th style={panelStyles.th}>Threshold</th>
+                <th style={panelStyles.th}>Mode</th>
+                <th style={panelStyles.th}>Status</th>
+                <th style={panelStyles.th}></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {alerts.map((a) => (
+                <tr key={a.id}>
+                  <td style={panelStyles.td}>{a.name}</td>
+                  <td style={panelStyles.td}>{conditionLabel(a.condition_type)}</td>
+                  <td style={panelStyles.td}>{formatThreshold(a)}</td>
+                  <td style={panelStyles.td}>{a.trigger_mode}</td>
+                  <td style={panelStyles.td}>
+                    {a.triggered_at ? (
+                      <span style={{ color: '#f44336' }}>
+                        Triggered {new Date(a.triggered_at).toLocaleTimeString()}
+                      </span>
+                    ) : (
+                      <span style={{ color: '#66bb6a' }}>Watching</span>
+                    )}
+                  </td>
+                  <td style={panelStyles.td}>
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      disabled={deletingId === a.id}
+                      style={deleteButtonStyle}
+                      title="Delete alert"
+                    >
+                      {deletingId === a.id ? '…' : '×'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
-      {/* Create form */}
-      <div style={{ borderTop: '1px solid #2a2a2e', paddingTop: '12px' }}>
-        <p style={{ ...panelStyles.label, marginBottom: '8px' }}>New alert</p>
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* Create form — pinned at the bottom, always visible */}
+      <div style={{ borderTop: '1px solid #2a2a2e', paddingTop: '10px', flexShrink: 0 }}>
+        <p style={{ ...panelStyles.label, marginBottom: '6px' }}>New alert</p>
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           <input
             style={inputStyle}
             placeholder="Name"
@@ -235,7 +238,7 @@ function AlertsPanel() {
             onChange={(e) => setFormTriggerMode(e.target.value)}
           >
             <option value="once">Once — trigger once, then stay triggered</option>
-            <option value="rearm">Rearm — reset and trigger again when condition returns</option>
+            <option value="rearm">Rearm — reset and trigger again</option>
           </select>
           {formError && <p style={panelStyles.error}>{formError}</p>}
           <button type="submit" style={buttonStyle} disabled={submitting}>

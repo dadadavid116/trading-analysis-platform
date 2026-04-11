@@ -36,42 +36,45 @@ function LiquidationPanel() {
     <div style={panelStyles.card}>
       <h2 style={panelStyles.title}>Liquidations — BTC/USDT</h2>
 
-      {loading && <p style={panelStyles.muted}>Loading…</p>}
+      {/* Scrollable table area — title above stays fixed */}
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+        {loading && <p style={panelStyles.muted}>Loading…</p>}
 
-      {error && (
-        <p style={panelStyles.error}>
-          Could not load liquidation data — check that the API is running.
-        </p>
-      )}
+        {error && (
+          <p style={panelStyles.error}>
+            Could not load liquidation data — check that the API is running.
+          </p>
+        )}
 
-      {!loading && !error && events.length === 0 && (
-        <p style={panelStyles.muted}>No recent liquidations.</p>
-      )}
+        {!loading && !error && events.length === 0 && (
+          <p style={panelStyles.muted}>No recent liquidations.</p>
+        )}
 
-      {events.length > 0 && (
-        <table style={panelStyles.table}>
-          <thead>
-            <tr>
-              <th style={panelStyles.th}>Time</th>
-              <th style={panelStyles.th}>Side</th>
-              <th style={panelStyles.th}>Price</th>
-              <th style={panelStyles.th}>Qty</th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.map((ev) => (
-              <tr key={ev.id}>
-                <td style={panelStyles.td}>{new Date(ev.timestamp).toLocaleTimeString()}</td>
-                <td style={{ ...panelStyles.td, color: ev.side === 'buy' ? '#4caf50' : '#f44336' }}>
-                  {ev.side.toUpperCase()}
-                </td>
-                <td style={panelStyles.td}>${ev.price.toLocaleString()}</td>
-                <td style={panelStyles.td}>{ev.quantity}</td>
+        {events.length > 0 && (
+          <table style={panelStyles.table}>
+            <thead>
+              <tr>
+                <th style={panelStyles.th}>Time</th>
+                <th style={panelStyles.th}>Side</th>
+                <th style={panelStyles.th}>Price</th>
+                <th style={panelStyles.th}>Qty</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            </thead>
+            <tbody>
+              {events.map((ev) => (
+                <tr key={ev.id}>
+                  <td style={panelStyles.td}>{new Date(ev.timestamp).toLocaleTimeString()}</td>
+                  <td style={{ ...panelStyles.td, color: ev.side === 'buy' ? '#4caf50' : '#f44336' }}>
+                    {ev.side.toUpperCase()}
+                  </td>
+                  <td style={panelStyles.td}>${ev.price.toLocaleString()}</td>
+                  <td style={panelStyles.td}>{ev.quantity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   );
 }

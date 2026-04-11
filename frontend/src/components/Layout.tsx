@@ -118,12 +118,12 @@ const styles: Record<string, CSSProperties | ((...args: never[]) => CSSPropertie
 
   // 2×2 grid that fills the full available height.
   // gap:1px + backgroundColor creates the thin divider lines between panels.
-  // Top row (Price + Liquidation) gets 2/3 of height — needed for the chart.
-  // Bottom row (OrderBook + Alerts) gets 1/3 — both are compact panels.
+  // Top row (Price + Liquidation): 3fr — chart needs the room.
+  // Bottom row (OrderBook + Alerts): 2fr — alerts form needs reasonable space.
   grid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gridTemplateRows: '2fr 1fr',
+    gridTemplateRows: '3fr 2fr',
     height: '100%',
     gap: '1px',
     backgroundColor: '#2a2a2e',
