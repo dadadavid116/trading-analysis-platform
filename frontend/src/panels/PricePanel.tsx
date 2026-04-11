@@ -6,13 +6,13 @@ import { panelStyles } from './panelStyles';
 // ── Time-period definitions ────────────────────────────────────────────────────
 
 const INTERVALS = [
-  { label: '3m',  value: '3m',  limit: 100 },
-  { label: '5m',  value: '5m',  limit: 100 },
-  { label: '15m', value: '15m', limit: 100 },
-  { label: '1H',  value: '1h',  limit: 100 },
-  { label: '4H',  value: '4h',  limit: 100 },
-  { label: '1D',  value: '1d',  limit: 90  },
-  { label: '1M',  value: '1M',  limit: 24  },
+  { label: '3m',  value: '3m',  limit: 100, seconds: 180    },
+  { label: '5m',  value: '5m',  limit: 100, seconds: 300    },
+  { label: '15m', value: '15m', limit: 100, seconds: 900    },
+  { label: '1H',  value: '1h',  limit: 100, seconds: 3600   },
+  { label: '4H',  value: '4h',  limit: 100, seconds: 14400  },
+  { label: '1D',  value: '1d',  limit: 90,  seconds: 86400  },
+  { label: '1M',  value: '1M',  limit: 24,  seconds: 0      }, // monthly varies — no countdown
 ] as const;
 
 type IntervalValue = typeof INTERVALS[number]['value'];
@@ -47,6 +47,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: '320px',
     borderRadius: '4px',
     overflow: 'hidden',
+    cursor: 'crosshair',
   },
 };
 
@@ -61,94 +62,103 @@ function PricePanel() {
   const [chartLoading, setChartLoading] = useState(true);
   const [chartError, setChartError] = useState<string | null>(null);
 
+  // ── Countdown timer state ───────────────────────────────────────────────────
+  const [countdown, setCountdown] = useState<string>('');
+  const lastCandleTimeRef = useRef<number>(0); // Unix seconds — open time of rightmost candle
+
+  // ── Crosshair hover state ───────────────────────────────────────────────────
+  // Tracks the price under the cursor as the user moves across the chart.
+  const [crosshair, setCrosshair] = useState<{ x: number; y: number; price: number } | null>(null);
+
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  // Tracks the IPriceLine handle for each alert ID so we can remove them cleanly.
-  const alertLinesRef = useRef<Map<number, IPriceLine>>(new Map());
+  const chartRef          = useRef<IChartApi | null>(null);
+  const seriesRef         = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const alertLinesRef     = useRef<Map<number, IPriceLine>>(new Map());
 
-  // Floating popover shown when user clicks the chart at a price level.
-  const [popover, setPopover] = useState<{ x: number; y: number; price: number } | null>(null);
+  // Alert popover shown on chart click.
+  const [popover, setPopover]           = useState<{ x: number; y: number; price: number } | null>(null);
   const [popoverSaving, setPopoverSaving] = useState(false);
-  const [popoverError, setPopoverError] = useState<string | null>(null);
+  const [popoverError, setPopoverError]   = useState<string | null>(null);
 
-  // ── Live price via Server-Sent Events ─────────────────────────────────────
-  // The backend pushes the latest DB candle every ~1 s. The collector now
-  // upserts on every Binance tick, so the displayed price is effectively live.
-  // EventSource reconnects automatically on connection drop.
+  // ── Live price via SSE ────────────────────────────────────────────────────
   useEffect(() => {
     const es = new EventSource('/api/price/stream');
-
     es.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data) as PriceCandle;
         setCandle(data);
         setLatestError(null);
         setLatestLoading(false);
-      } catch {
-        // malformed frame — skip
-      }
+      } catch { /* malformed frame — skip */ }
     };
-
-    es.onerror = () => {
-      setLatestError('Live stream reconnecting…');
-      // EventSource auto-reconnects — no manual retry needed
-    };
-
+    es.onerror = () => setLatestError('Live stream reconnecting…');
     return () => es.close();
   }, []);
 
-  // ── Sync alert price lines onto the chart every 15 s ──────────────────────
+  // ── Countdown ticker (updates every second) ───────────────────────────────
+  useEffect(() => {
+    const cfg = INTERVALS.find((i) => i.value === timeframe);
+    const intervalSecs = cfg?.seconds ?? 0;
+
+    const tick = () => {
+      if (!intervalSecs || !lastCandleTimeRef.current) { setCountdown(''); return; }
+      const closeTime  = lastCandleTimeRef.current + intervalSecs;
+      const remaining  = closeTime - Math.floor(Date.now() / 1000);
+      if (remaining <= 0) { setCountdown('closing…'); return; }
+      if (remaining >= 3600) {
+        const h = Math.floor(remaining / 3600);
+        const m = Math.floor((remaining % 3600) / 60);
+        setCountdown(`${h}h ${m}m`);
+      } else if (remaining >= 60) {
+        const m = Math.floor(remaining / 60);
+        const s = remaining % 60;
+        setCountdown(`${m}m ${s}s`);
+      } else {
+        setCountdown(`${remaining}s`);
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [timeframe]);
+
+  // ── Sync alert price lines every 15 s ────────────────────────────────────
   useEffect(() => {
     const syncLines = () => {
       fetchAlerts()
         .then((data: Alert[]) => {
-          if (!seriesRef.current) return; // chart not mounted yet
-
-          // Only price alerts that haven't triggered yet get a line.
+          if (!seriesRef.current) return;
           const priceAlerts = data.filter(
-            (a) =>
-              a.is_active &&
-              !a.triggered_at &&
+            (a) => a.is_active && !a.triggered_at &&
               (a.condition_type === 'price_above' || a.condition_type === 'price_below'),
           );
-
-          const series    = seriesRef.current;
-          const linesMap  = alertLinesRef.current;
+          const series   = seriesRef.current;
+          const linesMap = alertLinesRef.current;
           const activeIds = new Set(priceAlerts.map((a) => a.id));
 
-          // Remove lines whose alerts no longer appear in the active list.
           for (const [id, line] of linesMap) {
-            if (!activeIds.has(id)) {
-              series.removePriceLine(line);
-              linesMap.delete(id);
-            }
+            if (!activeIds.has(id)) { series.removePriceLine(line); linesMap.delete(id); }
           }
-
-          // Add a new line for every alert we haven't drawn yet.
           for (const alert of priceAlerts) {
             if (linesMap.has(alert.id)) continue;
             const isAbove = alert.condition_type === 'price_above';
             const line = series.createPriceLine({
-              price:            alert.threshold,
-              color:            '#f5a623',
-              lineWidth:        1,
-              lineStyle:        LineStyle.Dashed,
-              axisLabelVisible: true,
-              title:            `${isAbove ? '↑' : '↓'} ${alert.name}`,
+              price: alert.threshold, color: '#f5a623', lineWidth: 1,
+              lineStyle: LineStyle.Dashed, axisLabelVisible: true,
+              title: `${isAbove ? '↑' : '↓'} ${alert.name}`,
             });
             linesMap.set(alert.id, line);
           }
         })
-        .catch(() => {}); // non-critical — silently skip on error
+        .catch(() => {});
     };
-
     syncLines();
     const id = setInterval(syncLines, 15_000);
     return () => clearInterval(id);
   }, []);
 
-  // ── Create the chart once on mount ─────────────────────────────────────────
+  // ── Create chart once on mount ────────────────────────────────────────────
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
@@ -166,29 +176,34 @@ function PricePanel() {
         horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
       },
       rightPriceScale: { borderColor: '#2a2a2e' },
-      timeScale: {
-        borderColor: '#2a2a2e',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      width: chartContainerRef.current.clientWidth,
+      timeScale: { borderColor: '#2a2a2e', timeVisible: true, secondsVisible: false },
+      width:  chartContainerRef.current.clientWidth,
       height: 320,
     });
 
     const series = chart.addCandlestickSeries({
-      upColor:          '#26a69a',
-      downColor:        '#ef5350',
-      borderUpColor:    '#26a69a',
-      borderDownColor:  '#ef5350',
-      wickUpColor:      '#26a69a',
-      wickDownColor:    '#ef5350',
+      upColor: '#26a69a', downColor: '#ef5350',
+      borderUpColor: '#26a69a', borderDownColor: '#ef5350',
+      wickUpColor:   '#26a69a', wickDownColor:   '#ef5350',
     });
 
     chartRef.current  = chart;
     seriesRef.current = series;
 
-    // Click on the chart → compute the price at the clicked y-coordinate
-    // and show a popover to create an alert above or below that level.
+    // ── Crosshair move → show floating price label ──────────────────────────
+    // Fires continuously as the user moves their cursor anywhere on the chart.
+    // The price is read directly from the Y coordinate — not snapped to any candle.
+    chart.subscribeCrosshairMove((param) => {
+      if (!param.point || param.point.x < 0 || param.point.y < 0) {
+        setCrosshair(null);
+        return;
+      }
+      const price = series.coordinateToPrice(param.point.y);
+      if (price === null || price <= 0) { setCrosshair(null); return; }
+      setCrosshair({ x: param.point.x, y: param.point.y, price: Math.round(price) });
+    });
+
+    // ── Click → open alert popover at the exact crosshair price ───────────
     chart.subscribeClick((param) => {
       if (!param.point) { setPopover(null); return; }
       const price = series.coordinateToPrice(param.point.y);
@@ -197,11 +212,10 @@ function PricePanel() {
       setPopover({ x: param.point.x, y: param.point.y, price: Math.round(price) });
     });
 
-    // Resize observer keeps the chart in sync with panel width changes.
+    // ResizeObserver keeps the chart in sync with panel width changes.
     const ro = new ResizeObserver(() => {
-      if (chartContainerRef.current) {
+      if (chartContainerRef.current)
         chart.applyOptions({ width: chartContainerRef.current.clientWidth });
-      }
     });
     ro.observe(chartContainerRef.current);
 
@@ -213,39 +227,29 @@ function PricePanel() {
     };
   }, []);
 
-  // ── Refresh the live (rightmost) candle on the chart every 10 s ───────────
-  // Full chart data is loaded once per timeframe switch (setData below).
-  // This effect only updates the LAST candle so the chart stays current
-  // without re-rendering the entire series.
+  // ── Refresh the rightmost candle every 10 s ───────────────────────────────
   useEffect(() => {
     const refreshLiveCandle = () => {
       if (!seriesRef.current) return;
-      const cfg = INTERVALS.find((i) => i.value === timeframe);
-      if (!cfg) return;
-
       fetchKlines(timeframe, 1)
         .then((data: KlineCandle[]) => {
           if (!seriesRef.current || data.length === 0) return;
           const c = data[0];
           seriesRef.current.update({
-            time:  c.time as UTCTimestamp,
-            open:  c.open,
-            high:  c.high,
-            low:   c.low,
-            close: c.close,
+            time: c.time as UTCTimestamp,
+            open: c.open, high: c.high, low: c.low, close: c.close,
           });
+          lastCandleTimeRef.current = c.time; // keep countdown in sync
         })
-        .catch(() => {}); // non-critical — skip on error
+        .catch(() => {});
     };
-
     const id = setInterval(refreshLiveCandle, 10_000);
     return () => clearInterval(id);
   }, [timeframe]);
 
-  // ── Load candle data whenever timeframe changes ────────────────────────────
+  // ── Load full candle series on timeframe change ───────────────────────────
   useEffect(() => {
     if (!seriesRef.current) return;
-
     const cfg = INTERVALS.find((i) => i.value === timeframe);
     if (!cfg) return;
 
@@ -255,14 +259,13 @@ function PricePanel() {
     fetchKlines(timeframe, cfg.limit)
       .then((data: KlineCandle[]) => {
         const chartData: CandlestickData[] = data.map((c) => ({
-          time:  c.time as UTCTimestamp,
-          open:  c.open,
-          high:  c.high,
-          low:   c.low,
-          close: c.close,
+          time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close,
         }));
         seriesRef.current!.setData(chartData);
         chartRef.current!.timeScale().fitContent();
+        // Seed the countdown with the open time of the rightmost candle.
+        if (chartData.length > 0)
+          lastCandleTimeRef.current = chartData[chartData.length - 1].time as number;
         setChartLoading(false);
       })
       .catch((err: Error) => {
@@ -271,7 +274,7 @@ function PricePanel() {
       });
   }, [timeframe]);
 
-  // Create an alert from the chart-click popover.
+  // ── Create alert from popover ─────────────────────────────────────────────
   async function setAlertFromChart(conditionType: 'price_above' | 'price_below') {
     if (!popover) return;
     setPopoverSaving(true);
@@ -284,7 +287,6 @@ function PricePanel() {
         trigger_mode: 'once',
       });
       setPopover(null);
-      // Phase 19 polling will draw the alert line on the chart within 15 s.
     } catch (err: unknown) {
       setPopoverError(err instanceof Error ? err.message : 'Could not create alert.');
     } finally {
@@ -292,9 +294,13 @@ function PricePanel() {
     }
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  const containerWidth = chartContainerRef.current?.clientWidth ?? 400;
+
   return (
     <div style={panelStyles.card}>
-      {/* Header row: title + interval switcher */}
+      {/* Header: title + interval switcher */}
       <div style={styles.header}>
         <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
           Price — BTC/USDT
@@ -312,7 +318,7 @@ function PricePanel() {
         </div>
       </div>
 
-      {/* Latest price data grid */}
+      {/* Price data grid */}
       {latestLoading && <p style={panelStyles.muted}>Loading…</p>}
       {latestError && (
         <p style={panelStyles.error}>Could not load price data — check that the API is running.</p>
@@ -325,10 +331,14 @@ function PricePanel() {
           <DataRow label="Low"    value={`$${candle.low.toLocaleString()}`} />
           <DataRow label="Volume" value={candle.volume.toLocaleString()} />
           <DataRow label="Time"   value={new Date(candle.timestamp).toLocaleTimeString()} />
+          {/* Countdown timer — shows how long until the current candle closes */}
+          {countdown && (
+            <DataRow label="Candle closes" value={countdown} />
+          )}
         </div>
       )}
 
-      {/* K-line candlestick chart */}
+      {/* Chart */}
       <div style={{ position: 'relative' }}>
         {chartLoading && (
           <p style={{ ...panelStyles.muted, position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
@@ -342,12 +352,32 @@ function PricePanel() {
         )}
         <div ref={chartContainerRef} style={styles.chartContainer} />
 
-        {/* Click-to-alert popover */}
+        {/* Crosshair price label — follows cursor, hidden while popover is open */}
+        {crosshair && !popover && (
+          <div style={{
+            position: 'absolute',
+            left: Math.min(crosshair.x + 14, containerWidth - 160) + 'px',
+            top:  Math.max(crosshair.y - 14, 2) + 'px',
+            backgroundColor: 'rgba(26,26,46,0.92)',
+            border: '1px solid #3a3a5e',
+            borderRadius: '4px',
+            padding: '2px 8px',
+            fontSize: '11px',
+            color: '#f5a623',
+            pointerEvents: 'none',   // must not block chart events
+            zIndex: 5,
+            whiteSpace: 'nowrap',
+          }}>
+            ${crosshair.price.toLocaleString()} — click to set alert
+          </div>
+        )}
+
+        {/* Alert popover (appears on click) */}
         {popover && (
           <div style={{
             position: 'absolute',
-            left: `${Math.min(popover.x + 8, (chartContainerRef.current?.clientWidth ?? 300) - 190)}px`,
-            top: `${Math.max(popover.y - 20, 0)}px`,
+            left: `${Math.min(popover.x + 8, containerWidth - 190)}px`,
+            top:  `${Math.max(popover.y - 20, 0)}px`,
             backgroundColor: '#1a1a2e',
             border: '1px solid #3a3a5e',
             borderRadius: '7px',
@@ -356,7 +386,7 @@ function PricePanel() {
             width: '178px',
             boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
           }}>
-            {/* Price label + close */}
+            {/* Price + close */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span style={{ color: '#f5a623', fontWeight: 700, fontSize: '13px' }}>
                 ${popover.price.toLocaleString()}
@@ -402,7 +432,7 @@ function PricePanel() {
 
 export default PricePanel;
 
-// ── Helper ─────────────────────────────────────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function DataRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
