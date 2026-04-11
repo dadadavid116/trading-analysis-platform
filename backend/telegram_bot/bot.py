@@ -345,11 +345,11 @@ async def _ai_reply(message: str, context: ContextTypes.DEFAULT_TYPE) -> str:
     history.append({"role": "user", "content": message})
 
     if model == "openai" and settings.openai_api_key:
-        reply = await _reply_via_openai(history[:-1], system_prompt)
+        reply = await _reply_via_openai(history, system_prompt)
     else:
         if not settings.anthropic_api_key:
             return "ANTHROPIC_API_KEY is not configured. Add it to .env."
-        reply = await _reply_via_claude(history[:-1], system_prompt)
+        reply = await _reply_via_claude(history, system_prompt)
 
     # Save updated history (cap at MAX_HISTORY_TURNS pairs).
     history.append({"role": "assistant", "content": reply})
