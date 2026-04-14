@@ -44,7 +44,8 @@ const styles: Record<string, React.CSSProperties> = {
   }),
   chartContainer: {
     width: '100%',
-    height: '320px',
+    flex: 1,
+    minHeight: 0,
     borderRadius: '4px',
     overflow: 'hidden',
     cursor: 'crosshair',
@@ -178,7 +179,7 @@ function PricePanel() {
       rightPriceScale: { borderColor: '#2a2a2e' },
       timeScale: { borderColor: '#2a2a2e', timeVisible: true, secondsVisible: false },
       width:  chartContainerRef.current.clientWidth,
-      height: 320,
+      height: chartContainerRef.current.clientHeight || 320,
     });
 
     const series = chart.addCandlestickSeries({
@@ -215,7 +216,10 @@ function PricePanel() {
     // ResizeObserver keeps the chart in sync with panel width changes.
     const ro = new ResizeObserver(() => {
       if (chartContainerRef.current)
-        chart.applyOptions({ width: chartContainerRef.current.clientWidth });
+        chart.applyOptions({
+          width:  chartContainerRef.current.clientWidth,
+          height: chartContainerRef.current.clientHeight,
+        });
     });
     ro.observe(chartContainerRef.current);
 
@@ -338,8 +342,8 @@ function PricePanel() {
         </div>
       )}
 
-      {/* Chart */}
-      <div style={{ position: 'relative' }}>
+      {/* Chart — grows to fill all remaining panel space */}
+      <div style={{ position: 'relative', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {chartLoading && (
           <p style={{ ...panelStyles.muted, position: 'absolute', top: 8, left: 8, zIndex: 1 }}>
             Loading chart…
