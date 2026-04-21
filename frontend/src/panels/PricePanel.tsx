@@ -333,11 +333,10 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
       };
 
       result.support_levels.forEach((p, i)    => addLine(p, '#26a69a', `Support ${i + 1}`));
-      result.resistance_levels.forEach((p, i) => addLine(p, '#ef5350', `Resistance ${i + 1}`));
       addLine(result.entry_zone.low,  '#4a90d9', 'Entry low');
       addLine(result.entry_zone.high, '#4a90d9', 'Entry high');
       addLine(result.stop_loss, '#f5a623', 'Stop loss');
-      result.take_profit.forEach((p, i)       => addLine(p, '#ab47bc', `Take profit ${i + 1}`));
+      result.take_profit.forEach((p, i)       => addLine(p, '#ef5350', `TP ${i + 1} — Resistance`));
 
       // Format a markdown message for ChatPanel
       const trendEmoji = result.trend === 'bullish' ? '📈' : result.trend === 'bearish' ? '📉' : '➡️';
@@ -346,12 +345,11 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
         `## Chart Analysis — BTC/USDT (${result.timeframe.toUpperCase()})\n\n` +
         `**Trend:** ${trendEmoji} ${result.trend.charAt(0).toUpperCase() + result.trend.slice(1)}\n\n` +
         `**Support:** ${result.support_levels.map(fmt).join(' · ')}\n` +
-        `**Resistance:** ${result.resistance_levels.map(fmt).join(' · ')}\n\n` +
+        `**TP / Resistance:** ${result.take_profit.map(fmt).join(' · ')}\n\n` +
         `**Entry zone:** ${fmt(result.entry_zone.low)} – ${fmt(result.entry_zone.high)}\n` +
-        `**Stop loss:** ${fmt(result.stop_loss)}\n` +
-        `**Take profit:** ${result.take_profit.map(fmt).join(' · ')}\n\n` +
+        `**Stop loss:** ${fmt(result.stop_loss)}\n\n` +
         `${result.reasoning}\n\n` +
-        `*Lines drawn on chart — green: support, red: resistance, blue: entry, orange: stop loss, purple: take profit.*`;
+        `*Lines drawn on chart — green: support, red: TP/resistance, blue: entry zone, orange: stop loss.*`;
 
       onAnalysis(msg);
     } catch (err: unknown) {
