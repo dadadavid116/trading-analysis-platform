@@ -1,11 +1,13 @@
 """
-routers/analysis.py — API endpoint for AI-generated market summaries.
+routers/analysis.py — API endpoints for AI-generated market analysis.
 
 Endpoints:
-    GET /api/analysis/latest — most recent summary for BTC
+    GET  /api/analysis/latest — most recent scheduled summary for BTC
+    POST /api/analysis/chart  — on-demand Claude chart analysis (Phase 23)
 """
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,3 +34,23 @@ async def get_latest_analysis(db: AsyncSession = Depends(get_db)):
             detail="No analysis available yet. The analysis worker generates summaries on a schedule — check back shortly.",
         )
     return summary
+
+
+# ── Phase 23: on-demand Claude chart analysis ─────────────────────────────────
+
+class ChartAnalysisRequest(BaseModel):
+    timeframe: str = "1h"
+
+
+@router.post("/chart")
+async def chart_analysis(body: ChartAnalysisRequest):
+    """
+    Fetch the last 50 BTC candles from Binance and ask Claude to identify
+    support/resistance levels, an entry zone, stop loss, and take profit targets.
+    Returns structured JSON that the frontend draws as price lines on the chart.
+    """
+    try:
+        from app.services.chart_analysis import analyze_chart
+        return await analyze_chart(body.timeframe)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

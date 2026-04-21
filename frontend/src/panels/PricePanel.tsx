@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine } from 'lightweight-charts';
-import { fetchKlines, fetchAlerts, createAlert, PriceCandle, KlineCandle, Alert } from '../api';
+import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
 // ── Time-period definitions ────────────────────────────────────────────────────
@@ -54,7 +54,11 @@ const styles: Record<string, React.CSSProperties> = {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-function PricePanel() {
+interface PricePanelProps {
+  onAnalysis: (message: string) => void;
+}
+
+function PricePanel({ onAnalysis }: PricePanelProps) {
   const [candle, setCandle] = useState<PriceCandle | null>(null);
   const [latestError, setLatestError] = useState<string | null>(null);
   const [latestLoading, setLatestLoading] = useState(true);
@@ -75,6 +79,11 @@ function PricePanel() {
   const chartRef          = useRef<IChartApi | null>(null);
   const seriesRef         = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const alertLinesRef     = useRef<Map<number, IPriceLine>>(new Map());
+
+  // ── Chart analysis (Phase 23) ─────────────────────────────────────────────
+  const [analyzing, setAnalyzing]       = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const analysisLinesRef = useRef<IPriceLine[]>([]);
 
   // Alert popover shown on chart click.
   const [popover, setPopover]           = useState<{ x: number; y: number; price: number } | null>(null);
@@ -298,6 +307,60 @@ function PricePanel() {
     }
   }
 
+  // ── Chart analysis (Phase 23) ─────────────────────────────────────────────
+  async function handleAnalyze() {
+    if (!seriesRef.current) return;
+    setAnalyzing(true);
+    setAnalyzeError(null);
+
+    try {
+      const result = await requestChartAnalysis(timeframe);
+      const series = seriesRef.current;
+
+      // Clear previous analysis lines
+      for (const line of analysisLinesRef.current) {
+        try { series.removePriceLine(line); } catch { /* already removed */ }
+      }
+      analysisLinesRef.current = [];
+
+      const addLine = (price: number, color: string, title: string) => {
+        const line = series.createPriceLine({
+          price, color, lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true, title,
+        });
+        analysisLinesRef.current.push(line);
+      };
+
+      result.support_levels.forEach((p, i)    => addLine(p, '#26a69a', `S${i + 1}`));
+      result.resistance_levels.forEach((p, i) => addLine(p, '#ef5350', `R${i + 1}`));
+      addLine(result.entry_zone.low,  '#4a90d9', 'Entry low');
+      addLine(result.entry_zone.high, '#4a90d9', 'Entry high');
+      addLine(result.stop_loss, '#f5a623', 'Stop loss');
+      result.take_profit.forEach((p, i)       => addLine(p, '#ab47bc', `TP${i + 1}`));
+
+      // Format a markdown message for ChatPanel
+      const trendEmoji = result.trend === 'bullish' ? '📈' : result.trend === 'bearish' ? '📉' : '➡️';
+      const fmt = (n: number) => `$${n.toLocaleString()}`;
+      const msg =
+        `## Chart Analysis — BTC/USDT (${result.timeframe.toUpperCase()})\n\n` +
+        `**Trend:** ${trendEmoji} ${result.trend.charAt(0).toUpperCase() + result.trend.slice(1)}\n\n` +
+        `**Support:** ${result.support_levels.map(fmt).join(' · ')}\n` +
+        `**Resistance:** ${result.resistance_levels.map(fmt).join(' · ')}\n\n` +
+        `**Entry zone:** ${fmt(result.entry_zone.low)} – ${fmt(result.entry_zone.high)}\n` +
+        `**Stop loss:** ${fmt(result.stop_loss)}\n` +
+        `**Take profit:** ${result.take_profit.map(fmt).join(' · ')}\n\n` +
+        `${result.reasoning}\n\n` +
+        `*Lines drawn on chart — green: support, red: resistance, blue: entry, orange: stop loss, purple: take profit.*`;
+
+      onAnalysis(msg);
+    } catch (err: unknown) {
+      setAnalyzeError(err instanceof Error ? err.message : 'Analysis failed.');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const containerWidth = chartContainerRef.current?.clientWidth ?? 400;
@@ -309,16 +372,36 @@ function PricePanel() {
         <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
           Price — BTC/USDT
         </h2>
-        <div style={styles.switcherRow}>
-          {INTERVALS.map((iv) => (
-            <button
-              key={iv.value}
-              style={styles.switcherBtn(timeframe === iv.value)}
-              onClick={() => setTimeframe(iv.value)}
-            >
-              {iv.label}
-            </button>
-          ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={styles.switcherRow}>
+            {INTERVALS.map((iv) => (
+              <button
+                key={iv.value}
+                style={styles.switcherBtn(timeframe === iv.value)}
+                onClick={() => setTimeframe(iv.value)}
+              >
+                {iv.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleAnalyze}
+            disabled={analyzing}
+            style={{
+              backgroundColor: analyzing ? '#111114' : '#1e2a3a',
+              border: '1px solid #3a5a7a',
+              borderRadius: '4px',
+              color: analyzing ? '#555' : '#90b8e0',
+              cursor: analyzing ? 'not-allowed' : 'pointer',
+              fontSize: '11px',
+              fontWeight: 600,
+              padding: '3px 10px',
+              whiteSpace: 'nowrap' as const,
+              transition: 'all 0.15s',
+            }}
+          >
+            {analyzing ? 'Analyzing…' : '✦ Analyze'}
+          </button>
         </div>
       </div>
 
@@ -340,6 +423,10 @@ function PricePanel() {
             <DataRow label="Candle closes" value={countdown} />
           )}
         </div>
+      )}
+
+      {analyzeError && (
+        <p style={{ ...panelStyles.error, margin: 0 }}>Analysis error: {analyzeError}</p>
       )}
 
       {/* Chart — grows to fill all remaining panel space */}

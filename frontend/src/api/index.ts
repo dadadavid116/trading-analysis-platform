@@ -168,6 +168,33 @@ export async function deleteAlert(id: number): Promise<void> {
   }
 }
 
+// ── Chart analysis (Phase 23) ─────────────────────────────────────────────────
+
+export interface ChartAnalysis {
+  trend:             'bullish' | 'bearish' | 'sideways';
+  support_levels:    number[];
+  resistance_levels: number[];
+  entry_zone:        { low: number; high: number };
+  stop_loss:         number;
+  take_profit:       number[];
+  reasoning:         string;
+  timeframe:         string;
+  current_price:     number;
+}
+
+export async function requestChartAnalysis(timeframe: string): Promise<ChartAnalysis> {
+  const response = await fetch(`${BASE_URL}/analysis/chart`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ timeframe }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string })?.detail ?? `API error ${response.status}: ${response.statusText}`);
+  }
+  return response.json() as Promise<ChartAnalysis>;
+}
+
 // ── Strategy ───────────────────────────────────────────────────────────────────
 
 export interface StrategyResult {

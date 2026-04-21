@@ -246,7 +246,12 @@ function renderMarkdown(text: string): React.ReactNode {
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
-function ChatPanel() {
+interface ChatPanelProps {
+  analysisMessage?: string | null;
+  onAnalysisConsumed?: () => void;
+}
+
+function ChatPanel({ analysisMessage, onAnalysisConsumed }: ChatPanelProps) {
   const [model, setModel]       = useState('claude');
   const [input, setInput]       = useState('');
   const [messages, setMessages] = useState<DisplayMessage[]>([GREETING]);
@@ -267,6 +272,13 @@ function ChatPanel() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
+
+  // Inject analysis result from PricePanel as an assistant message.
+  useEffect(() => {
+    if (!analysisMessage) return;
+    setMessages((prev) => [...prev, { role: 'assistant', content: analysisMessage }]);
+    onAnalysisConsumed?.();
+  }, [analysisMessage, onAnalysisConsumed]);
 
   // Load recent sessions whenever the settings panel opens.
   useEffect(() => {
