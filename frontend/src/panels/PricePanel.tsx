@@ -332,12 +332,12 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
         analysisLinesRef.current.push(line);
       };
 
-      result.support_levels.forEach((p, i)    => addLine(p, '#26a69a', `S${i + 1}`));
-      result.resistance_levels.forEach((p, i) => addLine(p, '#ef5350', `R${i + 1}`));
+      result.support_levels.forEach((p, i)    => addLine(p, '#26a69a', `Support ${i + 1}`));
+      result.resistance_levels.forEach((p, i) => addLine(p, '#ef5350', `Resistance ${i + 1}`));
       addLine(result.entry_zone.low,  '#4a90d9', 'Entry low');
       addLine(result.entry_zone.high, '#4a90d9', 'Entry high');
       addLine(result.stop_loss, '#f5a623', 'Stop loss');
-      result.take_profit.forEach((p, i)       => addLine(p, '#ab47bc', `TP${i + 1}`));
+      result.take_profit.forEach((p, i)       => addLine(p, '#ab47bc', `Take profit ${i + 1}`));
 
       // Format a markdown message for ChatPanel
       const trendEmoji = result.trend === 'bullish' ? '📈' : result.trend === 'bearish' ? '📉' : '➡️';
