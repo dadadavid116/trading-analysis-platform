@@ -456,6 +456,9 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
         "You have access to live market data and can manage price alerts on behalf of the user. "
         "Be concise, friendly, and accurate. When creating or managing alerts, always confirm "
         "the details back to the user after the tool executes.\n\n"
+        "IMPORTANT: Whenever you perform or discuss any market analysis, always explicitly state "
+        "the timeframe you are analysing (e.g. '1H', '4H', '1D'). If the user does not specify "
+        "a timeframe, default to 1H and state that assumption clearly in your response.\n\n"
         + market_context
     )
 
