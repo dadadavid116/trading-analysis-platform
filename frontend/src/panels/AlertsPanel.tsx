@@ -1,4 +1,4 @@
-import { useState, useEffect, CSSProperties, FormEvent } from 'react';
+import { useState, useEffect, useRef, CSSProperties, FormEvent } from 'react';
 import { fetchAlerts, createAlert, deleteAlert, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
@@ -35,12 +35,53 @@ function AlertsPanel() {
   const [formError,       setFormError]       = useState<string | null>(null);
   const [submitting,      setSubmitting]      = useState(false);
   const [deletingId,      setDeletingId]      = useState<number | null>(null);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
+
+  // Tracks alert IDs that were already triggered on the previous poll cycle.
+  // Populated silently on first load — only NEW triggers fire a notification.
+  const knownTriggeredRef = useRef<Set<number> | null>(null);
+
+  // ── Request notification permission on mount ───────────────────────────────
+  useEffect(() => {
+    if (!('Notification' in window)) return;
+    setNotifPermission(Notification.permission);
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then((p) => setNotifPermission(p));
+    }
+  }, []);
 
   // ── Polling ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const load = () => {
       fetchAlerts()
         .then((data) => {
+          // ── Desktop notification logic ───────────────────────────────────
+          if ('Notification' in window && Notification.permission === 'granted') {
+            const currentTriggered = new Set(
+              data.filter((a) => a.triggered_at).map((a) => a.id),
+            );
+
+            if (knownTriggeredRef.current === null) {
+              // First load — seed silently, no popup.
+              knownTriggeredRef.current = currentTriggered;
+            } else {
+              // Find IDs that are newly triggered since last poll.
+              for (const id of currentTriggered) {
+                if (!knownTriggeredRef.current.has(id)) {
+                  const alert = data.find((a) => a.id === id);
+                  if (alert) {
+                    const body =
+                      alert.condition_type === 'liquidation_spike'
+                        ? `Liquidation spike exceeded ${alert.threshold} events`
+                        : `BTC ${alert.condition_type === 'price_above' ? 'rose above' : 'dropped below'} $${Number(alert.threshold).toLocaleString()}`;
+                    new Notification(`🚨 ${alert.name}`, { body, icon: '/favicon.ico' });
+                  }
+                }
+              }
+              knownTriggeredRef.current = currentTriggered;
+            }
+          }
+
           setAlerts(data);
           setError(null);
           setLoading(false);
@@ -128,7 +169,23 @@ function AlertsPanel() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={panelStyles.card}>
-      <h2 style={panelStyles.title}>Alerts — BTC/USDT</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #2a2a2e', paddingBottom: '8px' }}>
+        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>Alerts — BTC/USDT</h2>
+        {'Notification' in window && (
+          notifPermission === 'granted' ? (
+            <span style={{ fontSize: '10px', color: '#66bb6a' }}>🔔 Notifications on</span>
+          ) : notifPermission === 'denied' ? (
+            <span style={{ fontSize: '10px', color: '#f44336' }}>🔕 Notifications blocked</span>
+          ) : (
+            <button
+              style={{ fontSize: '10px', color: '#f5a623', background: 'none', border: '1px solid #f5a623', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px' }}
+              onClick={() => Notification.requestPermission().then((p) => setNotifPermission(p))}
+            >
+              Enable notifications
+            </button>
+          )
+        )}
+      </div>
 
       {/* Scrollable alert list — grows to fill available space */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
