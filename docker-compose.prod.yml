@@ -150,6 +150,23 @@ services:
       db:
         condition: service_healthy
 
+  # ── Chat history export worker ────────────────────────────────────────────────
+  chat_export:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    command: ["python", "-m", "chat_export.run"]
+    volumes:
+      - ./chat_history:/app/chat_history
+    depends_on:
+      db:
+        condition: service_healthy
+
   # ── Caddy — public entry point (HTTPS + reverse proxy + Basic Auth) ───────────
   #
   # Caddy automatically obtains and renews Let's Encrypt certificates for DOMAIN.
