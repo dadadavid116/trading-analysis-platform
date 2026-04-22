@@ -19,7 +19,7 @@ type IntervalValue = typeof INTERVALS[number]['value'];
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const styles: Record<string, React.CSSProperties | ((active: boolean) => React.CSSProperties)> = {
+const styles = {
   header: {
     display: 'flex',
     justifyContent: 'space-between',

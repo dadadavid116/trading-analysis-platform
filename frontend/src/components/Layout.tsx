@@ -60,7 +60,7 @@ export default Layout;
 
 const HEADER_HEIGHT = '56px';
 
-const styles: Record<string, CSSProperties | ((...args: never[]) => CSSProperties)> = {
+const styles = {
   root: {
     height: '100vh',
     display: 'flex',

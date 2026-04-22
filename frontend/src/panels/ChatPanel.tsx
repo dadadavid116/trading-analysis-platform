@@ -9,7 +9,6 @@ import {
   StrategyResult,
   ChatSessionSummary,
 } from '../api';
-import { panelStyles } from './panelStyles';
 
 /**
  * ChatPanel — full-height AI chat panel, docked to the right side of the dashboard.
@@ -50,7 +49,7 @@ const GREETING: DisplayMessage = {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const S: Record<string, React.CSSProperties> = {
+const S = {
   // Outer container — fills the right column completely.
   panel: {
     height: '100%',
