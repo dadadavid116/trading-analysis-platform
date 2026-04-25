@@ -1,0 +1,829 @@
+================================================================================
+  TRADING ANALYSIS PLATFORM — COMPLETE PLATFORM OVERVIEW
+  Document purpose: Full technical and feature reference for AI-assisted
+  future development planning. Covers frontend, backend, deployment, all
+  completed phases, and proposed future phases.
+================================================================================
+
+Last updated: April 2026
+Platform status: Live on VPS — Hetzner CX22, domain via DuckDNS, HTTPS via Caddy
+
+
+================================================================================
+  SECTION 1 — WHAT THE PLATFORM IS
+================================================================================
+
+A personal, 24/7 crypto market monitoring and trading analysis platform focused
+on BTC/USDT. It runs entirely in Docker Compose on a Linux VPS. The platform
+combines live market data collection, AI-powered analysis, alert management,
+and a Telegram bot into one unified system.
+
+The web dashboard is protected by HTTP Basic Auth (Caddy layer). There is no
+public-facing login page — access is restricted by credentials in the .env file.
+
+Core capabilities today:
+  - Live BTC/USDT candlestick chart (powered by lightweight-charts + Binance API)
+  - Real-time price stats panel (SSE stream from backend database)
+  - Liquidations panel (Binance Futures forceOrder stream)
+  - Order book panel (Binance depth20 stream)
+  - Alerts panel — create, monitor, and delete price/liquidation alerts
+  - Desktop browser notifications when alerts trigger
+  - AI Chat panel — Claude Sonnet or ChatGPT, with full tool use (alerts, price)
+  - Chart Analysis feature — Claude reads last 50 candles, draws support/resistance/
+    entry/stop loss/take profit lines on the chart, pushes formatted analysis to chat
+  - Strategy Validator — OpenAI validates strategy, Claude writes summary and sets alerts
+  - Telegram bot — full parallel interface to the web dashboard
+  - Chat history — sessions persisted to database, exportable to .md files
+  - HTTPS with auto-renewing Let's Encrypt certificate via Caddy
+
+
+================================================================================
+  SECTION 2 — TECHNOLOGY STACK
+================================================================================
+
+FRONTEND
+  Framework:        React 18 + TypeScript
+  Build tool:       Vite
+  Chart library:    lightweight-charts (TradingView OSS library) — candlestick,
+                    price lines, crosshair, click-to-alert
+  Production:       Multi-stage Docker build → Nginx serving static bundle
+  Dev server:       Vite dev server (port 5173, proxies /api to backend)
+  Styling:          Inline CSSProperties — no CSS framework, no class names
+  HTTP client:      Native fetch, typed wrappers in src/api/index.ts
+
+BACKEND
+  Framework:        FastAPI (Python 3.11+)
+  Server:           Uvicorn (ASGI)
+  ORM:              SQLAlchemy 2.x async
+  DB driver:        asyncpg (PostgreSQL async driver)
+  Validation:       Pydantic v2 (request/response schemas)
+  Config:           pydantic-settings (env vars → typed Settings object)
+  WebSocket client: websockets library (Binance streams)
+  HTTP client:      httpx (async, used for Binance REST and AI APIs)
+  AI:               anthropic SDK (Claude), openai SDK (GPT-4o)
+  Telegram:         python-telegram-bot v21
+
+DATABASE
+  Engine:     PostgreSQL 16 (Docker container)
+  Tables:     price_candles, liquidations, orderbook_snapshots,
+              alerts, analysis_summaries, chat_sessions, chat_messages
+  Schema mgmt: SQLAlchemy create_all on startup + inline ALTER TABLE migrations
+               (no Alembic yet — planned for future)
+
+DEPLOYMENT
+  Hosting:       Hetzner CX22 VPS (2 vCPU, 4 GB RAM, 40 GB SSD, ~$4.50/month)
+  OS:            Ubuntu 24.04
+  Containers:    Docker + Docker Compose
+  Reverse proxy: Caddy 2 (HTTPS termination, Basic Auth, reverse proxy)
+  Domain:        DuckDNS subdomain (free dynamic DNS)
+  TLS:           Let's Encrypt via Caddy ACME (auto-renewing)
+  Services:      9 Docker Compose services (see Section 4)
+
+
+================================================================================
+  SECTION 3 — REPOSITORY LAYOUT
+================================================================================
+
+trading-analysis-platform/
+├── backend/
+│   ├── app/
+│   │   ├── main.py                 FastAPI app entry point
+│   │   ├── config.py               Settings from env vars (pydantic-settings)
+│   │   ├── database.py             SQLAlchemy engine, session factory
+│   │   ├── auth.py                 Optional secondary X-API-Key layer
+│   │   ├── models/                 SQLAlchemy ORM models
+│   │   │   ├── price.py            PriceCandle — 1m OHLCV rows
+│   │   │   ├── liquidation.py      Liquidation events
+│   │   │   ├── orderbook.py        Order book snapshots (JSONB bids/asks)
+│   │   │   ├── alert.py            Alert rules
+│   │   │   ├── analysis.py         AI-generated analysis summaries
+│   │   │   └── chat.py             Chat sessions + messages
+│   │   ├── routers/                FastAPI route modules
+│   │   │   ├── price.py            /api/price/*
+│   │   │   ├── liquidations.py     /api/liquidations/*
+│   │   │   ├── orderbook.py        /api/orderbook/*
+│   │   │   ├── alerts.py           /api/alerts/*
+│   │   │   ├── analysis.py         /api/analysis/*
+│   │   │   ├── chat.py             /api/chat/
+│   │   │   ├── chat_history.py     /api/chat-history/*
+│   │   │   └── strategy.py         /api/strategy/validate
+│   │   ├── schemas/                Pydantic response schemas
+│   │   └── services/
+│   │       ├── chart_analysis.py   Claude chart analysis service
+│   │       └── chat_history.py     Chat session persistence helpers
+│   ├── collectors/
+│   │   ├── price_collector.py      Binance kline_1m WebSocket → DB upsert
+│   │   ├── liquidation_collector.py Binance forceOrder stream → DB insert
+│   │   ├── orderbook_collector.py  Binance depth20 stream → DB insert
+│   │   └── run_all.py              Launches all three collectors with asyncio.gather
+│   ├── analysis/
+│   │   ├── claude_client.py        Scheduled analysis worker (Claude API)
+│   │   └── run.py                  Entry point for analysis container
+│   ├── alerts/
+│   │   ├── evaluator.py            Evaluates alert conditions against live data
+│   │   ├── notifications.py        Telegram notification sender
+│   │   └── run.py                  Entry point for alerts container
+│   ├── telegram_bot/
+│   │   ├── bot.py                  Full Telegram bot implementation
+│   │   └── run.py                  Entry point for telegram container
+│   ├── chat_export/
+│   │   └── run.py                  Exports chat sessions to /app/chat_history/*.md
+│   ├── requirements.txt
+│   └── Dockerfile                  Multi-service image (CMD override per container)
+│
+├── frontend/
+│   ├── src/
+│   │   ├── main.tsx                React entry point
+│   │   ├── App.tsx                 Root component, layout, state bridges
+│   │   ├── api/
+│   │   │   └── index.ts            Typed fetch wrappers for all API endpoints
+│   │   ├── components/
+│   │   │   └── Layout.tsx          Two-column shell: panel grid + chat sidebar
+│   │   └── panels/
+│   │       ├── PricePanel.tsx      Candlestick chart + price stats + analyze button
+│   │       ├── LiquidationPanel.tsx Live liquidation events table
+│   │       ├── OrderBookPanel.tsx  Order book bids/asks display
+│   │       ├── AlertsPanel.tsx     Alert list, create form, desktop notifications
+│   │       ├── ChatPanel.tsx       AI chat interface (Claude + ChatGPT)
+│   │       └── panelStyles.ts      Shared panel style constants
+│   ├── vite.config.ts              Dev proxy: /api → http://localhost:8000
+│   ├── tsconfig.json
+│   ├── package.json
+│   └── Dockerfile                  Stage 1: tsc + vite build; Stage 2: Nginx
+│
+├── caddy/
+│   └── Caddyfile                   HTTPS, Basic Auth, reverse proxy, SSE flush
+│
+├── scripts/
+│   └── init_db.sql                 Initial PostgreSQL schema (runs at container start)
+│
+├── docs/
+│   ├── architecture.md             Architecture decisions + build order phases 1-14
+│   ├── deployment.md               Step-by-step VPS deployment guide
+│   ├── roadmap.md                  (placeholder — not fully maintained)
+│   └── platform_overview.txt       This file
+│
+├── docker-compose.yml              Local development stack
+├── docker-compose.prod.yml         Production stack (Caddy + Nginx frontend)
+├── .env.example                    All env vars documented
+└── CLAUDE.md                       Project instructions for Claude Code
+
+
+================================================================================
+  SECTION 4 — DOCKER COMPOSE SERVICES (PRODUCTION)
+================================================================================
+
+Service        Image              Role
+─────────────────────────────────────────────────────────────────────────────
+db             postgres:16        PostgreSQL database. Internal only. Persistent
+                                  named volume. Runs init_db.sql on first start.
+
+api            ./backend          FastAPI + Uvicorn on port 8000. Serves all
+                                  /api/* endpoints. Internal only (Caddy proxies).
+
+frontend       ./frontend         Multi-stage: Vite build → Nginx on port 80.
+                                  Serves static React bundle. Internal only.
+
+collector      ./backend          Runs collectors/run_all.py — connects to three
+                                  Binance WebSocket streams simultaneously:
+                                    • btcusdt@kline_1m → price_candles table
+                                    • btcusdt@forceOrder → liquidations table
+                                    • btcusdt@depth20 → orderbook_snapshots table
+                                  Each collector has its own reconnect loop.
+
+analysis       ./backend          Runs analysis/run.py — scheduled worker that
+                                  calls Claude API every N minutes (configurable),
+                                  generates a BTC market summary, stores in DB.
+
+alerts         ./backend          Runs alerts/run.py — polls DB every 1 minute,
+                                  evaluates all active alert rules against latest
+                                  price/liquidation data, fires Telegram notification
+                                  when a threshold is crossed.
+
+telegram       ./backend          Runs telegram_bot/run.py — long-polling Telegram
+                                  bot. No inbound ports needed. All actions sync
+                                  through the shared database.
+
+chat_export    ./backend          Runs chat_export/run.py — exports chat sessions
+                                  from DB to .md files in /app/chat_history/ volume.
+
+caddy          caddy:2-alpine     Single public-facing service. Ports 80 + 443.
+                                  Handles HTTPS (Let's Encrypt), HTTP Basic Auth,
+                                  and routes:
+                                    /health     → api:8000 (no auth)
+                                    /api/*      → api:8000 (with SSE flush_interval)
+                                    /*          → frontend:80
+                                  Env vars: DOMAIN, CADDY_USER, CADDY_HASHED_PASSWORD
+
+
+================================================================================
+  SECTION 5 — BACKEND API ENDPOINTS
+================================================================================
+
+All routes require Caddy Basic Auth in production. Optional secondary X-API-Key
+header if DASHBOARD_API_KEY is set in .env.
+
+PRICE
+  GET  /api/price/stream         SSE stream — pushes latest DB candle every 1s
+  GET  /api/price/latest         Single latest 1m candle from DB
+  GET  /api/price/history        Paginated candle history (newest first)
+  GET  /api/price/klines         Proxy to Binance REST — any interval/limit
+                                 (used by the lightweight-charts candlestick chart)
+
+LIQUIDATIONS
+  GET  /api/liquidations/recent  Latest N liquidation events (default 20)
+
+ORDER BOOK
+  GET  /api/orderbook/snapshot   Latest order book snapshot (bids + asks as JSONB)
+
+ALERTS
+  GET    /api/alerts/            List all alert rules (active + triggered)
+  POST   /api/alerts/            Create a new alert rule
+  DELETE /api/alerts/{id}        Delete an alert by ID
+
+ANALYSIS
+  GET  /api/analysis/latest      Most recent scheduled AI market summary
+  POST /api/analysis/chart       On-demand chart analysis (Claude)
+                                 Body: { timeframe: string, user_bias: string }
+                                 Returns: trend, direction (long/short), support_levels,
+                                          resistance_levels, entry_zone, stop_loss,
+                                          take_profit, reasoning, timeframe, current_price
+
+CHAT
+  POST /api/chat/                Send a message to Claude or ChatGPT
+                                 Body: { message, history, model, session_id }
+                                 Returns: { reply, session_id }
+
+CHAT HISTORY
+  GET    /api/chat-history/sessions          List recent sessions (newest first)
+  GET    /api/chat-history/sessions/{id}     Full session with all messages
+  POST   /api/chat-history/sessions/{id}/save  Export session to .md file
+  DELETE /api/chat-history/sessions/{id}     Delete a session
+
+STRATEGY
+  POST /api/strategy/validate    Two-stage strategy validator
+                                 Stage 1: OpenAI checks if description is a valid
+                                          actionable trading strategy
+                                 Stage 2: Claude writes a plain-English summary
+                                 Returns structured JSON with entry/exit/timeframe/
+                                         stop_loss/take_profit/valid fields
+
+HEALTH
+  GET  /health                   Liveness check — no auth required
+                                 Returns: { status: "ok" }
+
+
+================================================================================
+  SECTION 6 — DATABASE SCHEMA
+================================================================================
+
+price_candles
+  id          SERIAL PRIMARY KEY
+  symbol      VARCHAR(20)         e.g. "BTCUSDT"
+  timestamp   TIMESTAMP WITH TZ   candle close time (1-minute candles)
+  open        NUMERIC
+  high        NUMERIC
+  low         NUMERIC
+  close       NUMERIC
+  volume      NUMERIC
+  UNIQUE INDEX on (symbol, timestamp) — enables upsert on every Binance tick
+
+liquidations
+  id          SERIAL PRIMARY KEY
+  symbol      VARCHAR(20)
+  timestamp   TIMESTAMP WITH TZ
+  side        VARCHAR(10)         "buy" (long liquidated) or "sell" (short liquidated)
+  price       NUMERIC
+  quantity    NUMERIC
+  exchange    VARCHAR(50)         "binance"
+
+orderbook_snapshots
+  id          SERIAL PRIMARY KEY
+  symbol      VARCHAR(20)
+  timestamp   TIMESTAMP WITH TZ
+  bids        JSONB               Array of [price, quantity] pairs, descending
+  asks        JSONB               Array of [price, quantity] pairs, ascending
+
+alerts
+  id              SERIAL PRIMARY KEY
+  name            VARCHAR
+  symbol          VARCHAR(20)
+  condition_type  VARCHAR(50)     "price_above", "price_below", "liquidation_spike"
+  threshold       NUMERIC
+  window_minutes  INTEGER NULLABLE  (for liquidation_spike only)
+  trigger_mode    VARCHAR(10)     "once" or "rearm"
+  is_active       BOOLEAN
+  triggered_at    TIMESTAMP NULLABLE
+  created_at      TIMESTAMP WITH TZ
+
+analysis_summaries
+  id            SERIAL PRIMARY KEY
+  symbol        VARCHAR(20)
+  generated_at  TIMESTAMP WITH TZ
+  summary_text  TEXT
+  model_used    VARCHAR(50)
+
+chat_sessions
+  id              SERIAL PRIMARY KEY
+  platform        VARCHAR(20)     "web" or "telegram"
+  model           VARCHAR(50)     "claude" or "openai"
+  title           VARCHAR NULLABLE  (first user message, trimmed)
+  created_at      TIMESTAMP WITH TZ
+  last_active_at  TIMESTAMP WITH TZ
+
+chat_messages
+  id          SERIAL PRIMARY KEY
+  session_id  INTEGER FK → chat_sessions
+  role        VARCHAR(20)    "user" or "assistant"
+  content     TEXT
+  created_at  TIMESTAMP WITH TZ
+
+
+================================================================================
+  SECTION 7 — FRONTEND PANELS IN DETAIL
+================================================================================
+
+LAYOUT (Layout.tsx)
+  Two-column shell occupying full viewport height.
+  Left side (~2/3 width): scrollable grid of two independent flex columns.
+  Right side (~1/3 width): fixed chat sidebar (collapsible with animation).
+  Header: logo, title, "BTC · Dashboard" subtitle, "Chat ▶/◀" toggle button.
+
+LEFT COLUMN 1 (left flex column, 2/3 height split)
+  PricePanel (top, 2/3 height):
+    - Header with "Price — BTC/USDT" title
+    - Interval switcher: 3m / 5m / 15m / 1H / 4H / 1D / 1M buttons
+    - Bias selector: Auto / ↑ Long / ↓ Short (for chart analysis direction)
+    - "✦ Analyze" button — triggers Claude chart analysis
+    - Price data grid: Close (highlighted), Open, High, Low, Volume, Time,
+      Candle closes (countdown timer to next candle close)
+    - Full-height lightweight-charts candlestick chart
+      • ResizeObserver keeps chart sized to panel
+      • Alert price lines drawn as dashed orange horizontal lines
+      • Analysis lines drawn after ✦ Analyze: green (support), red (resistance/TP),
+        blue (entry zone), orange (stop loss)
+      • Crosshair tooltip showing price + "click to set alert"
+      • Click-to-set-alert popover: shows price, "↑ Alert above" / "↓ Alert below"
+    - Live price via SSE (updates every ~1 second)
+    - Chart refreshes latest candle every 10 seconds
+
+  OrderBookPanel (bottom, 1/3 height):
+    - Shows top 5 bid levels (green) and top 5 ask levels (red)
+    - Polls /api/orderbook/snapshot every 10 seconds
+
+LEFT COLUMN 2 (right flex column, 3/5 + 2/5 height split)
+  LiquidationPanel (top, 3/5 height):
+    - Table: Time, Side (BUY/SELL colored), Price, Quantity
+    - Shows 10 most recent BTC/USDT liquidation events
+    - Polls /api/liquidations/recent every 10 seconds
+
+  AlertsPanel (bottom, 2/5 height):
+    - Notification permission indicator (🔔 on / 🔕 blocked / "Enable" button)
+    - Scrollable list of all alerts with columns:
+      Name, Condition, Threshold, Mode, Status (Watching/Triggered), Delete (×) button
+    - Create form pinned at bottom:
+      Name input, Condition dropdown (price_above / price_below / liquidation_spike),
+      Threshold input, Window input (liquidation_spike only),
+      Trigger mode dropdown (once / rearm)
+    - Desktop push notification fires when new alert triggers (Chrome/Edge)
+    - Polls every 15 seconds; compares triggered IDs against previous poll
+
+RIGHT SIDEBAR
+  ChatPanel:
+    - Header with "AI Chat" title + "⚙ Chat Settings" toggle button
+    - Chat Settings panel (collapsible):
+      • Model selector: Claude / ChatGPT buttons
+      • Save this chat / Clear this chat buttons
+      • Recent sessions list (click to resume)
+    - Scrollable message list:
+      • Markdown rendering (bold, italic, code, headers, bullets, numbered lists, HR)
+      • User messages: right-aligned blue bubbles
+      • Assistant messages: left-aligned dark bubbles with model label
+      • Error messages: red bordered bubbles
+      • Strategy cards: structured card with entry/exit/SL/TP fields + Approve button
+    - Auto-growing textarea (capped at 130px)
+    - Send button (Enter key also sends)
+    - Strategy button (sends to OpenAI → Claude pipeline)
+    - Receives chart analysis automatically when ✦ Analyze is clicked in PricePanel
+      (PricePanel → App.tsx state lift → ChatPanel injection via useEffect)
+
+
+================================================================================
+  SECTION 8 — AI FEATURES IN DETAIL
+================================================================================
+
+1. WEB CHAT PANEL (Claude or ChatGPT)
+   Model: claude-sonnet-4-6 or gpt-4o
+   Tools available: get_current_price, create_price_alert, list_alerts, delete_alert
+   System prompt includes: live BTC price snapshot + timeframe reminder
+   Session persistence: every web conversation stored in chat_sessions / chat_messages
+   History: full conversation history sent on each request (up to 12 turns)
+
+2. CHART ANALYSIS (Claude)
+   Triggered by: "✦ Analyze" button in PricePanel
+   Inputs: last 50 BTC klines fetched from Binance (via backend service), timeframe,
+           optional user_bias ("bullish — looking for a long setup" / "bearish...")
+   Prompt logic:
+     - If BULLISH: long setup — entry near support, SL below support, TP at resistance
+     - If BEARISH: short setup — entry near resistance, SL above resistance, TP at support
+     - If SIDEWAYS: Claude picks more probable direction from momentum
+   Output JSON: trend, direction (long/short), support_levels[2], resistance_levels[2],
+                entry_zone {low, high}, stop_loss, take_profit[2], reasoning, timeframe
+   Frontend actions:
+     - Draws colored price lines on chart (green=support, red=resistance, blue=entry,
+       orange=stop loss, red=TP)
+     - Formats markdown analysis message and injects it into ChatPanel
+     - ChatPanel automatically opens if it was collapsed
+
+3. STRATEGY VALIDATOR (OpenAI → Claude pipeline)
+   Triggered by: "Strategy" button in ChatPanel input row
+   Stage 1: OpenAI (gpt-4o) receives strategy description, returns JSON:
+            { valid, reason, name, entry_condition, exit_condition, timeframe,
+              stop_loss, take_profit }
+   Stage 2: If valid, Claude writes a 2-3 sentence plain-English summary
+   Frontend: Shows StrategyCard with all fields + "Approve & Set Alert" button
+   On approve: sends structured approval message to Claude with tool use to create alerts
+
+4. SCHEDULED ANALYSIS WORKER
+   Container: analysis
+   Interval: ANALYSIS_INTERVAL_MINUTES (env var, default ~10 min)
+   Process: Claude reads latest price + liquidations from DB, writes summary to
+            analysis_summaries table
+   API access: GET /api/analysis/latest (shown in AnalysisPanel — currently basic)
+
+5. TELEGRAM BOT
+   Commands:
+     /start              Welcome message
+     /help               Full command reference
+     /price              Live BTC price (same data as PricePanel)
+     /status             Platform health, data freshness, alert count, AI model
+     /alerts             List all active alerts with IDs
+     /setalert above/below <price>  Create price alert directly
+     /delete_alert <id>  Delete alert (appears removed on web chart within 15s)
+     /analysis           On-demand market analysis (Claude or ChatGPT)
+     /strategy <text>    Strategy validator with approve/dismiss inline buttons
+     /model              Show or switch AI model
+     /claude             Switch to Claude Sonnet
+     /chatgpt            Switch to ChatGPT (GPT-4o)
+     /clear              Clear conversation history
+   Free text: routed to selected AI model with tool use (price, alerts)
+   Sync: all alert changes are visible on the web dashboard within 15 seconds
+   Access control: all commands restricted to TELEGRAM_CHAT_ID
+   Session persistence: Telegram conversations stored in same DB as web sessions
+
+
+================================================================================
+  SECTION 9 — ALERT SYSTEM IN DETAIL
+================================================================================
+
+Condition types supported:
+  price_above          Triggers when latest 1m candle close > threshold
+  price_below          Triggers when latest 1m candle close < threshold
+  liquidation_spike    Triggers when liquidation event count in last window_minutes > threshold
+
+Trigger modes:
+  once    Alert triggers once, stays in "triggered" state until deleted
+  rearm   Alert resets automatically when condition is no longer met, can trigger again
+
+Evaluation cycle: alerts worker polls every ALERT_EVALUATION_INTERVAL_MINUTES (default 1)
+Notification channels:
+  - Telegram message (if TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID configured)
+  - Browser desktop notification (if user has granted permission in browser)
+
+Alert lifecycle:
+  1. Created via web form, click-on-chart popover, ChatPanel AI, Telegram /setalert,
+     or Telegram AI free text
+  2. Alert line drawn on PricePanel chart within 15 seconds (dashed orange)
+  3. Alert worker evaluates on next 1-minute cycle
+  4. When triggered: Telegram notification sent, triggered_at set in DB,
+     browser desktop notification fires on next 15s frontend poll
+  5. Deleted via: web × button, ChatPanel AI (delete_alert tool), /delete_alert Telegram command
+
+
+================================================================================
+  SECTION 10 — COMPLETED PHASES (1 – 24)
+================================================================================
+
+Phase 1   Backend scaffold — FastAPI skeleton, DB models, stub endpoints
+Phase 2   Frontend scaffold — Vite + React + TypeScript, panel layout placeholders
+Phase 3   Docker / local runtime — docker-compose.yml with db, api, frontend
+Phase 4   End-to-end mock data flow — seed DB, full stack renders
+Phase 5   Live collectors — Binance WebSocket collectors for price, liquidations,
+          order book (3 separate streams, concurrent via asyncio.gather)
+Phase 6   Analysis worker — Claude API integration, scheduled summaries stored in DB
+Phase 7   Alerts — evaluation logic, DB table, API endpoints, AlertsPanel with form
+Phase 8   Cleanup — validation, trigger_mode (once/rearm), CORS config, TS fixes
+Phase 9   VPS deployment foundation — docker-compose.prod.yml, Caddy reverse proxy,
+          Nginx production frontend, full deployment guide
+Phase 10  Telegram bot — long-polling bot with /price, /analysis, /alerts, /status,
+          /setalert, /delete_alert commands; alert Telegram notifications
+Phase 11  Alert lifecycle — DELETE endpoint, delete button in UI, bot command,
+          TELEGRAM_CHAT_ID restriction
+Phase 12  Access control — static DASHBOARD_API_KEY / X-API-Key layer on /api/*;
+          startup warning when key not set; bot logs unauthorized attempts
+Phase 13  Auth hardening — Caddy Basic Auth as primary gate, VITE key removed from
+          bundle, hmac.compare_digest for timing-safe comparison
+Phase 14  Staging VPS validation — pre-flight check, healthcheck in prod compose,
+          orderbook pruning, deployment verification docs
+Phase 15  Strategy Validator — OpenAI validates strategy description (JSON), Claude
+          writes summary, StrategyCard in ChatPanel, Approve & Set Alert button
+Phase 16  K-line chart — replaced Recharts line chart with lightweight-charts
+          candlestick chart; interval switcher (3m/5m/15m/1H/4H/1D/1M); full-height
+          panel; ResizeObserver sizing
+Phase 17  ChatPanel markdown rendering — custom inline parser (bold/italic/code);
+          block-level parsing (headers, bullets, numbered lists, HR); auto-grow
+          textarea; scroll-to-bottom; session save/load in Chat Settings panel
+Phase 18  Click-to-alert on chart — crosshair floating price label; click opens
+          popover with "↑ Alert above" / "↓ Alert below" buttons; price line drawn
+          on chart within 15 seconds; removes on delete
+Phase 19  Alert countdown timer — candle close countdown in price stats panel;
+          formatted as Xh Ym, Xm Ys, Xs depending on remaining time
+Phase 20  Chat history — chat_sessions + chat_messages tables; web + Telegram
+          sessions persisted; session list in Chat Settings; load past sessions;
+          chat_export worker exports to .md files
+Phase 21  Telegram strategy validator — /strategy command with OpenAI → Claude
+          pipeline; inline keyboard Approve/Dismiss buttons; Claude uses tool use
+          to create alerts on approval
+Phase 22  Crosshair alerts + countdown — real crosshair price tracker on chart
+          (follows cursor, shows "$price — click to set alert"); precise price
+          popover on click; countdown timer improvements
+Phase 23  Chart Analysis (✦ Analyze) — "Analyze" button fetches last 50 candles,
+          sends to Claude for structured analysis (trend, support, resistance,
+          entry zone, stop loss, take profit); draws colored lines on chart;
+          formatted markdown result injected into ChatPanel
+Phase 24  Browser desktop notifications — Notification API in AlertsPanel; seed on
+          first load (no false triggers); fires on newly triggered alerts; HTTPS
+          required (fixed by DuckDNS + Caddy HTTPS deployment)
+Phase 24b Direction-aware chart analysis — prompt rewritten to build long setup for
+          bullish trend and short setup for bearish trend; Auto/↑ Long/↓ Short
+          bias selector buttons added; user_bias field passes selection to Claude;
+          resistance lines now always drawn alongside support lines
+
+
+================================================================================
+  SECTION 11 — CURRENT PLATFORM LIMITATIONS / KNOWN GAPS
+================================================================================
+
+1. Analysis panel (AnalysisPanel.tsx) — exists but is minimal. The scheduled worker
+   generates summaries but the panel does not display them richly. Needs redesign.
+
+2. Single asset only — entire platform is hardcoded to BTC/USDT. No multi-asset
+   support. Symbol switching is not implemented anywhere.
+
+3. No Alembic migrations — schema changes are handled via inline ALTER TABLE at
+   startup. Will become fragile as schema grows.
+
+4. No backtesting — alerts and analysis are forward-looking only. No historical
+   strategy evaluation.
+
+5. Mobile layout — dashboard is desktop-only. No responsive breakpoints.
+
+6. No multi-user support — single credentials via Caddy Basic Auth.
+
+7. OpenAI API key — ChatGPT and strategy validation are optional features that
+   require OPENAI_API_KEY to be set. Currently returning 429 errors if free tier.
+
+8. Order book display — shows top 5 bids/asks but no depth visualization (no bar
+   chart, no cumulative depth chart).
+
+9. Alert rearm logic — "rearm" mode works but there is no visual history of how
+   many times an alert has fired.
+
+10. Telegram bot — long-polling mode only. No webhook mode. Bot conversation
+    history is stored in memory per process restart (chat_data). Sessions persist
+    to DB but bot restart loses the in-memory turn count.
+
+
+================================================================================
+  SECTION 12 — FUTURE PHASES (NOT YET BUILT)
+================================================================================
+
+The following are proposed future development directions, roughly ordered by
+priority and complexity. These are starting points for expansion planning.
+
+─── PHASE 25: Grok (xAI) Integration ───────────────────────────────────────
+  Add Grok as a third AI model option in the ChatPanel and Telegram bot.
+  Add "Grok" button to model selector. Add GROK_API_KEY to .env.
+  The xAI API is OpenAI-compatible, so minimal changes needed.
+  Relevant file: backend/app/routers/chat.py, frontend/src/panels/ChatPanel.tsx
+
+─── PHASE 26: Platform Settings Panel ──────────────────────────────────────
+  A dedicated settings panel (or modal) for configuring platform behavior
+  without editing .env. Possible settings:
+    - Active AI model default
+    - Chart analysis default timeframe
+    - Alert poll interval
+    - Notification sound on/off
+    - Color theme (dark variants)
+  Settings stored in localStorage or a settings table in the DB.
+
+─── PHASE 27: Telegram History Commands ────────────────────────────────────
+  /history — list recent chat sessions saved to DB
+  /session <id> — resume a specific past session
+  /export <id> — trigger .md export of a session
+  Complements the existing chat_export worker.
+
+─── PHASE 28: Richer Analysis Panel ───────────────────────────────────────
+  Redesign the AnalysisPanel to properly display Claude's scheduled summaries.
+  Add: timestamp, model badge, expandable sections, copy button.
+  Could also show history of past summaries (last 5-10).
+
+─── PHASE 29: Order Book Depth Visualization ───────────────────────────────
+  Replace the simple bids/asks table with a visual depth chart:
+    - Stacked bar chart showing cumulative bid/ask volume by price level
+    - Color-coded walls (large orders highlighted differently)
+    - Imbalance ratio indicator (bid volume vs ask volume)
+  This gives much better insight into liquidity and potential price magnets.
+
+─── PHASE 30: Indicator Overlays on Chart ──────────────────────────────────
+  Add technical indicator overlays to the lightweight-charts candlestick chart:
+    - EMA 20 / EMA 50 / EMA 200 (trend direction)
+    - Bollinger Bands (volatility)
+    - Volume bars below candles
+    - RSI panel below chart (separate pane)
+  lightweight-charts supports custom series — these can be computed on the
+  frontend from existing klines data without additional API calls.
+
+─── PHASE 31: Multi-Asset Support ──────────────────────────────────────────
+  Currently hardcoded to BTC/USDT. Extend to support:
+    - ETH/USDT, SOL/USDT, etc.
+    - Symbol selector in the header or PricePanel
+    - Separate collector streams per symbol
+    - All DB tables have symbol column already — just needs multi-symbol routing
+
+─── PHASE 32: Alert History & Re-arm Log ───────────────────────────────────
+  Track alert trigger history in a separate table (alert_events):
+    alert_id, triggered_at, price_at_trigger, acknowledged_at
+  Show trigger count and last triggered time per alert.
+  "Reset" button for rearmed alerts (clear triggered state without deleting).
+
+─── PHASE 33: Liquidation Heatmap ─────────────────────────────────────────
+  A time-based heatmap showing liquidation volume by price level over the last
+  N hours. Useful for identifying price levels with high liquidation pressure.
+  Similar to Coinglass liquidation heatmaps. Could use D3.js or a canvas overlay
+  on the existing chart.
+
+─── PHASE 34: Funding Rate Monitor ────────────────────────────────────────
+  Binance Futures funding rate is a key sentiment indicator. Add:
+    - Funding rate panel showing current rate and 8-hour history
+    - Alert when funding rate exceeds a threshold (extreme greed/fear)
+    - Collector: Binance GET /fapi/v1/fundingRate endpoint (REST poll)
+
+─── PHASE 35: Open Interest Tracker ────────────────────────────────────────
+  Open interest (total value of outstanding futures contracts) is a strong
+  trend confirmation indicator. Add:
+    - OI chart overlay or separate panel
+    - OI change alerts (rapid increase = new money entering, breakout confirmation)
+    - Collector: Binance /fapi/v1/openInterest endpoint
+
+─── PHASE 36: Fear & Greed Index Integration ───────────────────────────────
+  Pull the Crypto Fear & Greed Index from alternative.me API (free, no key).
+  Display as a gauge or score in the dashboard.
+  Include in Claude's analysis context for sentiment-aware responses.
+
+─── PHASE 37: Chart Pattern Recognition ────────────────────────────────────
+  Extend the chart analysis to detect named patterns:
+    - Head & Shoulders, Double Top/Bottom, Bull/Bear Flag, Wedge, Triangle
+    - Draw pattern-specific annotations on the chart
+    - Include pattern name and confidence in the ChatPanel output
+  Could be done via Claude prompt engineering or a dedicated TA library.
+
+─── PHASE 38: Strategy Backtesting Engine ──────────────────────────────────
+  Use historical kline data (fetched from Binance) to backtest validated
+  strategies. Metrics: win rate, max drawdown, Sharpe ratio, avg R:R.
+  Display results in a BacktestPanel or in the ChatPanel as a formatted card.
+  This is a significant backend addition (new worker + backtesting logic).
+
+─── PHASE 39: Webhook-mode Telegram Bot ───────────────────────────────────
+  Replace long-polling with webhook mode for lower latency responses.
+  Requires a publicly accessible HTTPS URL (Caddy already handles this).
+  Add /webhook endpoint to FastAPI and configure BotFather.
+
+─── PHASE 40: Mobile-Responsive Layout ─────────────────────────────────────
+  Add responsive breakpoints to the dashboard layout:
+    - Below 768px: single column, panels stack vertically
+    - Chat panel becomes a bottom sheet or full-screen modal
+    - Simplified chart with fewer controls
+    - Touch-friendly alert creation
+
+─── PHASE 41: CI/CD Pipeline ──────────────────────────────────────────────
+  GitHub Actions workflow:
+    - On push to main: run tsc + type check, run Python tests
+    - On git tag: build Docker images, push to registry, SSH deploy to VPS
+  Currently: manual git pull + docker compose up --build on VPS.
+
+─── PHASE 42: Alembic Database Migrations ──────────────────────────────────
+  Replace the current startup ALTER TABLE approach with proper Alembic migrations.
+  Enables schema rollbacks and version tracking.
+  Critical before any schema change that could break production.
+
+─── PHASE 43: Automated Database Backups ───────────────────────────────────
+  Daily pg_dump to a mounted volume or S3-compatible storage.
+  Retention policy (e.g. 7 daily, 4 weekly).
+  Alert to Telegram if backup fails.
+
+─── PHASE 44: Multi-Exchange Data ─────────────────────────────────────────
+  Add support for OKX or Bybit as secondary data sources.
+  Compare order books and funding rates across exchanges.
+  Arbitrage indicator when price diverges between exchanges.
+
+─── PHASE 45: Portfolio Tracker ────────────────────────────────────────────
+  Track a simple portfolio (manually entered positions):
+    - Entry price, quantity, current PnL
+    - Unrealized PnL displayed in the dashboard
+    - Claude can include portfolio context in analysis
+  No exchange API keys required — manual position entry only for safety.
+
+─── PHASE 46: Trade Journal ─────────────────────────────────────────────────
+  Log completed trades with entry/exit/PnL/notes.
+  Claude can review the journal and identify patterns in winning/losing trades.
+  Export journal to CSV or PDF for review.
+
+─── PHASE 47: Custom Alert Conditions ──────────────────────────────────────
+  More complex alert conditions beyond simple price threshold:
+    - Price crossing EMA (price above EMA20, price below EMA200)
+    - RSI threshold (RSI < 30, RSI > 70)
+    - Volume spike (volume > N × average)
+    - Multi-condition alerts (price above X AND RSI < 30)
+  Requires computing indicators in the alert evaluator.
+
+─── PHASE 48: Telegram Mini App ───────────────────────────────────────────
+  A lightweight version of the dashboard accessible directly inside Telegram
+  as a Mini App (WebApp). Uses the Telegram WebApp API.
+  Would allow mobile dashboard access without opening a browser.
+
+─── PHASE 49: Live Trading Integration (Long-term) ────────────────────────
+  NOTE: This is a long-term goal that requires significant infrastructure.
+  Prerequisites:
+    - Move VPS to Tokyo or Singapore for <10ms latency to Binance
+    - Implement proper risk management system
+    - Paper trading mode first (simulate orders, no real funds)
+    - Extensive backtesting of all strategies
+  Features:
+    - Connect Binance API (with trading key, withdraw disabled)
+    - Claude can place/cancel orders via tool use after human approval
+    - Position sizing logic (% of balance, max daily loss)
+    - Emergency kill switch (cancel all orders, flatten positions)
+  IMPORTANT: Never deploy live trading to production without a separate,
+  isolated test environment and human approval for every trade.
+
+
+================================================================================
+  SECTION 13 — ENVIRONMENT VARIABLES REFERENCE
+================================================================================
+
+# PostgreSQL
+POSTGRES_USER              Database username
+POSTGRES_PASSWORD          Database password
+POSTGRES_DB                Database name
+DATABASE_URL               Full async URL: postgresql+asyncpg://user:pass@db:5432/db
+
+# API
+API_HOST                   Bind address (0.0.0.0)
+API_PORT                   Port (8000)
+CORS_ALLOWED_ORIGINS       Comma-separated origins (e.g. https://yourdomain.com)
+
+# AI Keys
+ANTHROPIC_API_KEY          Claude API key (required for chat, chart analysis, analysis worker)
+OPENAI_API_KEY             OpenAI key (optional — enables ChatGPT model + strategy validator)
+ANALYSIS_INTERVAL_MINUTES  How often the analysis worker runs (default: 10)
+
+# Alerts
+ALERT_EVALUATION_INTERVAL_MINUTES  How often alerts are evaluated (default: 1)
+
+# Telegram
+TELEGRAM_BOT_TOKEN         Bot token from @BotFather (optional — disables bot if not set)
+TELEGRAM_CHAT_ID           Your personal Telegram chat ID (restricts bot access)
+
+# Caddy (production only)
+CADDY_USER                 Basic auth username
+CADDY_HASHED_PASSWORD      bcrypt hash of password (double all $ signs in .env)
+DOMAIN                     Your domain (e.g. dadadavid116trading.duckdns.org)
+
+# Secondary API key (optional, rarely needed)
+DASHBOARD_API_KEY          X-API-Key header value (optional secondary backend layer)
+
+
+================================================================================
+  SECTION 14 — DEPLOYMENT SUMMARY (VPS)
+================================================================================
+
+Server: Hetzner CX22 — 2 vCPU (Intel/AMD x86), 4 GB RAM, 40 GB SSD, Ubuntu 24.04
+Domain: DuckDNS free subdomain → VPS IP (auto-updates on IP change)
+HTTPS:  Caddy obtains Let's Encrypt certificate on first start (TLS-ALPN-01 challenge)
+Ports:  80 and 443 open in Hetzner firewall. All other ports blocked.
+Update procedure:
+  1. git pull
+  2. docker compose -f docker-compose.prod.yml up -d --build
+  Caddy config changes only: restart caddy service (no --build needed)
+
+Total running containers: 9
+  db, api, frontend, collector, analysis, alerts, telegram, chat_export, caddy
+
+Current production URL: https://dadadavid116trading.duckdns.org
+Access: HTTP Basic Auth (username/password chosen by user, stored as bcrypt hash)
+
+
+================================================================================
+  END OF DOCUMENT
+================================================================================
