@@ -49,114 +49,32 @@ const GREETING: DisplayMessage = {
 
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
-const S = {
-  // Outer container — fills the right column completely.
-  panel: {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#1a1a1f',
-    overflow: 'hidden',
-  },
-
-  // Top header bar.
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '12px 16px',
-    borderBottom: '1px solid #2a2a2e',
-    flexShrink: 0,
-    backgroundColor: '#16161f',
-  },
-
-  headerTitle: {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#d0d0d0',
-    margin: 0,
-  },
-
-  // The scrollable message list — flex:1 + minHeight:0 makes it scroll.
-  messageList: {
-    flex: 1,
-    overflowY: 'auto' as const,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '12px',
-    padding: '12px 14px',
-    minHeight: 0,
-  },
-
-  messageGroup: (role: 'user' | 'assistant' | 'error'): React.CSSProperties => ({
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: role === 'user' ? 'flex-end' : 'flex-start',
-  }),
-
-  roleLabel: (role: 'user' | 'assistant'): React.CSSProperties => ({
-    fontSize: '10px',
-    color: '#555',
-    marginBottom: '3px',
-    paddingLeft: role === 'assistant' ? '2px' : '0',
-    paddingRight: role === 'user' ? '2px' : '0',
-  }),
-
-  bubble: (role: 'user' | 'assistant'): React.CSSProperties => ({
-    maxWidth: '92%',
-    padding: role === 'user' ? '8px 12px' : '10px 13px',
+// Dynamic style functions extracted so the S record can be purely CSSProperties.
+function msgGroupStyle(role: 'user' | 'assistant' | 'error'): React.CSSProperties {
+  return { display: 'flex', flexDirection: 'column', alignItems: role === 'user' ? 'flex-end' : 'flex-start' };
+}
+function roleLabelStyle(role: 'user' | 'assistant'): React.CSSProperties {
+  return { fontSize: '10px', color: '#555', marginBottom: '3px', paddingLeft: role === 'assistant' ? '2px' : '0', paddingRight: role === 'user' ? '2px' : '0' };
+}
+function bubbleStyle(role: 'user' | 'assistant'): React.CSSProperties {
+  return {
+    maxWidth: '92%', padding: role === 'user' ? '8px 12px' : '10px 13px',
     borderRadius: role === 'user' ? '14px 14px 3px 14px' : '14px 14px 14px 3px',
     backgroundColor: role === 'user' ? '#1e3a5f' : '#1e1e28',
-    color: '#d4d4d4',
-    fontSize: '13px',
-    lineHeight: '1.6',
-    border: role === 'assistant' ? '1px solid #2a2a38' : 'none',
-    wordBreak: 'break-word' as const,
-  }),
+    color: '#d4d4d4', fontSize: '13px', lineHeight: '1.6',
+    border: role === 'assistant' ? '1px solid #2a2a38' : 'none', wordBreak: 'break-word',
+  };
+}
 
-  errorBubble: {
-    maxWidth: '92%',
-    alignSelf: 'flex-start',
-    backgroundColor: '#2a1a1a',
-    border: '1px solid #5f2a2a',
-    borderRadius: '8px',
-    color: '#f44336',
-    fontSize: '12px',
-    padding: '7px 11px',
-  },
-
-  typing: {
-    color: '#555',
-    fontSize: '12px',
-    fontStyle: 'italic',
-    alignSelf: 'flex-start',
-    paddingLeft: '4px',
-  },
-
-  inputRow: {
-    display: 'flex',
-    gap: '6px',
-    padding: '10px 14px',
-    borderTop: '1px solid #2a2a2e',
-    flexShrink: 0,
-    backgroundColor: '#16161f',
-  },
-
-  input: {
-    flex: 1,
-    backgroundColor: '#111114',
-    border: '1px solid #2a2a2e',
-    borderRadius: '6px',
-    color: '#d0d0d0',
-    fontSize: '13px',
-    padding: '8px 10px',
-    resize: 'none' as const,
-    outline: 'none',
-    fontFamily: 'inherit',
-    lineHeight: '1.4',
-    minHeight: '36px',
-    overflowY: 'hidden' as const,
-  },
+const S: Record<string, React.CSSProperties> = {
+  panel:       { height: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#1a1a1f', overflow: 'hidden' },
+  header:      { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #2a2a2e', flexShrink: 0, backgroundColor: '#16161f' },
+  headerTitle: { fontSize: '14px', fontWeight: 600, color: '#d0d0d0', margin: 0 },
+  messageList: { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px 14px', minHeight: 0 },
+  errorBubble: { maxWidth: '92%', alignSelf: 'flex-start', backgroundColor: '#2a1a1a', border: '1px solid #5f2a2a', borderRadius: '8px', color: '#f44336', fontSize: '12px', padding: '7px 11px' },
+  typing:      { color: '#555', fontSize: '12px', fontStyle: 'italic', alignSelf: 'flex-start', paddingLeft: '4px' },
+  inputRow:    { display: 'flex', gap: '6px', padding: '10px 14px', borderTop: '1px solid #2a2a2e', flexShrink: 0, backgroundColor: '#16161f' },
+  input:       { flex: 1, backgroundColor: '#111114', border: '1px solid #2a2a2e', borderRadius: '6px', color: '#d0d0d0', fontSize: '13px', padding: '8px 10px', resize: 'none', outline: 'none', fontFamily: 'inherit', lineHeight: '1.4', minHeight: '36px', overflowY: 'hidden' },
 };
 
 // Small helpers for button styles.
@@ -536,9 +454,9 @@ function ChatPanel({ analysisMessage, onAnalysisConsumed }: ChatPanelProps) {
       {/* ── Scrollable message list ── */}
       <div style={S.messageList}>
         {messages.map((msg, i) => (
-          <div key={i} style={S.messageGroup(msg.role === 'strategy' ? 'assistant' : msg.role as 'user' | 'assistant' | 'error')}>
+          <div key={i} style={msgGroupStyle(msg.role === 'strategy' ? 'assistant' : msg.role as 'user' | 'assistant' | 'error')}>
             {msg.role !== 'error' && msg.role !== 'strategy' && (
-              <span style={S.roleLabel(msg.role === 'user' ? 'user' : 'assistant')}>
+              <span style={roleLabelStyle(msg.role === 'user' ? 'user' : 'assistant')}>
                 {msg.role === 'user' ? 'You' : modelLabel}
               </span>
             )}
@@ -551,9 +469,9 @@ function ChatPanel({ analysisMessage, onAnalysisConsumed }: ChatPanelProps) {
                 onApprove={() => handleApproveStrategy(i, msg.strategyData!)}
               />
             ) : msg.role === 'user' ? (
-              <div style={S.bubble('user')}>{msg.content}</div>
+              <div style={bubbleStyle('user')}>{msg.content}</div>
             ) : (
-              <div style={S.bubble('assistant')}>{renderMarkdown(msg.content)}</div>
+              <div style={bubbleStyle('assistant')}>{renderMarkdown(msg.content)}</div>
             )}
           </div>
         ))}
