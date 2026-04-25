@@ -83,6 +83,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
   // ── Chart analysis (Phase 23) ─────────────────────────────────────────────
   const [analyzing, setAnalyzing]       = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [bias, setBias]                 = useState<'auto' | 'long' | 'short'>('auto');
   const analysisLinesRef = useRef<IPriceLine[]>([]);
 
   // Alert popover shown on chart click.
@@ -314,7 +315,8 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
     setAnalyzeError(null);
 
     try {
-      const result = await requestChartAnalysis(timeframe);
+      const userBias = bias === 'auto' ? '' : bias === 'long' ? 'bullish — looking for a long setup' : 'bearish — looking for a short setup';
+      const result = await requestChartAnalysis(timeframe, userBias);
       const series = seriesRef.current;
 
       // Clear previous analysis lines
@@ -332,24 +334,29 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
         analysisLinesRef.current.push(line);
       };
 
-      result.support_levels.forEach((p, i)    => addLine(p, '#26a69a', `Support ${i + 1}`));
-      addLine(result.entry_zone.low,  '#4a90d9', 'Entry low');
-      addLine(result.entry_zone.high, '#4a90d9', 'Entry high');
-      addLine(result.stop_loss, '#f5a623', 'Stop loss');
-      result.take_profit.forEach((p, i)       => addLine(p, '#ef5350', `TP ${i + 1} — Resistance`));
+      const isShort = result.direction === 'short';
 
-      // Format a markdown message for ChatPanel
+      result.support_levels.forEach((p, i) => addLine(p, '#26a69a', `Support ${i + 1}`));
+      result.resistance_levels.forEach((p, i) => addLine(p, '#ef5350', `Resistance ${i + 1}`));
+      addLine(result.entry_zone.low,  '#4a90d9', isShort ? 'Short entry low'  : 'Entry low');
+      addLine(result.entry_zone.high, '#4a90d9', isShort ? 'Short entry high' : 'Entry high');
+      addLine(result.stop_loss, '#f5a623', 'Stop loss');
+      result.take_profit.forEach((p, i) => addLine(p, isShort ? '#26a69a' : '#ef5350', `TP ${i + 1}`));
+
+      // Format markdown message for ChatPanel
       const trendEmoji = result.trend === 'bullish' ? '📈' : result.trend === 'bearish' ? '📉' : '➡️';
+      const dirEmoji   = isShort ? '🔴 SHORT' : '🟢 LONG';
       const fmt = (n: number) => `$${n.toLocaleString()}`;
       const msg =
         `## Chart Analysis — BTC/USDT (${result.timeframe.toUpperCase()})\n\n` +
-        `**Trend:** ${trendEmoji} ${result.trend.charAt(0).toUpperCase() + result.trend.slice(1)}\n\n` +
+        `**Trend:** ${trendEmoji} ${result.trend.charAt(0).toUpperCase() + result.trend.slice(1)} · **Setup:** ${dirEmoji}\n\n` +
         `**Support:** ${result.support_levels.map(fmt).join(' · ')}\n` +
-        `**TP / Resistance:** ${result.take_profit.map(fmt).join(' · ')}\n\n` +
+        `**Resistance:** ${result.resistance_levels.map(fmt).join(' · ')}\n\n` +
         `**Entry zone:** ${fmt(result.entry_zone.low)} – ${fmt(result.entry_zone.high)}\n` +
-        `**Stop loss:** ${fmt(result.stop_loss)}\n\n` +
+        `**Stop loss:** ${fmt(result.stop_loss)}\n` +
+        `**Take profit:** ${result.take_profit.map(fmt).join(' · ')}\n\n` +
         `${result.reasoning}\n\n` +
-        `*Lines drawn on chart — green: support, red: TP/resistance, blue: entry zone, orange: stop loss.*`;
+        `*Lines on chart — green: support, red: resistance, blue: entry zone, orange: stop loss.*`;
 
       onAnalysis(msg);
     } catch (err: unknown) {
@@ -379,6 +386,28 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
                 onClick={() => setTimeframe(iv.value)}
               >
                 {iv.label}
+              </button>
+            ))}
+          </div>
+          {/* Bias selector */}
+          <div style={{ display: 'flex', gap: '2px' }}>
+            {(['auto', 'long', 'short'] as const).map((b) => (
+              <button
+                key={b}
+                onClick={() => setBias(b)}
+                style={{
+                  backgroundColor: bias === b ? (b === 'long' ? '#1e3a1e' : b === 'short' ? '#3a1e1e' : '#1e2a3a') : '#111114',
+                  border: `1px solid ${bias === b ? (b === 'long' ? '#2a6a2a' : b === 'short' ? '#6a2a2a' : '#3a5a7a') : '#2a2a2e'}`,
+                  borderRadius: '4px',
+                  color: bias === b ? (b === 'long' ? '#66bb6a' : b === 'short' ? '#ef5350' : '#90b8e0') : '#666',
+                  cursor: 'pointer',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  padding: '3px 7px',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {b === 'auto' ? 'Auto' : b === 'long' ? '↑ Long' : '↓ Short'}
               </button>
             ))}
           </div>

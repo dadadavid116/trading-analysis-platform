@@ -34,7 +34,7 @@ async def fetch_klines(interval: str, limit: int = 50) -> list[dict]:
     ]
 
 
-async def analyze_chart(interval: str = "1h") -> dict:
+async def analyze_chart(interval: str = "1h", user_bias: str = "") -> dict:
     """Return Claude's structured analysis of the current BTC chart."""
     candles = await fetch_klines(interval, limit=50)
     if not candles:
@@ -47,33 +47,47 @@ async def analyze_chart(interval: str = "1h") -> dict:
         for c in candles[-30:]
     )
 
+    bias_line = f"\nUser's market view: {user_bias}\nWeight this perspective in your analysis." if user_bias else ""
+
     prompt = f"""You are a professional crypto technical analyst. Analyze the BTC/USDT chart below.
 
 Timeframe: {interval}
 Current price: ${current_price:,.0f}
 Last 30 candles (Open / High / Low / Close):
 {candle_text}
+{bias_line}
+Determine the trend from price structure, momentum, and recent highs/lows.
+Then build a trade setup that matches the trend direction:
 
-Identify key price levels based on structure, recent highs/lows, and momentum.
+- BULLISH → LONG setup:
+    entry_zone: tight range near the nearest support below price
+    stop_loss: below the lower support level
+    take_profit: at or above the resistance levels
+
+- BEARISH → SHORT setup:
+    entry_zone: tight range near the nearest resistance above price
+    stop_loss: above the upper resistance level
+    take_profit: at or below the support levels
+
+- SIDEWAYS: pick the more probable direction from recent momentum and apply the matching rules above.
 
 Reply with ONLY valid JSON — no markdown, no extra text:
 {{
   "trend": "bullish" or "bearish" or "sideways",
+  "direction": "long" or "short",
   "support_levels": [price1, price2],
   "resistance_levels": [price1, price2],
   "entry_zone": {{"low": price, "high": price}},
   "stop_loss": price,
   "take_profit": [price1, price2],
-  "reasoning": "2-3 sentences explaining the structure and key levels"
+  "reasoning": "2-3 sentences explaining the trend, key levels, and why this direction"
 }}
 
 Constraints:
 - support_levels: 2 prices strictly BELOW ${current_price:,.0f}
 - resistance_levels: 2 prices strictly ABOVE ${current_price:,.0f}
-- entry_zone: a tight range near the nearest support
-- stop_loss: below the lower support level
-- take_profit: at or above the resistance levels
-- All prices must be round numbers near actual chart structure"""
+- All prices must be round numbers near actual chart structure
+- direction MUST match the trade setup (long entry below price, short entry above price)"""
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     message = await client.messages.create(

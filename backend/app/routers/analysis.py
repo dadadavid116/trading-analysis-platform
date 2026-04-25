@@ -40,6 +40,7 @@ async def get_latest_analysis(db: AsyncSession = Depends(get_db)):
 
 class ChartAnalysisRequest(BaseModel):
     timeframe: str = "1h"
+    user_bias: str = ""
 
 
 @router.post("/chart")
@@ -47,10 +48,12 @@ async def chart_analysis(body: ChartAnalysisRequest):
     """
     Fetch the last 50 BTC candles from Binance and ask Claude to identify
     support/resistance levels, an entry zone, stop loss, and take profit targets.
+    user_bias is optional free text (e.g. "bearish" or "I think price will drop")
+    that Claude incorporates into the directional analysis.
     Returns structured JSON that the frontend draws as price lines on the chart.
     """
     try:
         from app.services.chart_analysis import analyze_chart
-        return await analyze_chart(body.timeframe)
+        return await analyze_chart(body.timeframe, body.user_bias)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

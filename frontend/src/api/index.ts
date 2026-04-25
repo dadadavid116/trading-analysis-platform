@@ -172,6 +172,7 @@ export async function deleteAlert(id: number): Promise<void> {
 
 export interface ChartAnalysis {
   trend:             'bullish' | 'bearish' | 'sideways';
+  direction:         'long' | 'short';
   support_levels:    number[];
   resistance_levels: number[];
   entry_zone:        { low: number; high: number };
@@ -182,11 +183,11 @@ export interface ChartAnalysis {
   current_price:     number;
 }
 
-export async function requestChartAnalysis(timeframe: string): Promise<ChartAnalysis> {
+export async function requestChartAnalysis(timeframe: string, userBias = ''): Promise<ChartAnalysis> {
   const response = await fetch(`${BASE_URL}/analysis/chart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ timeframe }),
+    body: JSON.stringify({ timeframe, user_bias: userBias }),
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
