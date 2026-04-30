@@ -1,0 +1,854 @@
+================================================================================
+  TRADING ANALYSIS PLATFORM — STRATEGIC ROADMAP
+  Version: Post-Phase-24 Reframe
+  Purpose: Claude-ready reference for all future development planning.
+           Self-contained. Read this before planning any new phase.
+================================================================================
+
+
+================================================================================
+  PART 1 — WHAT THIS PLATFORM IS BECOMING
+================================================================================
+
+This platform is no longer a "crypto dashboard with more panels."
+
+It is a CRYPTO SELF-TRADING OPERATING SYSTEM built in layers.
+
+The mental model is a hybrid terminal + dashboard — similar in shape to
+professional trading operating environments, but crypto-native in its
+data sources, context, and execution logic.
+
+─── THE FOUR WORKSPACES ────────────────────────────────────────────────────────
+
+  WORKSPACE 1: MARKET INTELLIGENCE
+  ─────────────────────────────────
+  Live market structure, AI interpretation, alerting, depth/liquidation
+  analysis, derivatives context, funding/OI/long-short ratio monitoring.
+  This is where the trader understands the environment.
+
+  WORKSPACE 2: OPERATOR CONSOLE
+  ─────────────────────────────
+  Scanner runs, candidate lists, filter outputs, score breakdowns, skip
+  reasons, terminal-style event logs, signal queue.
+  This is where the trader finds and evaluates setups.
+
+  WORKSPACE 3: EXECUTION & RISK
+  ─────────────────────────────
+  Position proposals, order states, paper execution flow, risk engine,
+  open risk exposure, kill switch.
+  This is where the trader acts — controlled, rules-based, AI-assisted.
+
+  WORKSPACE 4: REVIEW & IMPROVEMENT
+  ──────────────────────────────────
+  Backtesting, replay, journaling, performance analytics, strategy
+  versioning, post-trade review, AI score tracking.
+  This is where the trader learns and improves.
+
+─── CRYPTO-NATIVE, NOT STOCK-TRANSLATED ────────────────────────────────────────
+
+The reference for this design comes partly from professional stock-platform
+terminal UX. The correct translation approach is:
+
+  KEEP from reference:
+    - terminal + dashboard hybrid shape
+    - scanner / signal / risk / execution / review progression
+    - structured operator workflow (not just a single view)
+    - account tracking, position state, logs, scores
+
+  REPLACE with crypto-native equivalents:
+    - premarket gap context  →  funding rate + OI + liquidation context
+    - earnings catalyst      →  on-chain events, macro news, funding spikes
+    - share volume           →  perpetual contract open interest delta
+    - level 2 quotes         →  Binance/OKX order book depth + imbalance
+    - relative strength vs sector  →  multi-asset relative performance (BTC/ETH/SOL)
+
+─── PRIMARY DATA SOURCE CHANGE ─────────────────────────────────────────────────
+
+The platform's primary price and contract data source should switch from:
+  Binance BTCUSDT Spot
+to:
+  OKX BTCUSDT Perpetual Swap Contract
+
+This is a configuration/implementation adjustment, not an open roadmap question.
+All new collector, analysis, and risk logic should be built against the perpetual
+contract unless a specific spot context is required.
+
+
+================================================================================
+  PART 2 — PRODUCT DESIGN DECISIONS (SETTLED)
+================================================================================
+
+These questions are answered. They should not be reopened or treated as
+unresolved in future phase planning.
+
+A. TELEGRAM FUNCTION PANEL
+   Telegram can support a full function panel using:
+     - command menu (BotFather menu configuration)
+     - reply keyboard (persistent button row)
+     - inline keyboard (contextual action buttons per message)
+   Implementation belongs in the Telegram bot layer.
+   Not a design blocker. Implement it in Phase 39.
+
+B. OVERLAPPING ANALYZE COMMANDS
+   The current overlap between web chart analysis and Telegram /analysis is
+   a product naming issue, not a technical problem.
+   Resolution:
+     - one command/path = market commentary (broader context, narrative)
+     - one command/path = trade setup analysis (directional, with levels)
+   This should be resolved by clear naming and scope in the phase that
+   redesigns the analysis panel (Phase 26).
+
+C. PRIMARY CONTRACT SOURCE
+   Switch to OKX BTCUSDT perpetual swap as the primary data source.
+   This affects: price collectors, chart feeds, analysis context, alert thresholds.
+   Implementation detail for Phase 27/28, not an ongoing debate.
+
+
+================================================================================
+  PART 3 — QUESTIONS THAT REMAIN OPEN (KEEP IN ROADMAP)
+================================================================================
+
+These are not yet settled and should stay as open architectural questions
+in the relevant phases.
+
+A. CHART ANALYSIS AS IMAGE/SNAPSHOT FOR TELEGRAM
+   Can the chart analysis result (with drawn lines) be rendered as an image
+   and delivered via Telegram instead of only as text?
+   Status: Likely yes, but requires a rendering/export pipeline (headless browser
+           or canvas export). Do not implement speculatively. Belongs in Phase 39.
+
+B. LOCAL DEPLOYMENT SCOPE
+   How far should local-first deployment go?
+   Questions still open:
+     - Should the full platform eventually move toward local-first operation?
+     - Should some AI layers be replaced with local models?
+     - How do local models coexist with live internet-fed market data and news?
+   Status: Do not block current evolution on this. Treat as a future architecture
+           track. Belongs in a post-Phase-37 decision point.
+
+C. WHICH AI LAYERS STAY API-BASED VS GO LOCAL?
+   Suggested future architectural question:
+     - Chat / interpretation layer: likely stays API-based (needs context + reasoning)
+     - Pattern detection / scoring: could go local once models are capable
+     - News summarization: could go local with a fine-tuned small model
+     - Execution guardrails: should stay deterministic rules, not AI-based
+   Status: Open. Do not architect local AI into current phases.
+
+
+================================================================================
+  PART 4 — ANALYSIS FEATURE REFRAME
+================================================================================
+
+The current chart analysis feature is a MARKET INTERPRETATION TOOL.
+It answers: "What does the chart look like?"
+
+It must evolve into a TRADE DECISION ANALYSIS ENGINE.
+It must answer: "Given this trader's style, risk tolerance, holding period,
+target return, and strategy source — does this setup produce a valid trade plan?"
+
+─── NEW INPUTS REQUIRED ────────────────────────────────────────────────────────
+
+  These inputs should eventually be collected from a trader profile and fed
+  into the analysis engine before generating a result:
+
+    - Trader profile / trading style (momentum, mean-reversion, breakout, etc.)
+    - Risk per trade (as % of account or fixed amount)
+    - Preferred holding duration (scalp / intraday / swing / position)
+    - Target R multiple or return profile (e.g. 2R, 3R minimum)
+    - Strategy source:
+        imported strategy (from backtested rules)
+        user-written idea (free-text direction)
+        platform-generated setup (from signal engine)
+
+─── NEW OUTPUT BEHAVIOR REQUIRED ────────────────────────────────────────────────
+
+  The analysis engine should eventually produce:
+
+    - A trade plan, not just market commentary
+    - Invalidation logic (the condition that cancels the setup)
+    - Setup expiration (time window in which the setup remains valid)
+    - Manual cancellation support (user can clear a setup)
+    - Annotation cleanup on chart when setup expires / is invalidated / superseded:
+        expired
+        invalidated
+        user cleared
+        superseded by new analysis
+
+─── CURRENT STATE ───────────────────────────────────────────────────────────────
+
+  Phase 23/24b introduced direction-aware analysis with Auto/Long/Short bias.
+  This was the right first step.
+  The full reframe (trader profile inputs, trade plan output, expiry logic)
+  belongs in Phase 26 (Market Intelligence Center) and matures through
+  Phase 30 (Signal Engine) and Phase 31 (Risk Engine).
+
+
+================================================================================
+  PART 5 — NEW STRUCTURAL ADDITIONS
+================================================================================
+
+A. ACCOUNT WORKSPACE
+   This is a new top-level platform section — not a small widget.
+   It is a separate interface that tracks trader performance over time.
+
+   Sections:
+     Account Total
+       - Balance / equity curve chart
+       - Return (daily / total)
+       - Net Profit
+       - Daily Gain / Loss
+
+     Trades
+       - Win / loss ratio (day / month / year)
+       - Total profit / loss (day / month / year)
+
+     AI Trading Score
+       - Scored against user-defined goals
+       - Tracks direction consistency
+       - Tracks execution quality
+       - Tracks adherence to strategy and risk rules
+
+   This absorbs Phase 32 (Account State Layer) in the new roadmap.
+
+B. BACKTESTING AS CORE MODULE
+   Backtesting is not a side feature. It is part of the self-trading discipline loop.
+   It should include:
+     - Strategy replay on historical data
+     - Setup validation (was the entry valid given the rules?)
+     - Outcome analysis (how did the setup resolve?)
+     - Performance analytics (win rate, drawdown, R-multiple distribution)
+     - Parameter comparison (which settings produce better results?)
+     - Visualized testing interface (chart replay with annotations)
+   This is Phase 34 in the new roadmap.
+
+
+================================================================================
+  PART 6 — COMPLETED PHASES (1 THROUGH 24b)
+================================================================================
+
+Phase 1    Backend scaffold — FastAPI skeleton, DB models, stub endpoints
+Phase 2    Frontend scaffold — Vite + React + TypeScript, panel layout
+Phase 3    Docker / local runtime — docker-compose.yml
+Phase 4    End-to-end mock data flow — seed DB, full stack renders
+Phase 5    Live collectors — Binance WebSocket price, liquidations, order book
+Phase 6    Analysis worker — Claude scheduled summaries stored in DB
+Phase 7    Alerts — evaluation logic, DB table, API endpoints, AlertsPanel
+Phase 8    Cleanup — validation, trigger_mode (once/rearm), CORS, TS fixes
+Phase 9    VPS deployment — docker-compose.prod.yml, Caddy, Nginx, deploy guide
+Phase 10   Telegram bot — long-polling, price/analysis/alerts/status commands,
+           Telegram alert notifications
+Phase 11   Alert lifecycle — DELETE endpoint, delete button, /delete_alert bot command,
+           TELEGRAM_CHAT_ID restriction
+Phase 12   Access control — static DASHBOARD_API_KEY layer, bot logs unauthorized
+Phase 13   Auth hardening — Caddy Basic Auth as primary gate, VITE key removed
+Phase 14   Staging VPS validation — preflight check, healthcheck, orderbook pruning
+Phase 15   Strategy Validator — OpenAI validates, Claude summarizes, StrategyCard UI,
+           Approve & Set Alert button
+Phase 16   K-line chart — lightweight-charts candlestick, interval switcher,
+           ResizeObserver full-height chart
+Phase 17   ChatPanel markdown rendering — custom inline parser, auto-grow textarea,
+           session save/load in Chat Settings
+Phase 18   Click-to-alert on chart — crosshair price label, click popover,
+           price lines drawn/removed dynamically
+Phase 19   Candle countdown timer — time remaining to current candle close
+Phase 20   Chat history — sessions persisted to DB, list/load in ChatPanel,
+           chat_export worker to .md files
+Phase 21   Telegram strategy validator — /strategy command, inline approve/dismiss,
+           Claude uses tool use to create alerts on approval
+Phase 22   Crosshair alerts + countdown — precise crosshair price tracker on chart,
+           click-to-alert popover improvements
+Phase 23   Chart Analysis (Analyze button) — Claude reads 50 candles, returns
+           structured JSON, draws lines on chart, formats analysis into ChatPanel
+Phase 24   Browser desktop notifications — Notification API, seed-on-first-load,
+           HTTPS requirement resolved via DuckDNS + Caddy
+Phase 24b  Direction-aware chart analysis — prompt rewritten for long/short setups,
+           Auto/Long/Short bias selector, user_bias field, resistance lines drawn,
+           SSE stream unblocked via Caddy flush_interval fix
+
+
+================================================================================
+  PART 7 — FUTURE PHASES (25 THROUGH 40)
+================================================================================
+
+These phases are ordered by priority. Infrastructure and architecture come
+before features. Operator workflow comes before UI polish. Execution comes
+after risk. Live trading is gated last.
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 25 — DATA FOUNDATION, GOVERNANCE, AND OBSERVABILITY
+Type: Structural refactor
+Priority: Highest — do this before any major new feature work
+───────────────────────────────────────────────────────────────────────────────
+
+  Why now:
+  The platform is live and useful, but schema changes are fragile (ALTER TABLE
+  on startup), there are no backups, and failures are invisible unless you check
+  logs manually. This must be solved before the system grows more complex.
+
+  Deliverables:
+    - Alembic migrations: replace startup ALTER TABLE approach with versioned
+      migration files. Enables schema rollback and reproducible deployments.
+    - Backup policy: automated daily pg_dump to a named volume or external
+      storage. Retention: 7 daily, 4 weekly. Telegram alert if backup fails.
+    - Service health panel: a page (or header indicator) showing per-service
+      last heartbeat, data freshness, and connection state for all collectors.
+    - Unified event log: structured logs for collector connects/disconnects,
+      analysis worker runs, alert evaluations, errors, Telegram commands.
+    - Operational alerts: internal alerts that fire when collectors drop,
+      DB falls behind, or worker stops emitting events.
+
+  Absorbs from old roadmap:
+    - Alembic migrations (old Phase 42)
+    - Automated DB backups (old Phase 43)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 26 — MARKET INTELLIGENCE CENTER
+Type: Major product upgrade
+Priority: High — first visible product-level upgrade after foundation
+───────────────────────────────────────────────────────────────────────────────
+
+  Why now:
+  The current Analysis panel is minimal. The chart analysis feature exists but
+  is still fundamentally a market commentary tool. This phase redesigns both
+  and begins the shift toward a trade decision analysis engine.
+
+  Deliverables:
+    - Redesigned Analysis panel: rich display of scheduled summaries with
+      timestamp, model badge, market snapshot at generation time, expandable
+      sections, copy button, history of last 5-10 summaries.
+    - Event timeline: a live timeline of significant market events (alert
+      triggers, analysis runs, large liquidations, analysis results).
+    - Depth visualization: order book depth chart showing cumulative bid/ask
+      volume by price level, liquidity walls, bid/ask imbalance ratio.
+    - Liquidation aggregation: rolling window stats (how many liquidations in
+      last 5m/15m/1H, total USD value, side breakdown).
+    - Analysis result lifecycle:
+        - Setup expiration (user-set or time-based)
+        - Invalidation trigger (price crosses stop without entry)
+        - Manual cancellation (user clears the current analysis)
+        - Superseded state (new analysis replaces old one)
+        - Chart annotation cleanup on any of the above states
+    - Naming clarity: separate "market commentary" from "trade setup analysis"
+      at the UI and API level.
+    - Begin collecting trader profile inputs (trading style, risk per trade,
+      holding preference) as optional context for the analysis engine.
+
+  Absorbs from old roadmap:
+    - Richer Analysis Panel (old Phase 28)
+    - Order Book Depth Chart (old Phase 29)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 27 — CRYPTO CONTEXT COLLECTOR PACK
+Type: Structural + data expansion
+Priority: High — prerequisite for any meaningful signal or scoring logic
+───────────────────────────────────────────────────────────────────────────────
+
+  Why now:
+  The platform currently collects price, liquidations, and order book data.
+  That is necessary but not sufficient for crypto-native market intelligence.
+  Without derivatives context, the analysis engine is working with incomplete
+  information. This is the crypto-native replacement for "premarket gap context"
+  in stock terminal workflows.
+
+  Deliverables:
+    - Funding rate collector: poll OKX/Binance funding rate endpoint on 8H
+      cycle + current estimated rate. Store in funding_rates table.
+    - Mark price and premium collector: mark price vs last price vs index price.
+      Store delta (basis). Surface basis in market intelligence view.
+    - Open interest collector: current OI, OI delta (1H/4H/24H). Store in
+      open_interest table. Surface as chart overlay option.
+    - Long/short ratio collector: top trader long/short ratio, global account
+      long/short ratio. Store in ls_ratios table.
+    - Market context snapshots: at each analysis run, capture a structured
+      snapshot of all derivatives context and attach it to the analysis record.
+    - API endpoints: expose all new data via /api/derivatives/* endpoints.
+    - Frontend: minimal display widgets for funding rate, OI, and basis.
+      Full visualization comes in Phase 26 / later.
+
+  Absorbs from old roadmap:
+    - Funding Rate Monitor (old Phase 34)
+    - Open Interest Tracker (old Phase 35)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 28 — MULTI-ASSET UNIVERSE + EXCHANGE ALIGNMENT
+Type: Structural platform expansion
+Priority: High — enables scanner and signal logic to operate across assets
+───────────────────────────────────────────────────────────────────────────────
+
+  Why now:
+  A signal engine cannot operate on one asset. A scanner is meaningless with
+  one symbol. This phase turns the platform from a single-asset monitor into
+  a real multi-asset operator base.
+
+  Deliverables:
+    - Primary source switch: move all BTCUSDT data collection to
+      OKX BTCUSDT perpetual swap contract as the primary feed.
+      Retain Binance as a secondary/fallback source.
+    - Symbol registry: a configuration-driven asset universe table.
+      Initial set: BTCUSDT, ETHUSDT, SOLUSDT perpetuals.
+      Extensible to additional assets without code changes.
+    - Multi-symbol routing: collectors, analysis workers, and alert evaluators
+      all become symbol-aware. Each symbol runs independently.
+    - Symbol selector: UI element in the header or PricePanel to switch the
+      active symbol on all panels simultaneously.
+    - Relative strength indicator: simple multi-asset comparison — percentage
+      change over 1H/4H/24H across all tracked assets.
+    - All DB tables already have symbol column — routing update only.
+
+  Absorbs from old roadmap:
+    - Multi-Asset Support (old Phase 31)
+    - Multi-Exchange Data (old Phase 44, partially)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 29 — OPERATOR CONSOLE / TERMINAL MODE
+Type: Major workflow upgrade (new workspace: Operator Console)
+Priority: High — the central product differentiator
+───────────────────────────────────────────────────────────────────────────────
+
+  Why now:
+  This is the feature that turns the platform into a professional operating
+  environment rather than a display dashboard. The reference platform's most
+  distinctive trait is not its stock logic — it is its terminal + dashboard
+  hybrid workflow. This phase brings that workflow to crypto.
+
+  Deliverables:
+    - Operator Console page: a dedicated high-density interface separate from
+      the main dashboard. Switchable via top navigation.
+    - Scanner run log: real-time feed of scanner evaluation events.
+      Each entry shows: symbol, timestamp, filters applied, outcome
+      (candidate / skipped), score breakdown, skip reason.
+    - Candidate list: filtered and scored asset list from the scanner run.
+      Columns: symbol, score, direction bias, setup type, context summary.
+      Click to load into Market Intelligence view.
+    - Filter output panel: shows which conditions each candidate passed/failed.
+    - Event log: unified terminal-style stream of all platform events
+      (collector events, analysis completions, alert triggers, order events).
+    - High-density control UI: monospaced font option, compact row heights,
+      configurable columns, keyboard navigation.
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 30 — SIGNAL ENGINE V1
+Type: Major logic layer (populates Operator Console output)
+Priority: High — first time the platform generates its own structured signals
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - Signal object schema: structured record with fields:
+        symbol, timeframe, direction (long/short), setup_type,
+        confidence_score, entry_zone, stop_loss, take_profit[],
+        invalidation_condition, expiry_time, context_snapshot,
+        ai_explanation, strategy_source, status
+    - L1 / L2 filter logic:
+        L1 = broad universe filter (volatility, volume, trend alignment)
+        L2 = precise setup filter (structure, key levels, derivatives context)
+    - Setup types: initial set of named setup types to recognize
+        (e.g. breakout retest, range compression, OI expansion with trend)
+    - Trader profile integration: signal generation reads trader style,
+      holding preference, and R target before scoring.
+    - AI explanation: Claude writes a 2-3 sentence rationale for each
+      signal and stores it with the signal record.
+    - Signal status lifecycle: pending → active → expired / invalidated / hit
+
+  Note: Signal engine produces candidates for the operator to review.
+  It does not automatically execute. Human review + approval is always required.
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 31 — RISK ENGINE V1
+Type: Major logic layer
+Priority: High — required before any execution or position management
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - Per-trade risk calculator:
+        input: account size, risk %, entry, stop → output: position size
+        support for both fixed $ risk and % risk modes
+    - Portfolio-level open risk cap:
+        maximum total open risk across all positions (e.g. 6% of account)
+        new positions blocked if cap would be exceeded
+    - Stop logic types:
+        structure-based (below/above key level)
+        ATR-based (N × ATR from entry)
+        user-defined (manual price input)
+    - Scale-in / add-on rules: define conditions under which a position
+      can be added to (price confirmation, new structure confirmation)
+    - Risk events: log all risk evaluations, limit breaches, size overrides
+    - Kill switch: single action that cancels all pending signals and closes
+      or flags all open positions for immediate review
+    - AI trading score foundations: start tracking execution adherence to
+      risk rules as a scored metric over time
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 32 — POSITIONS / ORDERS / ACCOUNT STATE LAYER
+Type: Major state-management layer (new workspace: Execution + Account)
+Priority: High — required for execution flow and account tracking
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    DB tables:
+      positions: symbol, direction, entry_price, size, stop, targets[],
+                 status, opened_at, closed_at, pnl_realized, risk_amount
+      orders: position_id, type (entry/stop/target/manual), price, size,
+              status, created_at, filled_at
+      order_events: order_id, event_type, timestamp, detail
+
+    Account Summary page (new top-level section):
+      - Balance / equity curve chart (paper account value over time)
+      - Net Profit (all time, daily, weekly, monthly)
+      - Return % (all time, daily)
+      - Daily Gain / Loss indicator
+
+    Trade Statistics page:
+      - Win / loss count and ratio (day / month / year)
+      - Total profit / loss (day / month / year)
+      - Average R-multiple on winners / losers
+      - Largest single gain / largest single loss
+
+    AI Trading Score panel:
+      - Composite score based on user-defined goals
+      - Sub-scores: direction consistency, execution quality, rule adherence
+      - Score history chart (trend over time)
+      - AI commentary on recent score changes
+
+  Absorbs from new structure additions:
+    - Account Workspace (Section 5A)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 33 — PAPER EXECUTION ADAPTER
+Type: Execution workflow layer
+Priority: Medium-high — first time the platform acts, not just observes
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - Paper-only execution: all order actions simulate fills at current price.
+      No real exchange connection. No real funds.
+    - Execution proposal flow:
+        signal → risk-sized proposal → operator review → approve/reject
+        Approval always required before any position is opened.
+    - Order management: entry, stop adjustment, target adjustment, full close,
+      partial close — all via the UI and confirmed before applying.
+    - Stop and target management: drag-to-adjust on chart, or numeric input.
+      Changes reflected in risk engine immediately.
+    - Execution state timeline: per-position log of all events
+      (opened, stop moved, partial close, target hit, closed)
+    - Telegram execution commands (where appropriate):
+        view open positions
+        confirm a pending proposal
+        trigger kill switch
+        All destructive Telegram actions require a confirmation step.
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 34 — REPLAY AND BACKTESTING
+Type: Review / research layer (new workspace: Review & Improvement)
+Priority: Medium-high — required for strategy validation before live gate
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - Historical chart replay: step through historical candles bar by bar,
+      or jump to a specific date/time. Signals and levels replayed in context.
+    - Signal outcome analysis: for each past signal, track what actually
+      happened — did the entry trigger? did stop hit? did targets hit?
+    - Strategy backtesting UI: run a named strategy against historical data
+      for a selected symbol, timeframe, and date range.
+      Input: strategy rules (condition-based, not curve-fit)
+      Output: trade list, equity curve, R-multiple distribution
+    - Performance metrics: win rate, max drawdown, Sharpe ratio,
+      average R-multiple, profit factor, total trades
+    - Parameter comparison: test two strategy configurations side by side
+    - Strategy version management: save and compare multiple strategy versions
+
+  Note: This phase must be complete before the Live Execution Gate (Phase 40).
+
+  Absorbs from old roadmap:
+    - Strategy Backtesting Engine (old Phase 38)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 35 — NEWS AND CATALYST LAYER
+Type: Intelligence enhancement
+Priority: Medium — adds context without changing execution architecture
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - News feed integration: aggregate crypto news from RSS/API sources
+      (CryptoPanic, CoinDesk, Decrypt, or similar free sources).
+    - Catalyst tagging: AI tags each news item with relevant symbols,
+      sentiment (positive/negative/neutral), urgency level.
+    - AI summarization: Claude summarizes the top 3-5 news items on demand
+      or on a scheduled cycle.
+    - Event-linked candidate scoring: if a news catalyst matches a symbol
+      in the scanner, boost or reduce its score accordingly.
+    - Context enrichment: news summary and relevant catalyst events are
+      included in the analysis context when Claude generates signals or
+      market commentary.
+
+  Absorbs from old roadmap:
+    - Fear & Greed Index (old Phase 36) — can be included here as a
+      supplementary sentiment source (alternative.me API, free)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 36 — JOURNAL AND PERFORMANCE REVIEW
+Type: Review / discipline layer
+Priority: Medium — completes the discipline loop
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - Trade journal: attach notes, tags, and screenshots to each completed trade.
+      Notes can include: what the setup was, what went right/wrong,
+      emotional state, plan vs execution comparison.
+    - End-of-day / end-of-week review:
+        AI generates a structured review of all trades in the period.
+        Highlights pattern violations, strong execution, missed opportunities.
+    - Rule adherence tracking: did entries match the signal criteria?
+      Did exits follow the stop/target plan?
+    - AI review of execution patterns: Claude identifies recurring mistakes
+      (entering too early, cutting winners short, holding losers, etc.)
+    - Score evolution chart: AI trading score over time vs trade outcomes.
+    - Performance attribution: which setups / symbols / timeframes
+      performed best and worst.
+
+  Absorbs from old roadmap:
+    - Trade Journal (old Phase 46)
+    - Portfolio Tracker history (partial)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 37 — CROSS-ASSET ADAPTER REFACTOR
+Type: Architecture refactor
+Priority: Medium — future-proofs without blocking current work
+───────────────────────────────────────────────────────────────────────────────
+
+  Why:
+  By Phase 36 the platform has crypto-specific logic woven throughout
+  collectors, analysis, risk, and execution. This phase cleans that into
+  a proper abstraction layer so future asset classes can be added cleanly.
+
+  Deliverables:
+    - Unified market adapter interface: abstract base class / protocol
+      that any asset class (crypto perpetual, crypto spot, stock, option,
+      futures) can implement. Methods: get_price, get_orderbook,
+      get_funding_rate, get_open_interest, get_klines, etc.
+    - Unified account adapter: same pattern for positions, orders, fills.
+    - Clean extension points: adding a new exchange or asset class requires
+      only a new adapter implementation, not changes to core logic.
+    - Future path preserved for stocks and options without current code impact.
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 38 — PROFESSIONAL ACCOUNT SYSTEM
+Type: Professionalization phase
+Priority: Medium — do not rush this; correctness matters more than speed
+───────────────────────────────────────────────────────────────────────────────
+
+  Why after Phase 37:
+  Adding user accounts before the execution architecture is stable creates
+  re-work. The right order is: stable data → stable execution → stable review →
+  then multi-user.
+
+  Deliverables:
+    - Users table with hashed passwords
+    - Signup / login with session management
+    - Account recovery
+    - Role handling (admin / trader / read-only viewer)
+    - Auth middleware across all API endpoints and the Telegram bot
+    - Per-user trader profile, risk settings, alert ownership
+    - All existing single-user data migrated to a default user account
+
+  Notes:
+    - Caddy Basic Auth is removed as the primary gate when this is in place.
+    - This is the point at which the platform could support a second user
+      (e.g. a partner or colleague) without sharing credentials.
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 39 — MOBILE AND EXTERNAL ACCESS EXPANSION
+Type: UX and access enhancement
+Priority: Medium — high convenience value, not execution-critical
+───────────────────────────────────────────────────────────────────────────────
+
+  Deliverables:
+    - Telegram function panel: implement command menu, reply keyboard, and
+      inline keyboards for the most common operator actions.
+      Examples: current price, open positions, pending signals, kill switch.
+    - Telegram history commands: /history, /session <id>, /export <id>
+    - Chart analysis snapshot: render chart with drawn lines as an image
+      and deliver via Telegram (requires headless rendering pipeline or
+      server-side canvas). Keep as optional — do not block mobile rollout on it.
+    - Mobile-responsive dashboard: single column below 768px, panels stack
+      vertically, chat as bottom sheet, simplified chart controls,
+      touch-friendly alert creation.
+    - Telegram webhook mode (optional): replace long-polling with webhook
+      for lower latency. Caddy already handles the HTTPS requirement.
+    - Telegram Mini App (optional / long-term): dashboard inside Telegram
+      as a WebApp. Lower priority than responsive web.
+
+  Absorbs from old roadmap:
+    - Telegram history (old Phase 27)
+    - Telegram function panel (resolved in Part 2 above)
+    - Webhook mode (old Phase 39)
+    - Mobile layout (old Phase 40)
+    - Telegram Mini App (old Phase 48)
+
+───────────────────────────────────────────────────────────────────────────────
+PHASE 40 — LIVE EXECUTION GATE
+Type: Controlled long-term gate — final phase before real capital
+Priority: Lowest — do not rush; all prior phases must be stable first
+───────────────────────────────────────────────────────────────────────────────
+
+  PREREQUISITES — ALL must be met before live execution:
+    ✓ Paper execution is stable and has been used through Phase 33
+    ✓ Risk engine is proven and has not been bypassed (Phase 31)
+    ✓ Backtesting / replay is complete and strategies are validated (Phase 34)
+    ✓ Review loop is in active use (Phase 36)
+    ✓ Deployment is stable (Phase 25 + ongoing monitoring)
+    ✓ VPS is on Tokyo or Singapore node for < 10ms latency to OKX
+    ✓ A separate test environment exists for live-order testing (not production)
+
+  Deliverables:
+    - Exchange API connection (OKX, trading key, withdraw DISABLED)
+    - Staged rollout: paper → micro live (very small size) → full live
+    - Strict human approval flow: every order proposal must be explicitly
+      confirmed before submission. No autonomous order placement.
+    - Emergency controls:
+        Cancel all open orders (single action)
+        Flatten all positions (single action)
+        Disconnect exchange (removes API key from active session)
+    - Permission isolation: live trading permissions are separate from
+      analysis / alert permissions. Require explicit enablement.
+    - Production/live separation: live trading runs in an isolated container
+      with its own credentials. Never shares state with dev/test environment.
+    - Risk-linked execution guardrails: position size, open risk cap, and
+      daily loss limit are enforced in the execution adapter before any order
+      is submitted to the exchange.
+
+  WARNING: No real capital should be at risk until every prerequisite above
+  is met and has been stable for at minimum 30 days in paper mode.
+
+
+================================================================================
+  PART 8 — ITEMS MOVED DOWN IN PRIORITY
+================================================================================
+
+These items from the old future phase list are still valid, but they are not
+higher priority than the operator workflow, signal/risk/execution architecture,
+and review loop. They should be incorporated into the phases above where
+possible, or deferred until after Phase 36.
+
+  Grok Integration (old Phase 25)
+    → Defer. Add in Phase 39 alongside other model/UX work.
+      Low value until the signal/risk architecture is more developed.
+
+  Telegram history commands (old Phase 27)
+    → Moved into Phase 39 (Mobile & External Access).
+
+  Chart indicator overlays (old Phase 30)
+    → Incorporate into Phase 26 (Market Intelligence Center) as optional
+      overlays. EMA / Bollinger Bands are standard context.
+
+  Liquidation heatmap (old Phase 33)
+    → Incorporate into Phase 27 (Crypto Context Collector Pack) or
+      Phase 26 (Market Intelligence Center) as a derivatives visualization.
+
+  Fear & Greed Index (old Phase 36)
+    → Moved into Phase 35 (News & Catalyst Layer). Free API, low effort.
+
+  Chart pattern recognition (old Phase 37)
+    → Incorporate into Phase 30 (Signal Engine). Pattern names become
+      setup_type values in the signal object schema.
+
+  Alert history / re-arm log (old Phase 32)
+    → Low priority. Add after Phase 32 (Positions/Orders/Account).
+
+  Telegram webhook mode (old Phase 39)
+    → Moved into Phase 39 (Mobile & External Access). Optional.
+
+  CI/CD pipeline (old Phase 41)
+    → Fold into Phase 25 or do as a standalone improvement alongside it.
+      GitHub Actions type check + SSH deploy is not complex.
+
+  Automated backups (old Phase 43)
+    → Moved into Phase 25. Not optional — do it early.
+
+  Multi-exchange data (old Phase 44)
+    → Moved into Phase 28 (Exchange Alignment). OKX primary, Binance fallback.
+
+  Portfolio tracker (old Phase 45)
+    → Replaced by Positions/Orders layer (Phase 32). More structured.
+
+  Professional account system (old Phase 38)
+    → Kept as Phase 38. Explicitly deferred until execution is stable.
+
+  Telegram Mini App (old Phase 48)
+    → Moved into Phase 39 as optional/long-term. Not before responsive web.
+
+  Live trading (old Phase 49)
+    → Kept as Phase 40 (Live Execution Gate). Unchanged in gating logic.
+
+
+================================================================================
+  PART 9 — LOCAL AI / LOCAL DEPLOYMENT DIRECTION
+================================================================================
+
+Position: This is a future architecture track, not an immediate phase.
+
+Do not block current product evolution on local deployment questions.
+
+The platform should remain internet-connected for all real-time market data.
+Live data feeds (OKX WebSocket, news APIs, derivatives context) require
+internet access and cannot be meaningfully replicated locally.
+
+Suggested framing for future architectural decision:
+
+  Layers that should STAY API-based (reasoning + context required):
+    - Chat / interpretation layer (Claude / GPT-4o)
+    - Strategy explanation and rationale generation
+    - News summarization with live context
+    - Trade decision analysis engine
+
+  Layers that COULD move to local inference (when capable models exist):
+    - Pattern recognition / scoring (deterministic rules + local model)
+    - News sentiment classification (fine-tuned small model)
+    - Alert condition evaluation (already deterministic — stays rules-based)
+    - Journal entry analysis (low-latency batch task, no real-time need)
+
+  Layers that should NEVER be AI-dependent (must be deterministic):
+    - Risk engine enforcement (position sizing, loss limits, kill switch)
+    - Order submission guardrails
+    - Authentication and access control
+
+  Recommended timeline:
+    - Phase 25-36: stay fully API-based, optimize for capability
+    - Phase 37+: evaluate local model candidates based on maturity
+    - Post-Phase-38: consider hybrid architecture (local fast path + API fallback)
+
+
+================================================================================
+  PART 10 — PHASE SUMMARY TABLE
+================================================================================
+
+Phase   Name                                   Type              Status
+──────────────────────────────────────────────────────────────────────────────
+1-24b   [See platform_overview.txt]            Various           COMPLETE
+
+25      Data Foundation & Observability        Structural        TODO — highest priority
+26      Market Intelligence Center             Product upgrade   TODO
+27      Crypto Context Collector Pack          Data expansion    TODO
+28      Multi-Asset Universe + OKX Alignment   Structural        TODO
+29      Operator Console / Terminal Mode        Workflow          TODO
+30      Signal Engine v1                        Logic layer       TODO
+31      Risk Engine v1                          Logic layer       TODO
+32      Positions / Orders / Account Layer     State mgmt        TODO
+33      Paper Execution Adapter                Execution         TODO
+34      Replay and Backtesting                 Review layer      TODO
+35      News and Catalyst Layer                Intelligence      TODO
+36      Journal and Performance Review         Review layer      TODO
+37      Cross-Asset Adapter Refactor           Architecture      TODO
+38      Professional Account System            Platform          TODO
+39      Mobile and External Access             UX / access       TODO
+40      Live Execution Gate                    Controlled gate   TODO — last
+
+──────────────────────────────────────────────────────────────────────────────
+Total completed phases:   ~25 (Phases 1 through 24b)
+Total future phases:      16  (Phases 25 through 40)
+Total platform scope:     ~41 phases toward a full self-trading OS
+──────────────────────────────────────────────────────────────────────────────
+
+
+================================================================================
+  END OF STRATEGIC ROADMAP
+================================================================================
