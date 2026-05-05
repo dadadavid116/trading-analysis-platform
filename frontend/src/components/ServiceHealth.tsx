@@ -7,12 +7,6 @@ const STATUS_COLOR: Record<ServiceStatus, string> = {
   dead:  '#f44336',
 };
 
-const STATUS_LABEL: Record<ServiceStatus, string> = {
-  ok:    'ok',
-  stale: 'stale',
-  dead:  'dead',
-};
-
 const SERVICE_LABEL: Record<string, string> = {
   price:        'Price',
   liquidations: 'Liq',
