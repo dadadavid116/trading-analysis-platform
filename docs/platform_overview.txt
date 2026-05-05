@@ -558,6 +558,12 @@ Phase 24b Direction-aware chart analysis — prompt rewritten to build long setu
           bullish trend and short setup for bearish trend; Auto/↑ Long/↓ Short
           bias selector buttons added; user_bias field passes selection to Claude;
           resistance lines now always drawn alongside support lines
+Phase 25  Data Foundation, Governance, and Observability — Alembic async migration
+          infrastructure (baseline migration with IF NOT EXISTS, safe on existing DB);
+          GET /api/health/services endpoint checking MAX(timestamp) per collector
+          table with ok/stale/dead status; ServiceHealth component in dashboard header
+          (three colored dots polling every 30s); daily backup container in
+          docker-compose.prod.yml (pg_dump + 7-day retention, named backups volume)
 
 
 ================================================================================
@@ -570,8 +576,8 @@ Phase 24b Direction-aware chart analysis — prompt rewritten to build long setu
 2. Single asset only — entire platform is hardcoded to BTC/USDT. No multi-asset
    support. Symbol switching is not implemented anywhere.
 
-3. No Alembic migrations — schema changes are handled via inline ALTER TABLE at
-   startup. Will become fragile as schema grows.
+3. [RESOLVED Phase 25] Alembic migrations now in place. Baseline migration covers
+   all tables with IF NOT EXISTS. Run `alembic stamp head` on existing VPS DB.
 
 4. No backtesting — alerts and analysis are forward-looking only. No historical
    strategy evaluation.
@@ -598,10 +604,42 @@ Phase 24b Direction-aware chart analysis — prompt rewritten to build long setu
   SECTION 12 — FUTURE PHASES (NOT YET BUILT)
 ================================================================================
 
-The following are proposed future development directions, roughly ordered by
-priority and complexity. These are starting points for expansion planning.
+The authoritative source for all future phases is:
+  docs/strategic_roadmap.txt
 
-─── PHASE 25: Grok (xAI) Integration ───────────────────────────────────────
+That document is the single source of truth for phase ordering, deliverables,
+architectural decisions, open questions, and the platform product direction.
+Read it before planning or starting any new phase.
+
+Summary of future phases (Phases 26–41):
+  26  Market Intelligence Center        — redesigned analysis panel, depth chart,
+                                          indicator preferences, trader profile inputs
+  27  Crypto Context Collector Pack     — funding rate, OI, long/short ratio, basis
+  28  Multi-Asset Universe + OKX        — OKX perpetual as primary, BTC/ETH/SOL
+  29  Operator Console / Terminal Mode  — scanner log, candidate list, event log
+  30  Signal Engine v1                  — structured signal objects, L1/L2 filters
+  31  Risk Engine v1                    — per-trade sizing, open risk cap, kill switch
+  32  Positions / Orders / Account      — DB tables + Account workspace + AI score
+  33  Paper Execution Adapter           — simulated execution, proposal → approve flow
+  34  Replay and Backtesting            — bar-by-bar replay, strategy backtest, metrics
+  35  News and Catalyst Layer           — RSS/API news feed, AI tagging, scoring
+  36  Journal and Performance Review    — trade notes, AI review, adherence tracking
+  37  Cross-Asset Adapter Refactor      — clean abstraction for exchange/asset adapters
+  38  Professional Account System       — users table, login, roles, per-user profile
+  39  Mobile and External Access        — Telegram function panel, responsive layout
+  40  Live Execution Gate               — OKX live connection, strict approval flow
+  41  Ultimate Settings & Customization — unified settings panel: chat, analysis
+                                          indicators, panel layout, themes (last phase)
+
+For individual phase details, open docs/strategic_roadmap.txt.
+
+────────────────────────────────────────────────────────────────────────────────
+NOTE: The phase descriptions below (old Phases 25–49) are SUPERSEDED.
+They are kept here for historical reference only.
+Do NOT use them for planning — use strategic_roadmap.txt instead.
+────────────────────────────────────────────────────────────────────────────────
+
+─── PHASE 25 (OLD — superseded): Grok (xAI) Integration ────────────────────
   Add Grok as a third AI model option in the ChatPanel and Telegram bot.
   Add "Grok" button to model selector. Add GROK_API_KEY to .env.
   The xAI API is OpenAI-compatible, so minimal changes needed.

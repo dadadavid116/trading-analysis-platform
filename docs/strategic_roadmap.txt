@@ -159,6 +159,43 @@ target return, and strategy source — does this setup produce a valid trade pla
         imported strategy (from backtested rules)
         user-written idea (free-text direction)
         platform-generated setup (from signal engine)
+    - Indicator preferences (see below)
+
+─── INDICATOR PREFERENCES FOR ANALYSIS ─────────────────────────────────────────
+
+  The user should be able to select which technical indicators and data types
+  the analysis engine uses when evaluating a trade setup. This is an analysis
+  input preference, not a chart display preference.
+
+  How it works:
+    - A set of indicators is available for the user to enable/disable.
+    - Each enabled indicator's data is fetched and included in the AI prompt
+      context before analysis runs.
+    - The AI is told which indicators are active and must weight them in its
+      output. Disabled indicators are not mentioned in the analysis.
+    - If the user selects nothing, the default set is used automatically.
+
+  Default set (always active unless user overrides):
+    MACD, RSI, price levels (support/resistance), trend direction
+
+  User-selectable additions:
+    RSI          — momentum oscillator (14-period default)
+    MACD         — trend/momentum (12/26/9 default)
+    EMA          — trend direction (20, 50, 200 period options)
+    Bollinger Bands — volatility context
+    OI (Open Interest) — derivatives context, expansion/contraction signal
+    Funding Rate — perpetual contract bias (bullish/bearish sentiment proxy)
+    Volume Profile — key value areas, high-volume nodes
+    Trend Line   — user-drawn or auto-detected structural lines
+    Long/Short Ratio — crowd positioning context
+    VWAP         — intraday value reference
+    ATR          — volatility sizing reference (stop distance)
+
+  The list is extensible — new indicators can be added in future phases
+  without changing the core analysis engine interface.
+
+  Implementation belongs in Phase 26 (analysis inputs) and is surfaced in
+  the Ultimate Settings panel (Phase 41). See those phases for details.
 
 ─── NEW OUTPUT BEHAVIOR REQUIRED ────────────────────────────────────────────────
 
@@ -332,6 +369,15 @@ Priority: High — first visible product-level upgrade after foundation
       at the UI and API level.
     - Begin collecting trader profile inputs (trading style, risk per trade,
       holding preference) as optional context for the analysis engine.
+    - Indicator preferences — first implementation:
+        Default indicator set always active (MACD, RSI, price levels, trend).
+        User can toggle additional indicators on/off via an Analyze Settings
+        modal (accessible from a gear icon next to the Analyze button).
+        Selected indicators are fetched and injected into the AI prompt as
+        structured context. The AI explicitly references active indicators
+        and ignores disabled ones.
+        Preferences are saved to localStorage. Full settings management
+        moves to the Ultimate Settings panel (Phase 41).
 
   Absorbs from old roadmap:
     - Richer Analysis Panel (old Phase 28)
@@ -719,6 +765,109 @@ Priority: Lowest — do not rush; all prior phases must be stable first
   WARNING: No real capital should be at risk until every prerequisite above
   is met and has been stable for at minimum 30 days in paper mode.
 
+───────────────────────────────────────────────────────────────────────────────
+PHASE 41 — ULTIMATE SETTINGS & PLATFORM CUSTOMIZATION
+Type: Platform polish / end-stage UX
+Priority: Lowest — implement after Phase 40; the platform must be feature-complete
+          before unifying its settings layer. Do not rush this.
+───────────────────────────────────────────────────────────────────────────────
+
+  What this is:
+  A single, unified "Settings" entry point accessible from the platform header.
+  It consolidates every user-customizable option across the entire platform into
+  one organized panel. The goal is a professional-grade configuration system
+  where the user controls the platform to their exact preferences.
+
+  Why last:
+  Settings UI is most useful when all features already exist. Building it early
+  means rebuilding it as new features are added. Do it once, do it complete.
+
+  ── A. CHAT SETTINGS ────────────────────────────────────────────────────────
+
+    Everything currently in the ChatPanel settings modal, centralized here:
+      - Default AI model (Claude / GPT-4o / others)
+      - Chat panel visibility on startup
+      - Session auto-save behavior
+      - Markdown rendering on/off
+      - Auto-grow textarea on/off
+      - Any future chat UX preferences
+
+  ── B. ANALYSIS PREFERENCES ─────────────────────────────────────────────────
+
+    Full control over what the Analyze function sees and produces:
+      - Active indicator set (full version of the Phase 26 implementation)
+          Enable/disable any supported indicator from a list
+          Set per-indicator parameters (e.g. RSI period, EMA lengths)
+          Preview what context will be sent to the AI
+      - Trader profile:
+          Trading style (momentum / mean-reversion / breakout / scalp)
+          Default holding duration (scalp / intraday / swing / position)
+          Risk per trade (% of account or fixed USD)
+          Minimum R-multiple target (e.g. 2R, 3R)
+      - Analysis output preferences:
+          Verbosity (concise / detailed)
+          Whether to auto-draw lines on chart after analysis
+          Whether to auto-send analysis result to ChatPanel
+      - Default bias (Auto / Long / Short)
+      - Default timeframe for analysis
+
+  ── C. PANEL LAYOUT CUSTOMIZATION ───────────────────────────────────────────
+
+    The trader controls which panels appear on the main dashboard and how
+    they are arranged. This turns the fixed layout into a configurable workspace.
+
+    Panel grid:
+      - Number of panels: 2, 4, 6, or 8 (or custom grid)
+      - Each panel slot can be assigned any available panel type:
+          Price chart (candlestick / line)
+          Liquidations feed
+          Order book (depth table or depth chart)
+          AI Analysis summary
+          Alerts list
+          Funding rate widget
+          Open interest chart
+          Long/short ratio widget
+          News feed
+          Trade journal (future)
+          Scanner output (future)
+          Any future panel type
+      - Panel size: relative weight per slot (e.g. 2× wide, 1× tall)
+      - Layout presets: save and recall named configurations
+          Examples: "Scalping view", "Swing analysis", "Execution mode"
+      - Reset to default: one-click restore of the standard layout
+
+    Note: The underlying panel components are already modular. This phase
+    wires up the configuration layer that selects and arranges them.
+
+  ── D. DISPLAY & THEME PREFERENCES ─────────────────────────────────────────
+
+    - Color theme: dark (default) / light / high-contrast
+    - Chart style: candlestick / hollow candle / bar / line
+    - Font size scaling: compact / normal / large
+    - Header info density: minimal / full
+    - Time zone: display all timestamps in user's local or selected zone
+
+  ── E. NOTIFICATION PREFERENCES ─────────────────────────────────────────────
+
+    - Browser desktop notifications: enable/disable per alert type
+    - Telegram notification routing: which alert types route to Telegram
+    - Alert sound: enable/disable, choose sound
+    - Quiet hours: suppress notifications between user-set hours
+
+  ── F. DATA & EXPORT PREFERENCES ────────────────────────────────────────────
+
+    - Chat history export format (Markdown / JSON / plain text)
+    - Trade journal export format (CSV / JSON)
+    - Analysis history retention (number of summaries to keep)
+    - Session auto-backup settings
+
+  Implementation notes:
+    - All settings persist to the user's account in the DB (Phase 38 user model).
+      Before Phase 38, localStorage is used as a fallback.
+    - The settings panel is a modal or a dedicated settings route — not a sidebar.
+    - Settings changes apply immediately where possible (no restart required).
+    - Each section can be opened independently (accordion or tabs).
+
 
 ================================================================================
   PART 8 — ITEMS MOVED DOWN IN PRIORITY
@@ -825,7 +974,7 @@ Phase   Name                                   Type              Status
 ──────────────────────────────────────────────────────────────────────────────
 1-24b   [See platform_overview.txt]            Various           COMPLETE
 
-25      Data Foundation & Observability        Structural        TODO — highest priority
+25      Data Foundation & Observability        Structural        COMPLETE
 26      Market Intelligence Center             Product upgrade   TODO
 27      Crypto Context Collector Pack          Data expansion    TODO
 28      Multi-Asset Universe + OKX Alignment   Structural        TODO
@@ -840,12 +989,13 @@ Phase   Name                                   Type              Status
 37      Cross-Asset Adapter Refactor           Architecture      TODO
 38      Professional Account System            Platform          TODO
 39      Mobile and External Access             UX / access       TODO
-40      Live Execution Gate                    Controlled gate   TODO — last
+40      Live Execution Gate                    Controlled gate   TODO — gated last
+41      Ultimate Settings & Customization      Platform polish   TODO — after Phase 40
 
 ──────────────────────────────────────────────────────────────────────────────
-Total completed phases:   ~25 (Phases 1 through 24b)
-Total future phases:      16  (Phases 25 through 40)
-Total platform scope:     ~41 phases toward a full self-trading OS
+Total completed phases:   ~26 (Phases 1 through 25)
+Total future phases:      16  (Phases 26 through 41)
+Total platform scope:     ~42 phases toward a full self-trading OS
 ──────────────────────────────────────────────────────────────────────────────
 
 
