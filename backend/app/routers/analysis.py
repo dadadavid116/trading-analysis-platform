@@ -2,11 +2,14 @@
 routers/analysis.py — API endpoints for AI-generated market analysis.
 
 Endpoints:
-    GET  /api/analysis/latest — most recent scheduled summary for BTC
-    POST /api/analysis/chart  — on-demand Claude chart analysis (Phase 23)
+    GET  /api/analysis/latest         — most recent scheduled summary for BTC
+    GET  /api/analysis/history        — last N scheduled summaries for BTC
+    POST /api/analysis/chart          — on-demand Claude chart analysis
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,31 +32,44 @@ async def get_latest_analysis(db: AsyncSession = Depends(get_db)):
     )
     summary = result.scalar_one_or_none()
     if summary is None:
-        raise HTTPException(
-            status_code=404,
-            detail="No analysis available yet. The analysis worker generates summaries on a schedule — check back shortly.",
-        )
+        raise HTTPException(status_code=404, detail="No analysis available yet.")
     return summary
 
 
-# ── Phase 23: on-demand Claude chart analysis ─────────────────────────────────
+@router.get("/history", response_model=List[AnalysisSummarySchema])
+async def get_analysis_history(
+    limit: int = Query(5, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the last N AI-generated market summaries for BTC, newest first."""
+    result = await db.execute(
+        select(AnalysisSummary)
+        .where(AnalysisSummary.symbol == "BTCUSDT")
+        .order_by(desc(AnalysisSummary.generated_at))
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+# ── On-demand Claude chart analysis ──────────────────────────────────────────
 
 class ChartAnalysisRequest(BaseModel):
-    timeframe: str = "1h"
-    user_bias: str = ""
+    timeframe:         str       = "1h"
+    user_bias:         str       = ""
+    active_indicators: List[str] = ["rsi", "macd", "ema", "price_levels"]
 
 
 @router.post("/chart")
 async def chart_analysis(body: ChartAnalysisRequest):
     """
-    Fetch the last 50 BTC candles from Binance and ask Claude to identify
-    support/resistance levels, an entry zone, stop loss, and take profit targets.
-    user_bias is optional free text (e.g. "bearish" or "I think price will drop")
-    that Claude incorporates into the directional analysis.
-    Returns structured JSON that the frontend draws as price lines on the chart.
+    Fetch the last 50 BTC candles, compute the requested technical indicators,
+    and ask Claude to produce a direction-aware trade setup.
+
+    active_indicators controls which computed values are injected into the prompt.
+    Supported values: rsi, macd, ema, bollinger, price_levels
     """
     try:
         from app.services.chart_analysis import analyze_chart
-        return await analyze_chart(body.timeframe, body.user_bias)
+        return await analyze_chart(body.timeframe, body.user_bias, body.active_indicators)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

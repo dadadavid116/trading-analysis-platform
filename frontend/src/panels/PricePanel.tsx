@@ -1,7 +1,36 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine } from 'lightweight-charts';
 import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
+
+// ── Indicator definitions ──────────────────────────────────────────────────────
+
+const INDICATOR_OPTIONS: { key: string; label: string; description: string; phase?: number }[] = [
+  { key: 'price_levels', label: 'Price Levels',     description: 'Support & resistance from candle structure (always on)' },
+  { key: 'rsi',          label: 'RSI (14)',          description: 'Momentum oscillator — oversold / neutral / overbought' },
+  { key: 'macd',         label: 'MACD (12/26/9)',    description: 'Trend & momentum — histogram positive = bullish' },
+  { key: 'ema',          label: 'EMA (20, 50)',       description: 'Price position relative to trend EMAs' },
+  { key: 'bollinger',    label: 'Bollinger Bands',   description: 'Volatility bands — price near upper / lower band' },
+  { key: 'oi',           label: 'Open Interest',     description: 'OI expansion/contraction context', phase: 27 },
+  { key: 'funding_rate', label: 'Funding Rate',      description: 'Perpetual contract bias (bullish/bearish sentiment)', phase: 27 },
+  { key: 'ls_ratio',     label: 'Long/Short Ratio',  description: 'Crowd positioning context', phase: 27 },
+];
+
+const ALWAYS_ON = new Set(['price_levels']);
+
+const STORAGE_KEY = 'tap_active_indicators';
+
+function loadIndicators(): string[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved) as string[];
+  } catch { /* ignore */ }
+  return ['price_levels', 'rsi', 'macd', 'ema'];
+}
+
+function saveIndicators(keys: string[]): void {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(keys)); } catch { /* ignore */ }
+}
 
 // ── Time-period definitions ────────────────────────────────────────────────────
 
@@ -80,10 +109,12 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
   const seriesRef         = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const alertLinesRef     = useRef<Map<number, IPriceLine>>(new Map());
 
-  // ── Chart analysis (Phase 23) ─────────────────────────────────────────────
-  const [analyzing, setAnalyzing]       = useState(false);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-  const [bias, setBias]                 = useState<'auto' | 'long' | 'short'>('auto');
+  // ── Chart analysis (Phase 23/26) ─────────────────────────────────────────
+  const [analyzing, setAnalyzing]           = useState(false);
+  const [analyzeError, setAnalyzeError]     = useState<string | null>(null);
+  const [bias, setBias]                     = useState<'auto' | 'long' | 'short'>('auto');
+  const [activeIndicators, setActiveIndicators] = useState<string[]>(loadIndicators);
+  const [showIndicatorModal, setShowIndicatorModal] = useState(false);
   const analysisLinesRef = useRef<IPriceLine[]>([]);
 
   // Alert popover shown on chart click.
@@ -316,7 +347,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
 
     try {
       const userBias = bias === 'auto' ? '' : bias === 'long' ? 'bullish — looking for a long setup' : 'bearish — looking for a short setup';
-      const result = await requestChartAnalysis(timeframe, userBias);
+      const result = await requestChartAnalysis(timeframe, userBias, activeIndicators);
       const series = seriesRef.current;
 
       // Clear previous analysis lines
@@ -371,7 +402,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
   const containerWidth = chartContainerRef.current?.clientWidth ?? 400;
 
   return (
-    <div style={panelStyles.card}>
+    <div style={{ ...panelStyles.card, position: 'relative' }}>
       {/* Header: title + interval switcher */}
       <div style={styles.header}>
         <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
@@ -429,8 +460,87 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
           >
             {analyzing ? 'Analyzing…' : '✦ Analyze'}
           </button>
+          {/* Indicator preferences gear */}
+          <button
+            onClick={() => setShowIndicatorModal((v) => !v)}
+            title="Analysis indicator preferences"
+            style={{
+              background: showIndicatorModal ? '#1e2a3a' : 'none',
+              border: `1px solid ${showIndicatorModal ? '#3a5a7a' : '#2a2a2e'}`,
+              borderRadius: '4px',
+              color: showIndicatorModal ? '#90b8e0' : '#555',
+              cursor: 'pointer',
+              fontSize: '13px',
+              padding: '3px 7px',
+              lineHeight: 1,
+              transition: 'all 0.15s',
+            }}
+          >
+            ⚙
+          </button>
         </div>
       </div>
+
+      {/* Indicator preferences modal */}
+      {showIndicatorModal && (
+        <div style={indicatorModalStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#d0d0d0' }}>Analysis Indicators</span>
+            <button onClick={() => setShowIndicatorModal(false)} style={modalCloseBtnStyle}>×</button>
+          </div>
+          <p style={{ fontSize: '10px', color: '#666', marginBottom: '8px', lineHeight: 1.4 }}>
+            Selected indicators are computed from chart data and included in the AI analysis prompt.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+            {INDICATOR_OPTIONS.map((opt) => {
+              const isAlwaysOn = ALWAYS_ON.has(opt.key);
+              const isPhase27  = !!opt.phase;
+              const isActive   = activeIndicators.includes(opt.key);
+              const toggle = () => {
+                if (isAlwaysOn || isPhase27) return;
+                const next = isActive
+                  ? activeIndicators.filter((k) => k !== opt.key)
+                  : [...activeIndicators, opt.key];
+                setActiveIndicators(next);
+                saveIndicators(next);
+              };
+              return (
+                <div
+                  key={opt.key}
+                  onClick={toggle}
+                  title={opt.description}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '4px 6px',
+                    borderRadius: '4px',
+                    cursor: isAlwaysOn || isPhase27 ? 'default' : 'pointer',
+                    backgroundColor: isActive && !isPhase27 ? 'rgba(74,144,217,0.08)' : 'transparent',
+                    opacity: isPhase27 ? 0.4 : 1,
+                  }}
+                >
+                  <div style={{
+                    width: '12px', height: '12px', borderRadius: '3px', flexShrink: 0,
+                    backgroundColor: isActive && !isPhase27 ? '#4a90d9' : 'transparent',
+                    border: `1px solid ${isActive && !isPhase27 ? '#4a90d9' : '#444'}`,
+                  }}>
+                    {isActive && !isPhase27 && (
+                      <span style={{ display: 'block', textAlign: 'center', fontSize: '9px', color: '#fff', lineHeight: '12px' }}>✓</span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: '11px', color: isPhase27 ? '#555' : '#ccc' }}>{opt.label}</span>
+                    {opt.phase && (
+                      <span style={{ fontSize: '9px', color: '#444', marginLeft: '6px' }}>Phase {opt.phase}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Price data grid */}
       {latestLoading && <p style={panelStyles.muted}>Loading…</p>}
@@ -575,3 +685,26 @@ function popoverButtonStyle(bg: string, border: string, color: string): React.CS
     textAlign: 'center',
   };
 }
+
+const indicatorModalStyle: CSSProperties = {
+  position: 'absolute',
+  top: '48px',
+  right: '8px',
+  zIndex: 20,
+  backgroundColor: '#16161a',
+  border: '1px solid #2a2a2e',
+  borderRadius: '7px',
+  padding: '10px 12px',
+  width: '240px',
+  boxShadow: '0 6px 24px rgba(0,0,0,0.6)',
+};
+
+const modalCloseBtnStyle: CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: '#666',
+  cursor: 'pointer',
+  fontSize: '16px',
+  lineHeight: 1,
+  padding: '0 2px',
+};

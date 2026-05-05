@@ -183,17 +183,47 @@ export interface ChartAnalysis {
   current_price:     number;
 }
 
-export async function requestChartAnalysis(timeframe: string, userBias = ''): Promise<ChartAnalysis> {
+export async function requestChartAnalysis(
+  timeframe: string,
+  userBias = '',
+  activeIndicators: string[] = ['rsi', 'macd', 'ema', 'price_levels'],
+): Promise<ChartAnalysis> {
   const response = await fetch(`${BASE_URL}/analysis/chart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ timeframe, user_bias: userBias }),
+    body: JSON.stringify({ timeframe, user_bias: userBias, active_indicators: activeIndicators }),
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));
     throw new Error((detail as { detail?: string })?.detail ?? `API error ${response.status}: ${response.statusText}`);
   }
   return response.json() as Promise<ChartAnalysis>;
+}
+
+/** Fetch the last N AI-generated market summaries, newest first. */
+export function fetchAnalysisHistory(limit = 5): Promise<AnalysisSummary[]> {
+  return apiFetch<AnalysisSummary[]>(`/analysis/history?limit=${limit}`);
+}
+
+// ── Liquidation stats (Phase 26) ──────────────────────────────────────────────
+
+export interface LiquidationWindow {
+  count:      number;
+  buy_count:  number;
+  sell_count: number;
+  total_usd:  number;
+  buy_usd:    number;
+  sell_usd:   number;
+}
+
+export interface LiquidationStats {
+  symbol:  string;
+  windows: Record<string, LiquidationWindow>;
+}
+
+/** Fetch rolling liquidation aggregates (5m / 15m / 1H). */
+export function fetchLiquidationStats(): Promise<LiquidationStats> {
+  return apiFetch<LiquidationStats>('/liquidations/stats');
 }
 
 // ── Strategy ───────────────────────────────────────────────────────────────────
