@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
+import ServiceHealth from './ServiceHealth';
 
 interface LayoutProps {
   /** Dashboard panels rendered in the left grid (Price, Liquidation, etc.) */
@@ -29,6 +30,9 @@ function Layout({ children, chatPanel, chatOpen, onToggleChat }: LayoutProps) {
         <span style={styles.logo}>📈</span>
         <h1 style={styles.title}>Trading Analysis Platform</h1>
         <span style={styles.subtitle}>BTC · Dashboard</span>
+
+        {/* Collector health dots */}
+        <ServiceHealth />
 
         {/* Chat toggle — sits at the far right of the header */}
         <button style={styles.chatToggle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">

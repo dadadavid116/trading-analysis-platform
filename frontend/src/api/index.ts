@@ -303,3 +303,21 @@ export async function deleteChatSession(id: number): Promise<void> {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
   }
 }
+
+// ── Service health (Phase 25) ──────────────────────────────────────────────────
+
+export type ServiceStatus = 'ok' | 'stale' | 'dead';
+
+export interface ServiceInfo {
+  last_seen: string | null;
+  status:    ServiceStatus;
+}
+
+export interface ServiceHealthResponse {
+  services: Record<string, ServiceInfo>;
+}
+
+/** Fetch collector health — last data timestamp and status per service. */
+export function fetchServiceHealth(): Promise<ServiceHealthResponse> {
+  return apiFetch<ServiceHealthResponse>('/health/services');
+}
