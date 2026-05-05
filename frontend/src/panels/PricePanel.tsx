@@ -11,9 +11,9 @@ const INDICATOR_OPTIONS: { key: string; label: string; description: string; phas
   { key: 'macd',         label: 'MACD (12/26/9)',    description: 'Trend & momentum — histogram positive = bullish' },
   { key: 'ema',          label: 'EMA (20, 50)',       description: 'Price position relative to trend EMAs' },
   { key: 'bollinger',    label: 'Bollinger Bands',   description: 'Volatility bands — price near upper / lower band' },
-  { key: 'oi',           label: 'Open Interest',     description: 'OI expansion/contraction context', phase: 27 },
-  { key: 'funding_rate', label: 'Funding Rate',      description: 'Perpetual contract bias (bullish/bearish sentiment)', phase: 27 },
-  { key: 'ls_ratio',     label: 'Long/Short Ratio',  description: 'Crowd positioning context', phase: 27 },
+  { key: 'oi',           label: 'Open Interest',     description: 'OI expansion/contraction — requires derivatives collector data' },
+  { key: 'funding_rate', label: 'Funding Rate',      description: 'Perpetual contract bias — requires derivatives collector data' },
+  { key: 'ls_ratio',     label: 'Long/Short Ratio',  description: 'Top-trader crowd positioning — requires derivatives collector data' },
 ];
 
 const ALWAYS_ON = new Set(['price_levels']);

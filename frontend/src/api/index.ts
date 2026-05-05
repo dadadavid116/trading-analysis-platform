@@ -351,3 +351,57 @@ export interface ServiceHealthResponse {
 export function fetchServiceHealth(): Promise<ServiceHealthResponse> {
   return apiFetch<ServiceHealthResponse>('/health/services');
 }
+
+// ── Derivatives context (Phase 27) ────────────────────────────────────────────
+
+export interface FundingRateData {
+  symbol:       string;
+  timestamp:    string;
+  funding_rate: number;
+  mark_price:   number | null;
+  index_price:  number | null;
+  premium_pct:  number;
+  sentiment:    'bullish' | 'bearish' | 'neutral';
+}
+
+export interface OpenInterestData {
+  symbol:    string;
+  timestamp: string;
+  oi_value:  number;
+  delta_1h:  number | null;
+  delta_4h:  number | null;
+  trend:     'expanding' | 'contracting' | 'stable';
+}
+
+export interface LSRatioEntry {
+  long_pct:   number;
+  short_pct:  number;
+  updated_at: string;
+}
+
+export interface LSRatioData {
+  symbol:         string;
+  top_account:    LSRatioEntry | null;
+  global_account: LSRatioEntry | null;
+}
+
+export async function fetchFundingRate(): Promise<FundingRateData | null> {
+  const r = await fetch(`${BASE_URL}/derivatives/funding`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`API error ${r.status}`);
+  return r.json() as Promise<FundingRateData>;
+}
+
+export async function fetchOpenInterest(): Promise<OpenInterestData | null> {
+  const r = await fetch(`${BASE_URL}/derivatives/oi`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`API error ${r.status}`);
+  return r.json() as Promise<OpenInterestData>;
+}
+
+export async function fetchLSRatio(): Promise<LSRatioData | null> {
+  const r = await fetch(`${BASE_URL}/derivatives/ls-ratio`);
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error(`API error ${r.status}`);
+  return r.json() as Promise<LSRatioData>;
+}

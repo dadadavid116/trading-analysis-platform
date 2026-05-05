@@ -28,6 +28,9 @@ _TABLES = {
     "price":        "price_candles",
     "liquidations": "liquidations",
     "orderbook":    "orderbook_snapshots",
+    "funding":      "funding_rates",
+    "oi":           "open_interest",
+    "ls_ratio":     "ls_ratios",
 }
 
 _OK_THRESHOLD    = 120   # seconds

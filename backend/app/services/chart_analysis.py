@@ -157,6 +157,73 @@ def build_indicator_context(candles: list[dict], active: list[str], price: float
     return "\nACTIVE INDICATORS:\n" + "\n".join(lines)
 
 
+# ── Derivatives context (Phase 27) ───────────────────────────────────────────
+
+async def fetch_derivatives_context(active: list[str]) -> str:
+    """Fetch latest derivatives data from DB and return a formatted context block."""
+    needs = {"oi", "funding_rate", "ls_ratio"}
+    if not any(k in active for k in needs):
+        return ""
+
+    from sqlalchemy import select, desc
+    from app.database import AsyncSessionLocal
+    from app.models.derivatives import FundingRate, OpenInterest, LSRatio
+
+    lines = []
+
+    async with AsyncSessionLocal() as session:
+        if "funding_rate" in active:
+            res = await session.execute(
+                select(FundingRate)
+                .where(FundingRate.symbol == "BTCUSDT")
+                .order_by(desc(FundingRate.timestamp))
+                .limit(1)
+            )
+            fr = res.scalar_one_or_none()
+            if fr:
+                rate_pct = float(fr.funding_rate) * 100
+                sentiment = "bearish — longs pay shorts" if rate_pct > 0.01 else "bullish — shorts pay longs" if rate_pct < -0.01 else "neutral"
+                lines.append(f"  Funding Rate: {rate_pct:+.4f}% — {sentiment}")
+                if fr.mark_price and fr.index_price:
+                    premium = (float(fr.mark_price) - float(fr.index_price)) / float(fr.index_price) * 100
+                    lines.append(f"  Mark/Index premium: {premium:+.4f}%")
+
+        if "oi" in active:
+            res = await session.execute(
+                select(OpenInterest)
+                .where(OpenInterest.symbol == "BTCUSDT")
+                .order_by(desc(OpenInterest.timestamp))
+                .limit(13)
+            )
+            oi_rows = res.scalars().all()
+            if oi_rows:
+                latest_oi = float(oi_rows[0].oi_value)
+                lines.append(f"  Open Interest: {latest_oi:,.0f} BTC")
+                if len(oi_rows) >= 2:
+                    prev_oi = float(oi_rows[-1].oi_value)
+                    delta   = (latest_oi - prev_oi) / prev_oi * 100 if prev_oi else 0
+                    trend   = "expanding (new money entering)" if delta > 0.5 else "contracting (positions closing)" if delta < -0.5 else "stable"
+                    lines.append(f"  OI change (~1H): {delta:+.2f}% — {trend}")
+
+        if "ls_ratio" in active:
+            res = await session.execute(
+                select(LSRatio)
+                .where(LSRatio.symbol == "BTCUSDT", LSRatio.ratio_type == "top_account")
+                .order_by(desc(LSRatio.timestamp))
+                .limit(1)
+            )
+            ls = res.scalar_one_or_none()
+            if ls:
+                long_pct  = float(ls.long_ratio) * 100
+                short_pct = float(ls.short_ratio) * 100
+                skew = "long biased" if long_pct > 55 else "short biased" if short_pct > 55 else "balanced"
+                lines.append(f"  Top Trader L/S: Long={long_pct:.1f}% Short={short_pct:.1f}% — {skew}")
+
+    if not lines:
+        return ""
+    return "\nDERIVATIVES CONTEXT (from DB — Phase 27 collectors):\n" + "\n".join(lines)
+
+
 # ── Main analysis function ────────────────────────────────────────────────────
 
 async def analyze_chart(
@@ -179,7 +246,8 @@ async def analyze_chart(
         for c in candles[-30:]
     )
 
-    indicator_context = build_indicator_context(candles, active_indicators, current_price)
+    indicator_context    = build_indicator_context(candles, active_indicators, current_price)
+    derivatives_context  = await fetch_derivatives_context(active_indicators)
     bias_line = (
         f"\nUser's market view: {user_bias}\nWeight this perspective in your analysis."
         if user_bias else ""
@@ -192,6 +260,7 @@ Current price: ${current_price:,.0f}
 Last 30 candles (Open / High / Low / Close):
 {candle_text}
 {indicator_context}
+{derivatives_context}
 {bias_line}
 Determine the trend from price structure, momentum, and the indicator readings above.
 Then build a trade setup that matches the trend direction:

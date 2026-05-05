@@ -5,6 +5,7 @@ import PricePanel from './panels/PricePanel';
 import LiquidationPanel from './panels/LiquidationPanel';
 import OrderBookPanel from './panels/OrderBookPanel';
 import AlertsPanel from './panels/AlertsPanel';
+import DerivativesPanel from './panels/DerivativesPanel';
 import ChatPanel from './panels/ChatPanel';
 
 /**
@@ -67,9 +68,11 @@ function App() {
 
       <div style={dividerV} />
 
-      {/* Right column: Liquidation takes 3/5, Alerts takes 2/5 */}
+      {/* Right column: Liquidation (top), Derivatives (mid), Alerts (bottom) */}
       <div style={col}>
         <div style={cell(3)}><LiquidationPanel /></div>
+        <div style={dividerH} />
+        <div style={cell(1)}><DerivativesPanel /></div>
         <div style={dividerH} />
         <div style={cell(2)}><AlertsPanel /></div>
       </div>

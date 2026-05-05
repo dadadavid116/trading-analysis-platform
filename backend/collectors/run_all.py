@@ -13,6 +13,7 @@ This module is used as the CMD override for the `collector` Docker Compose servi
 import asyncio
 import logging
 
+from collectors.derivatives_collector import run as run_derivatives
 from collectors.liquidation_collector import run as run_liquidations
 from collectors.orderbook_collector import run as run_orderbook
 from collectors.price_collector import run as run_price
@@ -33,6 +34,7 @@ async def main() -> None:
         run_price(),
         run_liquidations(),
         run_orderbook(),
+        run_derivatives(),
     )
 
 
