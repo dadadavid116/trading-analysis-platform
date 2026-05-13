@@ -84,10 +84,12 @@ const styles = {
 // ── Chart overlay definitions ─────────────────────────────────────────────────
 
 const OVERLAY_OPTIONS = [
-  { key: 'ema20',  label: 'EMA 20',  color: '#f5a623' },
-  { key: 'ema50',  label: 'EMA 50',  color: '#ff6b35' },
-  { key: 'ema200', label: 'EMA 200', color: '#9b59b6' },
-  { key: 'vwap',   label: 'VWAP',    color: '#4a9eff' },
+  { key: 'ema20',  label: 'EMA 20',    color: '#f5a623' },
+  { key: 'ema50',  label: 'EMA 50',    color: '#ff6b35' },
+  { key: 'ema200', label: 'EMA 200',   color: '#9b59b6' },
+  { key: 'vwap',   label: 'VWAP',      color: '#4a9eff' },
+  { key: 'volume', label: 'Volume',    color: '#26a69a' },
+  { key: 'bb',     label: 'BB (20,2)', color: '#5588bb' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -97,7 +99,7 @@ function loadOverlays(): Set<string> {
     const saved = localStorage.getItem(OVERLAY_STORAGE_KEY);
     if (saved) return new Set(JSON.parse(saved) as string[]);
   } catch { /* ignore */ }
-  return new Set(['ema20', 'ema50']);
+  return new Set(['ema20', 'ema50', 'volume']);
 }
 
 function computeEMA(closes: LineData[], period: number): LineData[] {
@@ -124,6 +126,22 @@ function computeVWAP(candles: KlineCandle[]): LineData[] {
     if (volSum > 0) result.push({ time: c.time as UTCTimestamp, value: pvSum / volSum });
   }
   return result;
+}
+
+function computeBollingerBands(
+  closes: LineData[], period = 20, mult = 2,
+): { upper: LineData[]; middle: LineData[]; lower: LineData[] } {
+  const upper: LineData[] = [], middle: LineData[] = [], lower: LineData[] = [];
+  for (let i = period - 1; i < closes.length; i++) {
+    const slice = closes.slice(i - period + 1, i + 1).map((d) => d.value);
+    const sma   = slice.reduce((s, v) => s + v, 0) / period;
+    const std   = Math.sqrt(slice.reduce((s, v) => s + (v - sma) ** 2, 0) / period);
+    const t     = closes[i].time;
+    upper.push({ time: t, value: sma + mult * std });
+    middle.push({ time: t, value: sma });
+    lower.push({ time: t, value: sma - mult * std });
+  }
+  return { upper, middle, lower };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -164,11 +182,15 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const analysisLinesRef = useRef<IPriceLine[]>([]);
   const levelsLinesRef   = useRef<IPriceLine[]>([]);
 
-  // Overlay line series (EMA 20/50/200, VWAP)
-  const ema20Ref  = useRef<ISeriesApi<'Line'> | null>(null);
-  const ema50Ref  = useRef<ISeriesApi<'Line'> | null>(null);
-  const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null);
-  const vwapRef   = useRef<ISeriesApi<'Line'> | null>(null);
+  // Overlay series (EMA 20/50/200, VWAP, Volume, Bollinger Bands)
+  const ema20Ref    = useRef<ISeriesApi<'Line'>      | null>(null);
+  const ema50Ref    = useRef<ISeriesApi<'Line'>      | null>(null);
+  const ema200Ref   = useRef<ISeriesApi<'Line'>      | null>(null);
+  const vwapRef     = useRef<ISeriesApi<'Line'>      | null>(null);
+  const volumeRef   = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const bbUpperRef  = useRef<ISeriesApi<'Line'>      | null>(null);
+  const bbMiddleRef = useRef<ISeriesApi<'Line'>      | null>(null);
+  const bbLowerRef  = useRef<ISeriesApi<'Line'>      | null>(null);
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
 
   function toggleOverlay(key: string) {
@@ -307,6 +329,28 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     ema200Ref.current = mkLine('#9b59b6');
     vwapRef.current   = mkLine('#4a9eff', true);
 
+    // Volume histogram — occupies bottom 18% of the chart pane
+    const vol = chart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+      lastValueVisible: false,
+      priceLineVisible: false,
+      visible: false,
+    });
+    vol.priceScale().applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+    volumeRef.current = vol;
+
+    // Bollinger Bands (upper, middle SMA, lower) — one toggle controls all three
+    const mkBB = (dash = false) => chart.addLineSeries({
+      color: '#5588bb', lineWidth: 1,
+      lineStyle: dash ? LineStyle.Dashed : LineStyle.Solid,
+      priceLineVisible: false, lastValueVisible: false,
+      crosshairMarkerVisible: false, visible: false,
+    });
+    bbUpperRef.current  = mkBB(true);
+    bbMiddleRef.current = mkBB();
+    bbLowerRef.current  = mkBB(true);
+
     // ── Crosshair move → show floating price label ──────────────────────────
     // Fires continuously as the user moves their cursor anywhere on the chart.
     // The price is read directly from the Y coordinate — not snapped to any candle.
@@ -344,10 +388,14 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       chart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
-      ema20Ref.current  = null;
-      ema50Ref.current  = null;
-      ema200Ref.current = null;
-      vwapRef.current   = null;
+      ema20Ref.current    = null;
+      ema50Ref.current    = null;
+      ema200Ref.current   = null;
+      vwapRef.current     = null;
+      volumeRef.current   = null;
+      bbUpperRef.current  = null;
+      bbMiddleRef.current = null;
+      bbLowerRef.current  = null;
     };
   }, []);
 
@@ -422,6 +470,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     ema50Ref.current?.applyOptions({ visible: overlays.has('ema50') });
     ema200Ref.current?.applyOptions({ visible: overlays.has('ema200') });
     vwapRef.current?.applyOptions({ visible: overlays.has('vwap') });
+    volumeRef.current?.applyOptions({ visible: overlays.has('volume') });
+    const bbOn = overlays.has('bb');
+    bbUpperRef.current?.applyOptions({ visible: bbOn });
+    bbMiddleRef.current?.applyOptions({ visible: bbOn });
+    bbLowerRef.current?.applyOptions({ visible: bbOn });
   }, [overlays]);
 
   // ── Load full candle series on timeframe or symbol change ─────────────────
@@ -449,6 +502,21 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         ema50Ref.current?.setData(computeEMA(closeLD, 50));
         ema200Ref.current?.setData(computeEMA(closeLD, 200));
         vwapRef.current?.setData(computeVWAP(data));
+
+        // Volume histogram (green/red tinted by candle direction)
+        volumeRef.current?.setData(
+          data.map((c) => ({
+            time:  c.time as UTCTimestamp,
+            value: c.volume,
+            color: c.close >= c.open ? '#26a69a55' : '#ef535055',
+          })),
+        );
+
+        // Bollinger Bands
+        const bb = computeBollingerBands(closeLD);
+        bbUpperRef.current?.setData(bb.upper);
+        bbMiddleRef.current?.setData(bb.middle);
+        bbLowerRef.current?.setData(bb.lower);
 
         setChartLoading(false);
       })
