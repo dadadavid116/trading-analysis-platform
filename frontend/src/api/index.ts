@@ -508,6 +508,20 @@ export function fetchScannerSignals(): Promise<ScannerResponse> {
   return apiFetch<ScannerResponse>('/scanner/signals');
 }
 
+export interface ScannerWorkerStatus {
+  worker_running:        boolean;
+  last_scan_at:          string | null;
+  notifications_sent:    number;
+  telegram_enabled:      boolean;
+  scan_interval_seconds: number;
+  composite_threshold:   number;
+}
+
+/** Fetch the status of the background scanner worker. */
+export function fetchScannerStatus(): Promise<ScannerWorkerStatus> {
+  return apiFetch<ScannerWorkerStatus>('/scanner/status');
+}
+
 export interface TradeSetup {
   symbol:       string;
   generated_at: string;

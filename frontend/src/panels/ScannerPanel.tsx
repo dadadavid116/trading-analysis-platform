@@ -1,5 +1,6 @@
-import type { CSSProperties } from 'react';
-import type { ScannerResponse, SymbolScanResult, ScannerSignal } from '../api';
+import { useState, useEffect, CSSProperties } from 'react';
+import { fetchScannerStatus } from '../api';
+import type { ScannerResponse, SymbolScanResult, ScannerSignal, ScannerWorkerStatus } from '../api';
 
 interface Props {
   data:  ScannerResponse | null;
@@ -92,7 +93,37 @@ function SymbolRow({ result }: { result: SymbolScanResult }) {
   );
 }
 
+function useWorkerStatus() {
+  const [status, setStatus] = useState<ScannerWorkerStatus | null>(null);
+  useEffect(() => {
+    fetchScannerStatus().then(setStatus).catch(() => {});
+    const id = setInterval(() => fetchScannerStatus().then(setStatus).catch(() => {}), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return status;
+}
+
+function AutoAlertDot({ status }: { status: ScannerWorkerStatus | null }) {
+  if (!status) return null;
+  const on    = status.telegram_enabled;
+  const color = on ? '#33aa66' : '#555';
+  const label = on
+    ? `Auto-alerts ON · ${status.notifications_sent} sent`
+    : 'Auto-alerts: Telegram not configured';
+  return (
+    <span title={label} style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'default' }}>
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: color, display: 'inline-block' }} />
+      {on && (
+        <span style={{ fontSize: '9px', color: '#33aa6699' }}>
+          {status.notifications_sent > 0 ? `${status.notifications_sent}×` : 'ON'}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function ScannerPanel({ data, error }: Props) {
+  const workerStatus = useWorkerStatus();
   const scannedAt = data
     ? new Date(data.scanned_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
     : null;
@@ -101,6 +132,7 @@ export default function ScannerPanel({ data, error }: Props) {
     <div style={containerStyle}>
       <div style={headerStyle}>
         <span style={titleStyle}>Market Scanner</span>
+        <AutoAlertDot status={workerStatus} />
         {scannedAt && (
           <span style={{ fontSize: '10px', color: '#555', marginLeft: 'auto' }}>
             {scannedAt}

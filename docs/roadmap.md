@@ -38,9 +38,10 @@
 | 32 | Trade Journal — save AI setups, auto-outcome tracking (SL/TP1-3/expired) via price replay, win rate | ✅ Done |
 | 33 | Mobile-responsive layout + PWA — 2-row compact header, bottom-tab navigation, service worker + manifest | ✅ Done |
 | 34 | Trade Performance Dashboard — win rate, expectancy, per-symbol/bias breakdown, outcome bars, streak | ✅ Done |
+| 35 | Background Scanner Worker — 5-min auto-scan loop, Telegram high-confidence alerts, 1H debounce, event log | ✅ Done |
 
 ## Upcoming Phases
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 35 | TBD | Planned |
+| 36 | TBD | Planned |

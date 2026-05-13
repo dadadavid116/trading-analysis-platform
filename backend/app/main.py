@@ -6,6 +6,7 @@ Start the server with:
     uvicorn app.main:app --reload
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -62,7 +63,18 @@ async def lifespan(app: FastAPI):
             "Primary access control is Caddy Basic Auth (production only)."
         )
 
+    # Start background scanner worker
+    from app.workers.scanner_worker import run_scanner_worker
+    scanner_task = asyncio.create_task(run_scanner_worker())
+    logger.info("Background scanner worker task started.")
+
     yield
+
+    scanner_task.cancel()
+    try:
+        await scanner_task
+    except asyncio.CancelledError:
+        pass
 
 # ── Create the FastAPI application ────────────────────────────────────────────
 app = FastAPI(

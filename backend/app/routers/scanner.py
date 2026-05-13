@@ -250,6 +250,26 @@ async def _scan_symbol(symbol: str, db: AsyncSession) -> dict:
 
 # ── Endpoint ───────────────────────────────────────────────────────────────────
 
+@router.get("/status")
+async def scanner_worker_status():
+    """
+    Return the current status of the background scanner worker.
+    Useful for the frontend to show whether auto-alerts are active.
+    """
+    from app.workers.scanner_worker import (
+        last_scan_at, notifications_sent,
+        SCAN_INTERVAL, COMPOSITE_THRESHOLD,
+    )
+    return {
+        "worker_running":       True,
+        "last_scan_at":         last_scan_at.isoformat() if last_scan_at else None,
+        "notifications_sent":   notifications_sent,
+        "telegram_enabled":     bool(settings.telegram_bot_token and settings.telegram_chat_id),
+        "scan_interval_seconds": SCAN_INTERVAL,
+        "composite_threshold":  COMPOSITE_THRESHOLD,
+    }
+
+
 @router.get("/signals")
 async def get_scanner_signals(db: AsyncSession = Depends(get_db)):
     """
