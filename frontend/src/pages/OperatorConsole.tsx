@@ -6,10 +6,11 @@ import ScannerPanel from '../panels/ScannerPanel';
 import CandidatePanel from '../panels/CandidatePanel';
 import JournalPanel from '../panels/JournalPanel';
 import PerformancePanel from '../panels/PerformancePanel';
+import HeatmapPanel from '../panels/HeatmapPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab    = 'events' | 'journal' | 'performance';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events';
+type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner' },
@@ -17,6 +18,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'performance', label: 'Stats'   },
   { id: 'journal',     label: 'Journal' },
   { id: 'events',      label: 'Events'  },
+  { id: 'heatmap',     label: 'Heat'    },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -51,6 +53,7 @@ export default function OperatorConsole() {
         case 'performance': return <PerformancePanel />;
         case 'journal':     return <JournalPanel />;
         case 'events':      return <EventLogPanel />;
+        case 'heatmap':     return <HeatmapPanel />;
       }
     })();
 
@@ -103,11 +106,15 @@ export default function OperatorConsole() {
           <button style={tabBtnStyle(rightTab === 'performance')} onClick={() => setRightTab('performance')}>
             Performance
           </button>
+          <button style={tabBtnStyle(rightTab === 'heatmap')} onClick={() => setRightTab('heatmap')}>
+            Heatmap
+          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {rightTab === 'events'      && <EventLogPanel />}
           {rightTab === 'journal'     && <JournalPanel />}
           {rightTab === 'performance' && <PerformancePanel />}
+          {rightTab === 'heatmap'     && <HeatmapPanel />}
         </div>
       </div>
     </div>
