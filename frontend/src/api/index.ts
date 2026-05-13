@@ -476,3 +476,34 @@ export interface EventLogEntry {
 export function fetchEvents(limit = 100, sinceId = 0): Promise<EventLogEntry[]> {
   return apiFetch<EventLogEntry[]>(`/events/?limit=${limit}&since_id=${sinceId}`);
 }
+
+// ── Scanner (Phase 30) ────────────────────────────────────────────────────────
+
+export interface ScannerSignal {
+  type:      string;
+  label:     string;
+  severity:  'info' | 'warning' | 'alert';
+  direction: 'bullish' | 'bearish' | 'neutral';
+  value:     number;
+}
+
+export interface SymbolScanResult {
+  symbol:       string;
+  signals:      ScannerSignal[];
+  bull_score:   number;
+  bear_score:   number;
+  composite:    number;   // -1.0 (fully bearish) to +1.0 (fully bullish)
+  bias:         'bullish' | 'bearish' | 'neutral';
+  signal_count: number;
+  error?:       string;
+}
+
+export interface ScannerResponse {
+  symbols:    SymbolScanResult[];
+  scanned_at: string;
+}
+
+/** Fetch signal scanner results for all tracked symbols. */
+export function fetchScannerSignals(): Promise<ScannerResponse> {
+  return apiFetch<ScannerResponse>('/scanner/signals');
+}
