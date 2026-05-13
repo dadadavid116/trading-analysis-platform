@@ -56,4 +56,5 @@
 | 45 | CVD (Cumulative Volume Delta) Subplot — cumulative signed-volume line with zero reference, five-way time scale sync | ✅ Done |
 | 46 | Daily Pivot Points — PP/R1-R3/S1-S3 price lines from yesterday's OHLC, toggle chip, color-coded by level | ✅ Done |
 | 47 | Market Heatmap — BTC/ETH/SOL × 5m/15m/1H/4H/24H % change color grid, OperatorConsole tab + mobile | ✅ Done |
-| 48 | TBD | Planned |
+| 48 | Ichimoku Cloud — Tenkan/Kijun/Span A/Span B/Chikou as chart overlay, Span A/B projected 26 bars forward | ✅ Done |
+| 49 | TBD | Planned |

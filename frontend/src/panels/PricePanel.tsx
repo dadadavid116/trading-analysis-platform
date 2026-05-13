@@ -95,6 +95,7 @@ const OVERLAY_OPTIONS = [
   { key: 'stochrsi', label: 'StochRSI',     color: '#26c6da' },
   { key: 'cvd',      label: 'CVD',          color: '#64b5f6' },
   { key: 'pivots',   label: 'Pivots',       color: '#ffd54f' },
+  { key: 'ichimoku', label: 'Ichimoku',     color: '#e91e63' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -213,6 +214,36 @@ function computeMACD(
   return { macd: macdLD, signal: signalLD, histogram };
 }
 
+function computeIchimoku(
+  candles: KlineCandle[], intervalSeconds: number,
+): { tenkan: LineData[]; kijun: LineData[]; spanA: LineData[]; spanB: LineData[]; chikou: LineData[] } {
+  const N = candles.length;
+  const mid = (s: number, p: number) => {
+    const sl = candles.slice(s, s + p);
+    return (Math.max(...sl.map(c => c.high)) + Math.min(...sl.map(c => c.low))) / 2;
+  };
+  const shift = 26 * (intervalSeconds || 86400);
+
+  const tenkan: LineData[] = [];
+  const kijun:  LineData[] = [];
+  const spanA:  LineData[] = [];
+  const spanB:  LineData[] = [];
+  const chikou: LineData[] = [];
+
+  for (let i = 8;  i < N; i++) tenkan.push({ time: candles[i].time as UTCTimestamp, value: mid(i - 8, 9) });
+  for (let i = 25; i < N; i++) kijun.push({ time: candles[i].time as UTCTimestamp, value: mid(i - 25, 26) });
+  for (let i = 25; i < N; i++) {
+    spanA.push({ time: (candles[i].time + shift) as UTCTimestamp, value: (mid(i - 8, 9) + mid(i - 25, 26)) / 2 });
+  }
+  for (let i = 51; i < N; i++) {
+    spanB.push({ time: (candles[i].time + shift) as UTCTimestamp, value: mid(i - 51, 52) });
+  }
+  for (let i = 26; i < N; i++) {
+    chikou.push({ time: candles[i - 26].time as UTCTimestamp, value: candles[i].close });
+  }
+  return { tenkan, kijun, spanA, spanB, chikou };
+}
+
 function computeCVD(candles: KlineCandle[]): LineData[] {
   let cum = 0;
   return candles.map((c) => {
@@ -320,6 +351,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const cvdContainerRef = useRef<HTMLDivElement>(null);
   const cvdChartRef     = useRef<IChartApi | null>(null);
   const cvdSeriesRef    = useRef<ISeriesApi<'Line'> | null>(null);
+
+  // Ichimoku Cloud overlay series (5 lines, all on main chart)
+  const ichiTenkanRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const ichiKijunRef  = useRef<ISeriesApi<'Line'> | null>(null);
+  const ichiSpanARef  = useRef<ISeriesApi<'Line'> | null>(null);
+  const ichiSpanBRef  = useRef<ISeriesApi<'Line'> | null>(null);
+  const ichiChikouRef = useRef<ISeriesApi<'Line'> | null>(null);
 
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
 
@@ -480,6 +518,19 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     bbUpperRef.current  = mkBB(true);
     bbMiddleRef.current = mkBB();
     bbLowerRef.current  = mkBB(true);
+
+    // Ichimoku Cloud — five line series, all hidden until toggled on
+    const mkIchi = (color: string, dashed = false, width: 1 | 2 = 1) => chart.addLineSeries({
+      color, lineWidth: width,
+      lineStyle: dashed ? LineStyle.Dashed : LineStyle.Solid,
+      priceLineVisible: false, lastValueVisible: false,
+      crosshairMarkerVisible: false, visible: false,
+    });
+    ichiTenkanRef.current = mkIchi('#e91e63');           // red  — Conversion Line
+    ichiKijunRef.current  = mkIchi('#1e88e5', false, 2); // blue — Base Line (thicker)
+    ichiSpanARef.current  = mkIchi('#26a69a99' as unknown as string); // teal — leading span A
+    ichiSpanBRef.current  = mkIchi('#ef535099' as unknown as string); // red  — leading span B
+    ichiChikouRef.current = mkIchi('#b39ddb', true);     // purple dashed — lagging span
 
     // ── Crosshair move → show floating price label ──────────────────────────
     // Fires continuously as the user moves their cursor anywhere on the chart.
@@ -666,6 +717,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       stochDRef.current     = null;
       cvdChartRef.current  = null;
       cvdSeriesRef.current = null;
+      ichiTenkanRef.current = null;
+      ichiKijunRef.current  = null;
+      ichiSpanARef.current  = null;
+      ichiSpanBRef.current  = null;
+      ichiChikouRef.current = null;
     };
   }, []);
 
@@ -798,6 +854,12 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     bbUpperRef.current?.applyOptions({ visible: bbOn });
     bbMiddleRef.current?.applyOptions({ visible: bbOn });
     bbLowerRef.current?.applyOptions({ visible: bbOn });
+    const ichiOn = overlays.has('ichimoku');
+    ichiTenkanRef.current?.applyOptions({ visible: ichiOn });
+    ichiKijunRef.current?.applyOptions({ visible: ichiOn });
+    ichiSpanARef.current?.applyOptions({ visible: ichiOn });
+    ichiSpanBRef.current?.applyOptions({ visible: ichiOn });
+    ichiChikouRef.current?.applyOptions({ visible: ichiOn });
   }, [overlays]);
 
   // ── Load full candle series on timeframe or symbol change ─────────────────
@@ -857,6 +919,15 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
 
         // CVD — cumulative signed volume
         cvdSeriesRef.current?.setData(computeCVD(data));
+
+        // Ichimoku Cloud (9, 26, 52, 26)
+        const intervalSecs = INTERVALS.find(iv => iv.value === timeframe)?.seconds || 86400;
+        const ichi = computeIchimoku(data, intervalSecs);
+        ichiTenkanRef.current?.setData(ichi.tenkan);
+        ichiKijunRef.current?.setData(ichi.kijun);
+        ichiSpanARef.current?.setData(ichi.spanA);
+        ichiSpanBRef.current?.setData(ichi.spanB);
+        ichiChikouRef.current?.setData(ichi.chikou);
 
         setChartLoading(false);
       })
