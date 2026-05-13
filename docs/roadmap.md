@@ -47,4 +47,5 @@
 |-------|-------------|--------|
 | 37 | Key S&R Levels — pivot clustering, `/price/levels` endpoint, chart price lines, scanner signal | ✅ Done |
 | 38 | Funding Rate & OI History Sparklines — 24H time-series charts in Derivatives panel | ✅ Done |
-| 39 | TBD | Planned |
+| 39 | Chart Indicator Overlays — EMA 20/50/200 + VWAP line series with toggle chips | ✅ Done |
+| 40 | TBD | Planned |

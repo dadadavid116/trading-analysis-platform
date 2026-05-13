@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, CSSProperties } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine, LineData } from 'lightweight-charts';
 import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, fetchPriceLevels, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
@@ -35,12 +35,12 @@ function saveIndicators(keys: string[]): void {
 // ── Time-period definitions ────────────────────────────────────────────────────
 
 const INTERVALS = [
-  { label: '3m',  value: '3m',  limit: 100, seconds: 180    },
-  { label: '5m',  value: '5m',  limit: 100, seconds: 300    },
-  { label: '15m', value: '15m', limit: 100, seconds: 900    },
-  { label: '1H',  value: '1h',  limit: 100, seconds: 3600   },
-  { label: '4H',  value: '4h',  limit: 100, seconds: 14400  },
-  { label: '1D',  value: '1d',  limit: 90,  seconds: 86400  },
+  { label: '3m',  value: '3m',  limit: 200, seconds: 180    },
+  { label: '5m',  value: '5m',  limit: 200, seconds: 300    },
+  { label: '15m', value: '15m', limit: 200, seconds: 900    },
+  { label: '1H',  value: '1h',  limit: 200, seconds: 3600   },
+  { label: '4H',  value: '4h',  limit: 200, seconds: 14400  },
+  { label: '1D',  value: '1d',  limit: 200, seconds: 86400  },
   { label: '1M',  value: '1M',  limit: 24,  seconds: 0      }, // monthly varies — no countdown
 ] as const;
 
@@ -81,6 +81,51 @@ const styles = {
   },
 };
 
+// ── Chart overlay definitions ─────────────────────────────────────────────────
+
+const OVERLAY_OPTIONS = [
+  { key: 'ema20',  label: 'EMA 20',  color: '#f5a623' },
+  { key: 'ema50',  label: 'EMA 50',  color: '#ff6b35' },
+  { key: 'ema200', label: 'EMA 200', color: '#9b59b6' },
+  { key: 'vwap',   label: 'VWAP',    color: '#4a9eff' },
+] as const;
+
+const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
+
+function loadOverlays(): Set<string> {
+  try {
+    const saved = localStorage.getItem(OVERLAY_STORAGE_KEY);
+    if (saved) return new Set(JSON.parse(saved) as string[]);
+  } catch { /* ignore */ }
+  return new Set(['ema20', 'ema50']);
+}
+
+function computeEMA(closes: LineData[], period: number): LineData[] {
+  if (closes.length < period) return [];
+  const k = 2 / (period + 1);
+  let ema = (closes.slice(0, period).reduce((s, d) => s + d.value, 0)) / period;
+  const result: LineData[] = [{ time: closes[period - 1].time, value: ema }];
+  for (let i = period; i < closes.length; i++) {
+    ema = closes[i].value * k + ema * (1 - k);
+    result.push({ time: closes[i].time, value: ema });
+  }
+  return result;
+}
+
+function computeVWAP(candles: KlineCandle[]): LineData[] {
+  const result: LineData[] = [];
+  let pvSum = 0, volSum = 0, lastDay = -1;
+  for (const c of candles) {
+    const day = Math.floor(c.time / 86400);
+    if (day !== lastDay) { pvSum = 0; volSum = 0; lastDay = day; }
+    const tp = (c.high + c.low + c.close) / 3;
+    pvSum  += tp * c.volume;
+    volSum += c.volume;
+    if (volSum > 0) result.push({ time: c.time as UTCTimestamp, value: pvSum / volSum });
+  }
+  return result;
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface PricePanelProps {
@@ -118,6 +163,22 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const [showIndicatorModal, setShowIndicatorModal] = useState(false);
   const analysisLinesRef = useRef<IPriceLine[]>([]);
   const levelsLinesRef   = useRef<IPriceLine[]>([]);
+
+  // Overlay line series (EMA 20/50/200, VWAP)
+  const ema20Ref  = useRef<ISeriesApi<'Line'> | null>(null);
+  const ema50Ref  = useRef<ISeriesApi<'Line'> | null>(null);
+  const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null);
+  const vwapRef   = useRef<ISeriesApi<'Line'> | null>(null);
+  const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
+
+  function toggleOverlay(key: string) {
+    setOverlays((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      try { localStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   // Alert popover shown on chart click.
   const [popover, setPopover]           = useState<{ x: number; y: number; price: number } | null>(null);
@@ -234,6 +295,18 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     chartRef.current  = chart;
     seriesRef.current = series;
 
+    // Overlay line series — hidden by default; visibility managed separately
+    const mkLine = (color: string, dashed = false) => chart.addLineSeries({
+      color, lineWidth: 1,
+      lineStyle: dashed ? LineStyle.Dashed : LineStyle.Solid,
+      priceLineVisible: false, lastValueVisible: false,
+      crosshairMarkerVisible: false, visible: false,
+    });
+    ema20Ref.current  = mkLine('#f5a623');
+    ema50Ref.current  = mkLine('#ff6b35');
+    ema200Ref.current = mkLine('#9b59b6');
+    vwapRef.current   = mkLine('#4a9eff', true);
+
     // ── Crosshair move → show floating price label ──────────────────────────
     // Fires continuously as the user moves their cursor anywhere on the chart.
     // The price is read directly from the Y coordinate — not snapped to any candle.
@@ -271,6 +344,10 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       chart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
+      ema20Ref.current  = null;
+      ema50Ref.current  = null;
+      ema200Ref.current = null;
+      vwapRef.current   = null;
     };
   }, []);
 
@@ -339,6 +416,14 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     return () => { cancelled = true; };
   }, [symbol]);
 
+  // ── Sync overlay visibility when toggles change ───────────────────────────
+  useEffect(() => {
+    ema20Ref.current?.applyOptions({ visible: overlays.has('ema20') });
+    ema50Ref.current?.applyOptions({ visible: overlays.has('ema50') });
+    ema200Ref.current?.applyOptions({ visible: overlays.has('ema200') });
+    vwapRef.current?.applyOptions({ visible: overlays.has('vwap') });
+  }, [overlays]);
+
   // ── Load full candle series on timeframe or symbol change ─────────────────
   useEffect(() => {
     if (!seriesRef.current) return;
@@ -357,6 +442,14 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         chartRef.current!.timeScale().fitContent();
         if (chartData.length > 0)
           lastCandleTimeRef.current = chartData[chartData.length - 1].time as number;
+
+        // Compute and set overlay data
+        const closeLD: LineData[] = data.map((c) => ({ time: c.time as UTCTimestamp, value: c.close }));
+        ema20Ref.current?.setData(computeEMA(closeLD, 20));
+        ema50Ref.current?.setData(computeEMA(closeLD, 50));
+        ema200Ref.current?.setData(computeEMA(closeLD, 200));
+        vwapRef.current?.setData(computeVWAP(data));
+
         setChartLoading(false);
       })
       .catch((err: Error) => {
@@ -528,6 +621,31 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             ⚙
           </button>
         </div>
+      </div>
+
+      {/* Overlay toggle chips */}
+      <div style={overlayRowStyle}>
+        {OVERLAY_OPTIONS.map((opt) => {
+          const active = overlays.has(opt.key);
+          return (
+            <button
+              key={opt.key}
+              onClick={() => toggleOverlay(opt.key)}
+              title={`Toggle ${opt.label} overlay`}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '4px',
+                backgroundColor: active ? `${opt.color}18` : 'transparent',
+                border: `1px solid ${active ? opt.color + '66' : '#2a2a2e'}`,
+                borderRadius: '3px', color: active ? opt.color : '#444',
+                cursor: 'pointer', fontSize: '10px', fontWeight: active ? 600 : 400,
+                padding: '2px 6px', transition: 'all 0.12s',
+              }}
+            >
+              <span style={{ display: 'inline-block', width: '8px', height: '2px', backgroundColor: active ? opt.color : '#444', borderRadius: '1px' }} />
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Indicator preferences modal */}
@@ -756,4 +874,11 @@ const modalCloseBtnStyle: CSSProperties = {
   fontSize: '16px',
   lineHeight: 1,
   padding: '0 2px',
+};
+
+const overlayRowStyle: CSSProperties = {
+  display: 'flex',
+  gap: '4px',
+  padding: '4px 0 2px',
+  flexWrap: 'wrap',
 };
