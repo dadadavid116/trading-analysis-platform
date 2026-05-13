@@ -2,29 +2,11 @@ import { useState, useEffect, useRef, CSSProperties, FormEvent } from 'react';
 import { fetchAlerts, createAlert, deleteAlert, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
-/**
- * AlertsPanel — displays configured alert rules and lets you create new ones.
- *
- * Data source: /api/alerts/ (Phase 8).
- * Polls every 15 s to pick up newly triggered alerts automatically.
- *
- * Supported condition types:
- *   price_above       — triggers when BTC close > threshold
- *   price_below       — triggers when BTC close < threshold
- *   liquidation_spike — triggers when event count in window_minutes > threshold
- *
- * Trigger modes:
- *   once  — triggers once, stays triggered until the alert is deleted
- *   rearm — resets when the condition is no longer met, can trigger again
- *
- * Notifications are sent via Telegram when TELEGRAM_BOT_TOKEN and
- * TELEGRAM_CHAT_ID are configured. Alerts can also be deleted from this panel
- * or via the /delete_alert <id> Telegram bot command.
- */
 function AlertsPanel() {
   const [alerts, setAlerts]   = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [formName,        setFormName]        = useState('');
@@ -37,8 +19,6 @@ function AlertsPanel() {
   const [deletingId,      setDeletingId]      = useState<number | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>('default');
 
-  // Tracks alert IDs that were already triggered on the previous poll cycle.
-  // Populated silently on first load — only NEW triggers fire a notification.
   const knownTriggeredRef = useRef<Set<number> | null>(null);
 
   // ── Request notification permission on mount ───────────────────────────────
@@ -55,17 +35,13 @@ function AlertsPanel() {
     const load = () => {
       fetchAlerts()
         .then((data) => {
-          // ── Desktop notification logic ───────────────────────────────────
           if ('Notification' in window && Notification.permission === 'granted') {
             const currentTriggered = new Set(
               data.filter((a) => a.triggered_at).map((a) => a.id),
             );
-
             if (knownTriggeredRef.current === null) {
-              // First load — seed silently, no popup.
               knownTriggeredRef.current = currentTriggered;
             } else {
-              // Find IDs that are newly triggered since last poll.
               for (const id of currentTriggered) {
                 if (!knownTriggeredRef.current.has(id)) {
                   const alert = data.find((a) => a.id === id);
@@ -81,7 +57,6 @@ function AlertsPanel() {
               knownTriggeredRef.current = currentTriggered;
             }
           }
-
           setAlerts(data);
           setError(null);
           setLoading(false);
@@ -103,14 +78,8 @@ function AlertsPanel() {
     setFormError(null);
 
     const threshold = parseFloat(formThreshold);
-    if (!formName.trim()) {
-      setFormError('Name is required.');
-      return;
-    }
-    if (isNaN(threshold) || threshold <= 0) {
-      setFormError('Threshold must be a positive number.');
-      return;
-    }
+    if (!formName.trim()) { setFormError('Name is required.'); return; }
+    if (isNaN(threshold) || threshold <= 0) { setFormError('Threshold must be a positive number.'); return; }
     if (formType === 'liquidation_spike' && !formWindow.trim()) {
       setFormError('Window (minutes) is required for liquidation_spike.');
       return;
@@ -127,10 +96,12 @@ function AlertsPanel() {
       });
       const updated = await fetchAlerts();
       setAlerts(updated);
+      // Reset + close form on success
       setFormName('');
       setFormThreshold('');
       setFormWindow('');
       setFormTriggerMode('once');
+      setFormOpen(false);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Could not create alert.');
     } finally {
@@ -169,36 +140,64 @@ function AlertsPanel() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={panelStyles.card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #2a2a2e', paddingBottom: '8px' }}>
-        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>Alerts — BTC/USDT</h2>
-        {'Notification' in window && (
-          notifPermission === 'granted' ? (
-            <span style={{ fontSize: '10px', color: '#66bb6a' }}>🔔 Notifications on</span>
-          ) : notifPermission === 'denied' ? (
-            <span style={{ fontSize: '10px', color: '#f44336' }}>🔕 Notifications blocked</span>
-          ) : (
-            <button
-              style={{ fontSize: '10px', color: '#f5a623', background: 'none', border: '1px solid #f5a623', borderRadius: '4px', cursor: 'pointer', padding: '2px 6px' }}
-              onClick={() => Notification.requestPermission().then((p) => setNotifPermission(p))}
-            >
-              Enable notifications
-            </button>
-          )
-        )}
+
+      {/* ── Header row ─────────────────────────────────────────────────────── */}
+      <div style={headerStyle}>
+        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
+          Alerts
+        </h2>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+          {/* Notification permission indicator */}
+          {'Notification' in window && (
+            notifPermission === 'granted' ? (
+              <span style={{ fontSize: '10px', color: '#66bb6a' }}>🔔</span>
+            ) : notifPermission === 'denied' ? (
+              <span style={{ fontSize: '10px', color: '#f44336' }} title="Notifications blocked">🔕</span>
+            ) : (
+              <button
+                style={microBtnStyle}
+                onClick={() => Notification.requestPermission().then((p) => setNotifPermission(p))}
+              >
+                Enable notifications
+              </button>
+            )
+          )}
+
+          {/* New alert toggle */}
+          <button
+            style={toggleBtnStyle(formOpen)}
+            onClick={() => setFormOpen((prev) => !prev)}
+            title={formOpen ? 'Close form' : 'New alert'}
+          >
+            {formOpen ? 'Close ▲' : '+ New alert'}
+          </button>
+        </div>
       </div>
 
-      {/* Scrollable alert list — grows to fill available space */}
+      {/* ── Alert list ─────────────────────────────────────────────────────── */}
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {loading && <p style={panelStyles.muted}>Loading…</p>}
 
         {error && (
-          <p style={panelStyles.error}>
-            Could not load alerts — check that the API is running.
-          </p>
+          <p style={panelStyles.error}>Could not load alerts — check that the API is running.</p>
         )}
 
         {!loading && !error && alerts.length === 0 && (
-          <p style={panelStyles.muted}>No alerts configured yet. Create one below.</p>
+          <div style={emptyStateStyle}>
+            <div style={emptyIconStyle}>🔔</div>
+            <p style={emptyTitleStyle}>No active alerts</p>
+            <p style={emptySubStyle}>
+              Create an alert to keep track of the market — get notified when price or
+              liquidation thresholds are crossed.
+            </p>
+            <button
+              style={emptyCtaStyle}
+              onClick={() => setFormOpen(true)}
+            >
+              + Create your first alert
+            </button>
+          </div>
         )}
 
         {!loading && !error && alerts.length > 0 && (
@@ -246,98 +245,205 @@ function AlertsPanel() {
         )}
       </div>
 
-      {/* Create form — pinned at the bottom, always visible */}
-      <div style={{ borderTop: '1px solid #2a2a2e', paddingTop: '10px', flexShrink: 0 }}>
-        <p style={{ ...panelStyles.label, marginBottom: '6px' }}>New alert</p>
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <input
-            style={inputStyle}
-            placeholder="Name"
-            value={formName}
-            onChange={(e) => setFormName(e.target.value)}
-          />
-          <select
-            style={inputStyle}
-            value={formType}
-            onChange={(e) => setFormType(e.target.value)}
-          >
-            <option value="price_above">Price above</option>
-            <option value="price_below">Price below</option>
-            <option value="liquidation_spike">Liquidation spike</option>
-          </select>
-          <input
-            style={inputStyle}
-            placeholder={
-              formType === 'liquidation_spike'
-                ? 'Event count threshold'
-                : 'Price threshold (USD)'
-            }
-            value={formThreshold}
-            onChange={(e) => setFormThreshold(e.target.value)}
-            type="number"
-            min="0"
-            step="any"
-          />
-          {formType === 'liquidation_spike' && (
+      {/* ── Collapsible create form ─────────────────────────────────────────── */}
+      <div style={formPanelStyle(formOpen)}>
+        <div style={formInnerStyle}>
+          <p style={{ ...panelStyles.label, marginBottom: '8px' }}>New alert</p>
+          <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <input
               style={inputStyle}
-              placeholder="Window (minutes)"
-              value={formWindow}
-              onChange={(e) => setFormWindow(e.target.value)}
-              type="number"
-              min="1"
-              step="1"
+              placeholder="Name"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
             />
-          )}
-          <select
-            style={inputStyle}
-            value={formTriggerMode}
-            onChange={(e) => setFormTriggerMode(e.target.value)}
-          >
-            <option value="once">Once — trigger once, then stay triggered</option>
-            <option value="rearm">Rearm — reset and trigger again</option>
-          </select>
-          {formError && <p style={panelStyles.error}>{formError}</p>}
-          <button type="submit" style={buttonStyle} disabled={submitting}>
-            {submitting ? 'Creating…' : 'Create alert'}
-          </button>
-        </form>
+            <select
+              style={inputStyle}
+              value={formType}
+              onChange={(e) => setFormType(e.target.value)}
+            >
+              <option value="price_above">Price above</option>
+              <option value="price_below">Price below</option>
+              <option value="liquidation_spike">Liquidation spike</option>
+            </select>
+            <input
+              style={inputStyle}
+              placeholder={
+                formType === 'liquidation_spike' ? 'Event count threshold' : 'Price threshold (USD)'
+              }
+              value={formThreshold}
+              onChange={(e) => setFormThreshold(e.target.value)}
+              type="number"
+              min="0"
+              step="any"
+            />
+            {formType === 'liquidation_spike' && (
+              <input
+                style={inputStyle}
+                placeholder="Window (minutes)"
+                value={formWindow}
+                onChange={(e) => setFormWindow(e.target.value)}
+                type="number"
+                min="1"
+                step="1"
+              />
+            )}
+            <select
+              style={inputStyle}
+              value={formTriggerMode}
+              onChange={(e) => setFormTriggerMode(e.target.value)}
+            >
+              <option value="once">Once — trigger once, then stay triggered</option>
+              <option value="rearm">Rearm — reset and trigger again</option>
+            </select>
+            {formError && <p style={panelStyles.error}>{formError}</p>}
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button type="submit" style={buttonStyle} disabled={submitting}>
+                {submitting ? 'Creating…' : 'Create alert'}
+              </button>
+              <button
+                type="button"
+                style={cancelBtnStyle}
+                onClick={() => setFormOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
+
     </div>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
+
+const headerStyle: CSSProperties = {
+  display:       'flex',
+  alignItems:    'center',
+  borderBottom:  '1px solid #2a2a2e',
+  paddingBottom: '8px',
+  flexShrink:    0,
+};
+
+const toggleBtnStyle = (open: boolean): CSSProperties => ({
+  backgroundColor: open ? '#1e1e26' : '#1a2a3a',
+  border:          `1px solid ${open ? '#444' : '#3a6a9f'}`,
+  borderRadius:    '4px',
+  color:           open ? '#777' : '#90b8e0',
+  cursor:          'pointer',
+  fontSize:        '11px',
+  fontWeight:      600,
+  padding:         '4px 10px',
+  transition:      'all 0.15s',
+  whiteSpace:      'nowrap',
+});
+
+const microBtnStyle: CSSProperties = {
+  fontSize:        '10px',
+  color:           '#f5a623',
+  background:      'none',
+  border:          '1px solid #f5a623',
+  borderRadius:    '4px',
+  cursor:          'pointer',
+  padding:         '2px 6px',
+};
+
+const emptyStateStyle: CSSProperties = {
+  display:        'flex',
+  flexDirection:  'column',
+  alignItems:     'center',
+  justifyContent: 'center',
+  textAlign:      'center',
+  padding:        '24px 16px',
+  gap:            '8px',
+  height:         '100%',
+};
+
+const emptyIconStyle: CSSProperties = {
+  fontSize: '28px',
+  opacity:  0.4,
+};
+
+const emptyTitleStyle: CSSProperties = {
+  color:      '#888',
+  fontSize:   '13px',
+  fontWeight: 600,
+  margin:     0,
+};
+
+const emptySubStyle: CSSProperties = {
+  color:     '#555',
+  fontSize:  '11px',
+  maxWidth:  '220px',
+  lineHeight: '1.5',
+  margin:    0,
+};
+
+const emptyCtaStyle: CSSProperties = {
+  marginTop:       '4px',
+  backgroundColor: '#1a2a3a',
+  border:          '1px solid #3a6a9f',
+  borderRadius:    '4px',
+  color:           '#90b8e0',
+  cursor:          'pointer',
+  fontSize:        '11px',
+  fontWeight:      600,
+  padding:         '5px 14px',
+};
+
+const formPanelStyle = (open: boolean): CSSProperties => ({
+  maxHeight:    open ? '360px' : '0',
+  overflow:     'hidden',
+  transition:   'max-height 0.25s ease',
+  flexShrink:   0,
+});
+
+const formInnerStyle: CSSProperties = {
+  borderTop:  '1px solid #2a2a2e',
+  paddingTop: '10px',
+};
+
 const inputStyle: CSSProperties = {
   backgroundColor: '#111114',
-  border: '1px solid #2a2a2e',
-  borderRadius: '4px',
-  padding: '6px 8px',
-  color: '#d0d0d0',
-  fontSize: '12px',
-  width: '100%',
-  boxSizing: 'border-box',
+  border:          '1px solid #2a2a2e',
+  borderRadius:    '4px',
+  padding:         '6px 8px',
+  color:           '#d0d0d0',
+  fontSize:        '12px',
+  width:           '100%',
+  boxSizing:       'border-box',
 };
 
 const deleteButtonStyle: CSSProperties = {
   backgroundColor: 'transparent',
-  border: '1px solid #555',
-  borderRadius: '4px',
-  padding: '2px 7px',
-  color: '#f44336',
-  fontSize: '14px',
-  cursor: 'pointer',
-  lineHeight: 1,
+  border:          '1px solid #555',
+  borderRadius:    '4px',
+  padding:         '2px 7px',
+  color:           '#f44336',
+  fontSize:        '14px',
+  cursor:          'pointer',
+  lineHeight:      1,
 };
 
 const buttonStyle: CSSProperties = {
   backgroundColor: '#2a4a7f',
-  border: 'none',
-  borderRadius: '4px',
-  padding: '7px 12px',
-  color: '#d0d0d0',
-  fontSize: '12px',
-  cursor: 'pointer',
-  alignSelf: 'flex-start',
+  border:          'none',
+  borderRadius:    '4px',
+  padding:         '7px 12px',
+  color:           '#d0d0d0',
+  fontSize:        '12px',
+  cursor:          'pointer',
+};
+
+const cancelBtnStyle: CSSProperties = {
+  backgroundColor: 'transparent',
+  border:          '1px solid #333',
+  borderRadius:    '4px',
+  padding:         '7px 12px',
+  color:           '#666',
+  fontSize:        '12px',
+  cursor:          'pointer',
 };
 
 export default AlertsPanel;
