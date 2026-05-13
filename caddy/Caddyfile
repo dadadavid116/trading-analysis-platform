@@ -46,7 +46,7 @@
         # Route all other API requests to the FastAPI backend service.
         reverse_proxy /api/* api:8000
 
-        # Route all other requests to the Vite dev server frontend.
-        reverse_proxy * frontend:5173
+        # Route all other requests to the Nginx frontend (port 80 in prod build).
+        reverse_proxy * frontend:80
     }
 }
