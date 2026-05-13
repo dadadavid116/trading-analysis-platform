@@ -91,6 +91,32 @@ export function fetchRecentLiquidations(limit = 20, symbol = 'BTCUSDT'): Promise
   return apiFetch<LiquidationEvent[]>(`/liquidations/recent?limit=${limit}&symbol=${symbol}`);
 }
 
+export interface HeatmapCell {
+  pi:       number;   // price bin index (0 = price_min)
+  ti:       number;   // time bin index (0 = oldest)
+  buy_usd:  number;   // shorts liquidated (exchange bought to close)
+  sell_usd: number;   // longs liquidated  (exchange sold to close)
+}
+
+export interface LiquidationHeatmapData {
+  symbol:           string;
+  hours:            number;
+  price_min:        number;
+  price_max:        number;
+  price_bin_size:   number;
+  price_bins:       number;
+  time_bins:        number;
+  time_bin_minutes: number;
+  time_start:       string;
+  time_end:         string;
+  cells:            HeatmapCell[];
+}
+
+/** Fetch the price×time liquidation heatmap for a symbol. */
+export function fetchLiquidationHeatmap(symbol = 'BTCUSDT', hours = 24): Promise<LiquidationHeatmapData> {
+  return apiFetch<LiquidationHeatmapData>(`/liquidations/heatmap?symbol=${symbol}&hours=${hours}`);
+}
+
 /** Fetch the latest order book snapshot for a symbol. */
 export function fetchOrderBookSnapshot(symbol = 'BTCUSDT'): Promise<OrderBookSnapshot> {
   return apiFetch<OrderBookSnapshot>(`/orderbook/snapshot?symbol=${symbol}`);
