@@ -507,3 +507,34 @@ export interface ScannerResponse {
 export function fetchScannerSignals(): Promise<ScannerResponse> {
   return apiFetch<ScannerResponse>('/scanner/signals');
 }
+
+export interface TradeSetup {
+  symbol:       string;
+  generated_at: string;
+  scanner_bias: string;
+  bias:         'long' | 'short';
+  entry_zone:   { low: number; high: number };
+  stop_loss:    number;
+  take_profit:  number[];
+  risk_reward:  number;
+  reasoning:    string;
+  key_risks:    string;
+}
+
+/** Request an AI-generated trade setup for the given symbol + scanner signals. */
+export async function requestTradeSetup(
+  symbol:  string,
+  signals: ScannerSignal[],
+  bias:    string,
+): Promise<TradeSetup> {
+  const response = await fetch(`${BASE_URL}/scanner/setup`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ symbol, signals, bias }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string })?.detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<TradeSetup>;
+}

@@ -1,19 +1,31 @@
 """
-routers/scanner.py — Real-time market signal scanner.
+routers/scanner.py — Real-time market signal scanner + AI trade setup.
 
 Runs signal checks across BTC/ETH/SOL using data already in the database.
 No new tables required. All checks read from existing price, liquidation,
 funding, OI, and LS-ratio tables.
 
-GET /api/scanner/signals — ranked signal list per symbol
+GET  /api/scanner/signals — ranked signal list per symbol
+POST /api/scanner/setup   — AI trade setup for the top candidate
 """
 
 import asyncio
+import json
+import re
 from datetime import datetime, timedelta, timezone
+from typing import Any, List
 
-from fastapi import APIRouter, Depends
+import anthropic
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
+from app.database import get_db
+from app.models.price import PriceCandle
+from app.models.liquidation import Liquidation
+from app.models.derivatives import FundingRate, OpenInterest, LSRatio
 
 from app.database import get_db
 from app.models.price import PriceCandle
@@ -258,3 +270,149 @@ async def get_scanner_signals(db: AsyncSession = Depends(get_db)):
 
     results.sort(key=lambda r: r["signal_count"], reverse=True)
     return {"symbols": results, "scanned_at": datetime.now(timezone.utc).isoformat()}
+
+
+# ── AI trade setup ─────────────────────────────────────────────────────────────
+
+class SetupRequest(BaseModel):
+    symbol:  str         = "BTCUSDT"
+    signals: List[Any]   = []
+    bias:    str         = "neutral"
+
+
+def _extract_json(text: str) -> dict:
+    """Pull the first JSON object out of a Claude response string."""
+    for candidate in [text, re.sub(r"```(?:json)?\s*|\s*```", "", text)]:
+        try:
+            return json.loads(candidate.strip())
+        except json.JSONDecodeError:
+            pass
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            pass
+    raise ValueError("Could not extract JSON from Claude response.")
+
+
+@router.post("/setup")
+async def generate_trade_setup(body: SetupRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Generate an AI trade setup for the given symbol.
+
+    Fetches current price, funding, OI, and LS-ratio from the DB, combines
+    them with the caller-supplied scanner signals, and asks Claude to produce
+    a structured entry/SL/TP plan.  Returns raw JSON — no markdown wrapper.
+    """
+    if not settings.anthropic_api_key:
+        raise HTTPException(status_code=503, detail="ANTHROPIC_API_KEY not configured on this server.")
+
+    sym = body.symbol.upper()
+
+    # ── Fetch market context ──────────────────────────────────────────────────
+    r = await db.execute(
+        select(PriceCandle).where(PriceCandle.symbol == sym)
+        .order_by(desc(PriceCandle.timestamp)).limit(1)
+    )
+    candle = r.scalar_one_or_none()
+
+    r = await db.execute(
+        select(FundingRate).where(FundingRate.symbol == sym)
+        .order_by(desc(FundingRate.timestamp)).limit(1)
+    )
+    funding = r.scalar_one_or_none()
+
+    r = await db.execute(
+        select(OpenInterest).where(OpenInterest.symbol == sym)
+        .order_by(desc(OpenInterest.timestamp)).limit(1)
+    )
+    oi = r.scalar_one_or_none()
+
+    r = await db.execute(
+        select(LSRatio)
+        .where(LSRatio.symbol == sym, LSRatio.ratio_type == "global_account")
+        .order_by(desc(LSRatio.timestamp)).limit(1)
+    )
+    ls = r.scalar_one_or_none()
+
+    # ── Build prompt ──────────────────────────────────────────────────────────
+    price_str   = f"${float(candle.close):,.2f}"     if candle  else "unknown"
+    funding_str = f"{float(funding.funding_rate)*100:.4f}%"   if funding else "N/A"
+    oi_str      = f"{float(oi.oi_value):,.0f} contracts"      if oi      else "N/A"
+    ls_str      = (
+        f"{float(ls.long_ratio)*100:.1f}% long / {float(ls.short_ratio)*100:.1f}% short"
+        if ls else "N/A"
+    )
+
+    signals_text = "\n".join(
+        f"- [{s.get('direction','?').upper()} {s.get('severity','?').upper()}] {s.get('label','?')}"
+        for s in body.signals
+    ) or "- No specific signals detected — use general market context."
+
+    prompt = f"""You are a professional crypto futures trader. Generate a precise, actionable trade setup.
+
+Symbol: {sym.replace('USDT', '/USDT')}
+Current price: {price_str}
+Scanner bias: {body.bias.upper()}
+
+Active signals:
+{signals_text}
+
+Derivatives snapshot:
+- Funding rate: {funding_str}
+- Open interest: {oi_str}
+- Long/Short ratio: {ls_str}
+
+Rules:
+1. The setup direction (long or short) must match the scanner bias when bias is not neutral.
+2. Entry zone must be a tight realistic range around the current price (within 1-2%).
+3. Stop loss must be placed beyond a clear invalidation level.
+4. Provide exactly 3 take profit levels at realistic distances.
+5. risk_reward = (TP1 distance from entry mid) / (SL distance from entry mid), round to 1 decimal.
+6. reasoning: 2-3 sentences explaining the trade rationale based on the signals.
+7. key_risks: 1 sentence on the main scenario that would invalidate this setup.
+
+Respond with ONLY a raw JSON object — no markdown, no code fences, no extra text:
+{{"bias":"long or short","entry_zone":{{"low":number,"high":number}},"stop_loss":number,"take_profit":[number,number,number],"risk_reward":number,"reasoning":"string","key_risks":"string"}}"""
+
+    # ── Call Claude ───────────────────────────────────────────────────────────
+    try:
+        client  = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        message = await client.messages.create(
+            model      = "claude-haiku-4-5-20251001",
+            max_tokens = 500,
+            messages   = [{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Claude API error: {exc}")
+
+    try:
+        setup = _extract_json(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    # ── Log event ─────────────────────────────────────────────────────────────
+    try:
+        from app.services.event_logger import log_event
+        await log_event(
+            service    = "analysis",
+            event_type = "trade_setup",
+            message    = (
+                f"AI setup: {sym} {setup.get('bias','?').upper()} "
+                f"entry {setup.get('entry_zone',{}).get('low','?')}–{setup.get('entry_zone',{}).get('high','?')} "
+                f"R/R {setup.get('risk_reward','?')}×"
+            ),
+            symbol = sym,
+            detail = {"bias": setup.get("bias"), "risk_reward": setup.get("risk_reward")},
+        )
+    except Exception:
+        pass
+
+    return {
+        "symbol":       sym,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "scanner_bias": body.bias,
+        **setup,
+    }
