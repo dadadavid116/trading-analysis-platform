@@ -36,9 +36,9 @@
             {$CADDY_USER} {$CADDY_HASHED_PASSWORD}
         }
 
-        # SSE price stream — flush immediately so events reach the browser in real time.
-        # Without flush_interval -1 Caddy buffers the response and the panel never updates.
-        @sse path /api/price/stream
+        # SSE endpoints — flush immediately so events reach the browser in real time.
+        # Without flush_interval -1 Caddy buffers the response and panels never update.
+        @sse path /api/price/stream /api/events/stream
         reverse_proxy @sse api:8000 {
             flush_interval -1
         }
