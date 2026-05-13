@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, CSSProperties } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine } from 'lightweight-charts';
-import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, PriceCandle, KlineCandle, Alert } from '../api';
+import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, fetchPriceLevels, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
 // ── Indicator definitions ──────────────────────────────────────────────────────
@@ -117,6 +117,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const [activeIndicators, setActiveIndicators] = useState<string[]>(loadIndicators);
   const [showIndicatorModal, setShowIndicatorModal] = useState(false);
   const analysisLinesRef = useRef<IPriceLine[]>([]);
+  const levelsLinesRef   = useRef<IPriceLine[]>([]);
 
   // Alert popover shown on chart click.
   const [popover, setPopover]           = useState<{ x: number; y: number; price: number } | null>(null);
@@ -293,13 +294,49 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     return () => clearInterval(id);
   }, [timeframe, symbol]);
 
-  // ── Clear analysis lines when symbol changes ─────────────────────────────
+  // ── Clear analysis + S&R lines when symbol changes ───────────────────────
   useEffect(() => {
     if (!seriesRef.current) return;
     for (const line of analysisLinesRef.current) {
       try { seriesRef.current.removePriceLine(line); } catch { /* ignore */ }
     }
     analysisLinesRef.current = [];
+    for (const line of levelsLinesRef.current) {
+      try { seriesRef.current.removePriceLine(line); } catch { /* ignore */ }
+    }
+    levelsLinesRef.current = [];
+  }, [symbol]);
+
+  // ── Draw S&R level lines on symbol change ────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    fetchPriceLevels(symbol)
+      .then((data) => {
+        if (cancelled || !seriesRef.current) return;
+        const series = seriesRef.current;
+        for (const line of levelsLinesRef.current) {
+          try { series.removePriceLine(line); } catch { /* ignore */ }
+        }
+        levelsLinesRef.current = [];
+        for (const lv of data.support) {
+          const line = series.createPriceLine({
+            price: lv.price, color: '#26a69a', lineWidth: 1,
+            lineStyle: LineStyle.Dashed, axisLabelVisible: true,
+            title: `S×${lv.touches}`,
+          });
+          levelsLinesRef.current.push(line);
+        }
+        for (const lv of data.resistance) {
+          const line = series.createPriceLine({
+            price: lv.price, color: '#ef5350', lineWidth: 1,
+            lineStyle: LineStyle.Dashed, axisLabelVisible: true,
+            title: `R×${lv.touches}`,
+          });
+          levelsLinesRef.current.push(line);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [symbol]);
 
   // ── Load full candle series on timeframe or symbol change ─────────────────

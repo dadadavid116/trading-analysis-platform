@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db, AsyncSessionLocal
 from app.models.price import PriceCandle
 from app.schemas.price import PriceCandleSchema
+from app.services.levels import find_sr_levels
 
 router = APIRouter(prefix="/price", tags=["price"])
 
@@ -146,6 +147,16 @@ async def get_price_history(
         .limit(limit)
     )
     return result.scalars().all()
+
+
+@router.get("/levels")
+async def get_price_levels(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return detected support and resistance levels for the given symbol."""
+    sym = _resolve_symbol(symbol)
+    return await find_sr_levels(sym, db)
 
 
 @router.get("/klines")

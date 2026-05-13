@@ -636,3 +636,22 @@ export interface JournalStats {
 export function fetchJournalStats(): Promise<JournalStats> {
   return apiFetch<JournalStats>('/journal/stats');
 }
+
+// ── Price Levels (Phase 37) ───────────────────────────────────────────────────
+
+export interface PriceLevel {
+  price:          number;
+  touches:        number;
+  pct_from_price: number;
+}
+
+export interface PriceLevelsData {
+  support:       PriceLevel[];
+  resistance:    PriceLevel[];
+  current_price: number | null;
+}
+
+/** Fetch key support and resistance levels for a symbol. */
+export function fetchPriceLevels(symbol = 'BTCUSDT'): Promise<PriceLevelsData> {
+  return apiFetch<PriceLevelsData>(`/price/levels?symbol=${symbol}`);
+}

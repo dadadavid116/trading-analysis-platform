@@ -45,4 +45,5 @@
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 37 | TBD | Planned |
+| 37 | Key S&R Levels — pivot clustering, `/price/levels` endpoint, chart price lines, scanner signal | ✅ Done |
+| 38 | TBD | Planned |

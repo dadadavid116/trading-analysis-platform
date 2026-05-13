@@ -402,6 +402,39 @@ async def _volume_signal(symbol: str, db: AsyncSession) -> list[dict]:
     }]
 
 
+async def _key_level_signal(symbol: str, db: AsyncSession) -> list[dict]:
+    """Fire when price is within 0.3% of a key support or resistance level."""
+    from app.services.levels import find_sr_levels
+    try:
+        data = await find_sr_levels(symbol, db, lookback=120, max_levels=5)
+    except Exception:
+        return []
+    current = data.get("current_price")
+    if not current:
+        return []
+
+    signals = []
+    for level in data.get("support", []):
+        pct_dist = abs(level["pct_from_price"])
+        if pct_dist <= 0.3:
+            severity = "alert" if level["touches"] >= 4 else "warning"
+            signals.append({
+                "type": "key_level_support", "timeframe": "1H",
+                "label": f"At support ${level['price']:,.0f} ({level['touches']}×)",
+                "severity": severity, "direction": "bullish", "value": round(pct_dist, 3),
+            })
+    for level in data.get("resistance", []):
+        pct_dist = abs(level["pct_from_price"])
+        if pct_dist <= 0.3:
+            severity = "alert" if level["touches"] >= 4 else "warning"
+            signals.append({
+                "type": "key_level_resistance", "timeframe": "1H",
+                "label": f"At resistance ${level['price']:,.0f} ({level['touches']}×)",
+                "severity": severity, "direction": "bearish", "value": round(pct_dist, 3),
+            })
+    return signals
+
+
 # ── Per-symbol aggregator ──────────────────────────────────────────────────────
 
 async def _scan_symbol(symbol: str, db: AsyncSession) -> dict:
@@ -414,8 +447,9 @@ async def _scan_symbol(symbol: str, db: AsyncSession) -> dict:
     price_1h    = await _price_signal_1h(symbol, db)
     pattern_sig = await _candle_pattern_signal(symbol, db)
     volume_sig  = await _volume_signal(symbol, db)
+    level_sig   = await _key_level_signal(symbol, db)
 
-    all_signals = price_sig + liq_sig + fund_sig + oi_sig + ls_sig + price_15m + price_1h + pattern_sig + volume_sig
+    all_signals = price_sig + liq_sig + fund_sig + oi_sig + ls_sig + price_15m + price_1h + pattern_sig + volume_sig + level_sig
 
     bull_score = sum(_SEVERITY_WEIGHT[s["severity"]] for s in all_signals if s["direction"] == "bullish")
     bear_score = sum(_SEVERITY_WEIGHT[s["severity"]] for s in all_signals if s["direction"] == "bearish")
