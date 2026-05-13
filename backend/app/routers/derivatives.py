@@ -9,7 +9,7 @@ Endpoints:
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,11 +21,15 @@ router = APIRouter(prefix="/derivatives", tags=["derivatives"])
 
 
 @router.get("/funding", response_model=FundingRateSchema)
-async def get_funding_rate(db: AsyncSession = Depends(get_db)):
-    """Return the most recent funding rate snapshot."""
+async def get_funding_rate(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the most recent funding rate snapshot for the given symbol."""
+    sym    = symbol.upper()
     result = await db.execute(
         select(FundingRate)
-        .where(FundingRate.symbol == "BTCUSDT")
+        .where(FundingRate.symbol == sym)
         .order_by(desc(FundingRate.timestamp))
         .limit(1)
     )
@@ -33,11 +37,11 @@ async def get_funding_rate(db: AsyncSession = Depends(get_db)):
     if row is None:
         raise HTTPException(status_code=404, detail="No funding rate data yet — collector may still be starting.")
 
-    mark  = float(row.mark_price)  if row.mark_price  else None
-    index = float(row.index_price) if row.index_price else None
+    mark        = float(row.mark_price)  if row.mark_price  else None
+    index       = float(row.index_price) if row.index_price else None
     premium_pct = ((mark - index) / index * 100) if mark and index and index != 0 else 0.0
-    rate = float(row.funding_rate)
-    sentiment = "bearish" if rate > 0.0001 else "bullish" if rate < -0.0001 else "neutral"
+    rate        = float(row.funding_rate)
+    sentiment   = "bearish" if rate > 0.0001 else "bullish" if rate < -0.0001 else "neutral"
 
     return FundingRateSchema(
         symbol       = row.symbol,
@@ -51,14 +55,17 @@ async def get_funding_rate(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/oi", response_model=OpenInterestSchema)
-async def get_open_interest(db: AsyncSession = Depends(get_db)):
+async def get_open_interest(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    db: AsyncSession = Depends(get_db),
+):
     """Return the most recent open interest snapshot with 1H and 4H deltas."""
+    sym = symbol.upper()
     now = datetime.now(timezone.utc)
 
-    # Latest row
     result = await db.execute(
         select(OpenInterest)
-        .where(OpenInterest.symbol == "BTCUSDT")
+        .where(OpenInterest.symbol == sym)
         .order_by(desc(OpenInterest.timestamp))
         .limit(1)
     )
@@ -74,7 +81,7 @@ async def get_open_interest(db: AsyncSession = Depends(get_db)):
         res = await db.execute(
             select(OpenInterest)
             .where(
-                OpenInterest.symbol == "BTCUSDT",
+                OpenInterest.symbol == sym,
                 OpenInterest.timestamp >= since,
                 OpenInterest.timestamp <= until,
             )
@@ -111,13 +118,17 @@ async def get_open_interest(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/ls-ratio", response_model=LSRatioSchema)
-async def get_ls_ratio(db: AsyncSession = Depends(get_db)):
+async def get_ls_ratio(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    db: AsyncSession = Depends(get_db),
+):
     """Return the most recent top-trader and global long/short ratios."""
+    sym = symbol.upper()
 
     async def latest_for(ratio_type: str) -> LSRatioEntry | None:
         res = await db.execute(
             select(LSRatio)
-            .where(LSRatio.symbol == "BTCUSDT", LSRatio.ratio_type == ratio_type)
+            .where(LSRatio.symbol == sym, LSRatio.ratio_type == ratio_type)
             .order_by(desc(LSRatio.timestamp))
             .limit(1)
         )
@@ -130,11 +141,11 @@ async def get_ls_ratio(db: AsyncSession = Depends(get_db)):
             updated_at = row.timestamp,
         )
 
-    top    = await latest_for("top_account")
+    top     = await latest_for("top_account")
     global_ = await latest_for("global_account")
 
     return LSRatioSchema(
-        symbol         = "BTCUSDT",
+        symbol         = sym,
         top_account    = top,
         global_account = global_,
     )

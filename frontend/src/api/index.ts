@@ -62,14 +62,14 @@ async function apiFetch<T>(path: string): Promise<T> {
 
 // ── Endpoint functions ─────────────────────────────────────────────────────────
 
-/** Fetch the latest BTC price candle. */
-export function fetchLatestPrice(): Promise<PriceCandle> {
-  return apiFetch<PriceCandle>('/price/latest');
+/** Fetch the latest price candle for a symbol. */
+export function fetchLatestPrice(symbol = 'BTCUSDT'): Promise<PriceCandle> {
+  return apiFetch<PriceCandle>(`/price/latest?symbol=${symbol}`);
 }
 
-/** Fetch paginated BTC candle history. */
-export function fetchPriceHistory(limit = 60): Promise<PriceCandle[]> {
-  return apiFetch<PriceCandle[]>(`/price/history?limit=${limit}`);
+/** Fetch paginated candle history for a symbol. */
+export function fetchPriceHistory(limit = 60, symbol = 'BTCUSDT'): Promise<PriceCandle[]> {
+  return apiFetch<PriceCandle[]>(`/price/history?limit=${limit}&symbol=${symbol}`);
 }
 
 export interface KlineCandle {
@@ -81,19 +81,19 @@ export interface KlineCandle {
   volume: number;
 }
 
-/** Fetch OHLCV candles for a given interval from Binance (via the backend). */
-export function fetchKlines(interval: string, limit = 100): Promise<KlineCandle[]> {
-  return apiFetch<KlineCandle[]>(`/price/klines?interval=${interval}&limit=${limit}`);
+/** Fetch OHLCV candles for a given interval and symbol from OKX (via the backend). */
+export function fetchKlines(interval: string, limit = 100, symbol = 'BTCUSDT'): Promise<KlineCandle[]> {
+  return apiFetch<KlineCandle[]>(`/price/klines?interval=${interval}&limit=${limit}&symbol=${symbol}`);
 }
 
-/** Fetch recent liquidation events. */
-export function fetchRecentLiquidations(limit = 20): Promise<LiquidationEvent[]> {
-  return apiFetch<LiquidationEvent[]>(`/liquidations/recent?limit=${limit}`);
+/** Fetch recent liquidation events for a symbol. */
+export function fetchRecentLiquidations(limit = 20, symbol = 'BTCUSDT'): Promise<LiquidationEvent[]> {
+  return apiFetch<LiquidationEvent[]>(`/liquidations/recent?limit=${limit}&symbol=${symbol}`);
 }
 
-/** Fetch the latest order book snapshot. */
-export function fetchOrderBookSnapshot(): Promise<OrderBookSnapshot> {
-  return apiFetch<OrderBookSnapshot>('/orderbook/snapshot');
+/** Fetch the latest order book snapshot for a symbol. */
+export function fetchOrderBookSnapshot(symbol = 'BTCUSDT'): Promise<OrderBookSnapshot> {
+  return apiFetch<OrderBookSnapshot>(`/orderbook/snapshot?symbol=${symbol}`);
 }
 
 export interface AnalysisSummary {
@@ -221,9 +221,9 @@ export interface LiquidationStats {
   windows: Record<string, LiquidationWindow>;
 }
 
-/** Fetch rolling liquidation aggregates (5m / 15m / 1H). */
-export function fetchLiquidationStats(): Promise<LiquidationStats> {
-  return apiFetch<LiquidationStats>('/liquidations/stats');
+/** Fetch rolling liquidation aggregates (5m / 15m / 1H) for a symbol. */
+export function fetchLiquidationStats(symbol = 'BTCUSDT'): Promise<LiquidationStats> {
+  return apiFetch<LiquidationStats>(`/liquidations/stats?symbol=${symbol}`);
 }
 
 // ── Strategy ───────────────────────────────────────────────────────────────────
@@ -385,23 +385,52 @@ export interface LSRatioData {
   global_account: LSRatioEntry | null;
 }
 
-export async function fetchFundingRate(): Promise<FundingRateData | null> {
-  const r = await fetch(`${BASE_URL}/derivatives/funding`);
+export async function fetchFundingRate(symbol = 'BTCUSDT'): Promise<FundingRateData | null> {
+  const r = await fetch(`${BASE_URL}/derivatives/funding?symbol=${symbol}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`API error ${r.status}`);
   return r.json() as Promise<FundingRateData>;
 }
 
-export async function fetchOpenInterest(): Promise<OpenInterestData | null> {
-  const r = await fetch(`${BASE_URL}/derivatives/oi`);
+export async function fetchOpenInterest(symbol = 'BTCUSDT'): Promise<OpenInterestData | null> {
+  const r = await fetch(`${BASE_URL}/derivatives/oi?symbol=${symbol}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`API error ${r.status}`);
   return r.json() as Promise<OpenInterestData>;
 }
 
-export async function fetchLSRatio(): Promise<LSRatioData | null> {
-  const r = await fetch(`${BASE_URL}/derivatives/ls-ratio`);
+export async function fetchLSRatio(symbol = 'BTCUSDT'): Promise<LSRatioData | null> {
+  const r = await fetch(`${BASE_URL}/derivatives/ls-ratio?symbol=${symbol}`);
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`API error ${r.status}`);
   return r.json() as Promise<LSRatioData>;
+}
+
+// ── Symbol registry + relative strength (Phase 28) ────────────────────────────
+
+export interface SymbolInfo {
+  symbol:            string;
+  okx_instrument_id: string | null;
+  binance_symbol:    string | null;
+  display_name:      string;
+  is_active:         boolean;
+  sort_order:        number;
+}
+
+export interface RelativeStrengthEntry {
+  symbol:         string;
+  display_name:   string;
+  last_price:     number;
+  open_24h:       number;
+  change_pct_24h: number;
+}
+
+/** Fetch all active tracked symbols. */
+export function fetchSymbols(): Promise<SymbolInfo[]> {
+  return apiFetch<SymbolInfo[]>('/symbols/');
+}
+
+/** Fetch 24H % change for all active symbols from OKX tickers. */
+export function fetchRelativeStrength(): Promise<RelativeStrengthEntry[]> {
+  return apiFetch<RelativeStrengthEntry[]>('/symbols/relative-strength');
 }

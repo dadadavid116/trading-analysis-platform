@@ -16,7 +16,9 @@ import { panelStyles } from './panelStyles';
  * Polls all three endpoints every 60 s. On 404 (collector not started yet)
  * shows a "waiting for data" placeholder rather than an error.
  */
-function DerivativesPanel() {
+interface DerivativesPanelProps { symbol?: string; }
+
+function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
   const [funding, setFunding] = useState<FundingRateData | null>(null);
   const [oi, setOI]           = useState<OpenInterestData | null>(null);
   const [ls, setLS]           = useState<LSRatioData | null>(null);
@@ -25,7 +27,7 @@ function DerivativesPanel() {
 
   useEffect(() => {
     const load = () => {
-      Promise.all([fetchFundingRate(), fetchOpenInterest(), fetchLSRatio()])
+      Promise.all([fetchFundingRate(symbol), fetchOpenInterest(symbol), fetchLSRatio(symbol)])
         .then(([f, o, l]) => {
           setFunding(f);
           setOI(o);
@@ -38,7 +40,7 @@ function DerivativesPanel() {
     load();
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
-  }, []);
+  }, [symbol]);
 
   const fmtRate = (r: number) => `${r >= 0 ? '+' : ''}${(r * 100).toFixed(4)}%`;
   const fmtOI   = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}K BTC` : `${v.toFixed(0)} BTC`;
@@ -56,7 +58,7 @@ function DerivativesPanel() {
     <div style={panelStyles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #2a2a2e', paddingBottom: '8px' }}>
         <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
-          Derivatives — BTC/USDT
+          Derivatives — {symbol.replace('USDT', '')}/USDT
         </h2>
         {updatedAt && (
           <span style={{ fontSize: '9px', color: '#444' }}>

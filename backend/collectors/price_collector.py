@@ -1,18 +1,16 @@
 """
-price_collector.py — Live BTC/USDT price collector with real-time upserts.
+price_collector.py — Multi-symbol live price collector via OKX WebSocket.
 
-Connects to the Binance kline WebSocket stream and upserts the current candle
-on EVERY tick — not just on candle close. This keeps the DB within ~250 ms
-of the live Binance price at all times.
+Primary source: OKX perpetual swap contracts (BTC/ETH/SOL USDT-SWAP).
+Subscribes to the candle1m channel and upserts on every tick so the DB
+stays within ~1 second of the live OKX price.
 
-The upsert uses ON CONFLICT (symbol, timestamp) DO UPDATE, so:
-  - Each tick within a 1-minute window overwrites the same row with the latest
-    open, high, low, close, and volume values.
-  - When the candle closes (kline["x"] == True), the final definitive values
-    are written and the row becomes a permanent closed candle.
-  - The next tick starts a new row at the next candle's timestamp.
+OKX candle1m data format:
+  [ts_ms, open, high, low, close, vol_contracts, vol_ccy, vol_ccy_quote, confirm]
+  confirm == "1" means the candle has closed; "0" means it is still live.
 
-Stream: wss://stream.binance.com:9443/ws/btcusdt@kline_1m
+The upsert key is (symbol, timestamp) matching the unique index created on startup.
+OKX sends a plain-text "ping" every 30 s — we reply "pong" to keep the connection.
 """
 
 import asyncio
@@ -28,60 +26,83 @@ from app.models.price import PriceCandle
 
 logger = logging.getLogger(__name__)
 
-STREAM_URL = "wss://stream.binance.com:9443/ws/btcusdt@kline_1m"
+OKX_WS_URL  = "wss://ws.okx.com:8443/ws/v5/public"
+INSTRUMENTS = ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"]
+SYMBOL_MAP  = {
+    "BTC-USDT-SWAP": "BTCUSDT",
+    "ETH-USDT-SWAP": "ETHUSDT",
+    "SOL-USDT-SWAP": "SOLUSDT",
+}
+
+_SUBSCRIBE = json.dumps({
+    "op": "subscribe",
+    "args": [{"channel": "candle1m", "instId": inst} for inst in INSTRUMENTS],
+})
 
 
 async def run() -> None:
-    """Connect to the Binance kline stream and upsert every tick."""
-    logger.info("Price collector starting (live-tick mode)...")
+    logger.info("Price collector starting (OKX multi-symbol, instruments=%s)...", INSTRUMENTS)
     while True:
         try:
-            async with websockets.connect(STREAM_URL) as ws:
-                logger.info("Price collector: connected to Binance kline stream.")
+            async with websockets.connect(OKX_WS_URL) as ws:
+                await ws.send(_SUBSCRIBE)
+                logger.info("Price collector: subscribed to OKX candle1m.")
+
                 async for raw in ws:
+                    # OKX keepalive — reply to avoid server-side disconnect
+                    if raw == "ping":
+                        await ws.send("pong")
+                        continue
+
                     msg = json.loads(raw)
-                    kline = msg["k"]
 
-                    # kline["T"] is the candle close time — constant for all
-                    # ticks within the same 1-minute candle, so it's our upsert key.
-                    ts = datetime.fromtimestamp(kline["T"] / 1000, tz=timezone.utc)
+                    # Skip subscription confirm / error events
+                    if "event" in msg:
+                        continue
 
-                    stmt = (
-                        insert(PriceCandle)
-                        .values(
-                            symbol    = kline["s"],
-                            timestamp = ts,
-                            open      = float(kline["o"]),
-                            high      = float(kline["h"]),
-                            low       = float(kline["l"]),
-                            close     = float(kline["c"]),
-                            volume    = float(kline["v"]),
+                    inst_id   = msg.get("arg", {}).get("instId", "")
+                    canonical = SYMBOL_MAP.get(inst_id)
+                    data      = msg.get("data", [])
+                    if not canonical or not data:
+                        continue
+
+                    for candle in data:
+                        # [ts_ms, open, high, low, close, vol, volCcy, volCcyQuote, confirm]
+                        ts        = datetime.fromtimestamp(int(candle[0]) / 1000, tz=timezone.utc)
+                        is_closed = candle[8] == "1"
+
+                        stmt = (
+                            insert(PriceCandle)
+                            .values(
+                                symbol    = canonical,
+                                timestamp = ts,
+                                open      = float(candle[1]),
+                                high      = float(candle[2]),
+                                low       = float(candle[3]),
+                                close     = float(candle[4]),
+                                volume    = float(candle[5]),
+                            )
+                            .on_conflict_do_update(
+                                index_elements=["symbol", "timestamp"],
+                                set_={
+                                    "open":   float(candle[1]),
+                                    "high":   float(candle[2]),
+                                    "low":    float(candle[3]),
+                                    "close":  float(candle[4]),
+                                    "volume": float(candle[5]),
+                                },
+                            )
                         )
-                        .on_conflict_do_update(
-                            # Matches the unique index created on startup.
-                            index_elements=["symbol", "timestamp"],
-                            set_={
-                                "open":   float(kline["o"]),
-                                "high":   float(kline["h"]),
-                                "low":    float(kline["l"]),
-                                "close":  float(kline["c"]),
-                                "volume": float(kline["v"]),
-                            },
-                        )
-                    )
 
-                    async with AsyncSessionLocal() as session:
-                        await session.execute(stmt)
-                        await session.commit()
+                        async with AsyncSessionLocal() as session:
+                            await session.execute(stmt)
+                            await session.commit()
 
-                    if kline["x"]:
-                        # Log only on candle close to avoid log spam.
-                        logger.info(
-                            "Candle closed: %s  close=%.2f  volume=%.4f",
-                            kline["s"],
-                            float(kline["c"]),
-                            float(kline["v"]),
-                        )
+                        if is_closed:
+                            logger.info(
+                                "Candle closed: %s  close=%.4f  vol=%.2f",
+                                canonical, float(candle[4]), float(candle[5]),
+                            )
 
         except Exception as exc:
             logger.error("Price collector error: %s — reconnecting in 5 s.", exc)

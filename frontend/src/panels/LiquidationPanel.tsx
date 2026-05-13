@@ -10,7 +10,9 @@ import { panelStyles } from './panelStyles';
  *
  * Event table: last 10 individual events, newest first.
  */
-function LiquidationPanel() {
+interface LiquidationPanelProps { symbol?: string; }
+
+function LiquidationPanel({ symbol = 'BTCUSDT' }: LiquidationPanelProps) {
   const [events, setEvents] = useState<LiquidationEvent[]>([]);
   const [stats, setStats]   = useState<LiquidationStats | null>(null);
   const [error, setError]   = useState<string | null>(null);
@@ -18,7 +20,7 @@ function LiquidationPanel() {
 
   useEffect(() => {
     const fetchData = () => {
-      Promise.all([fetchRecentLiquidations(10), fetchLiquidationStats()])
+      Promise.all([fetchRecentLiquidations(10, symbol), fetchLiquidationStats(symbol)])
         .then(([evs, s]) => {
           setEvents(evs);
           setStats(s);
@@ -30,7 +32,7 @@ function LiquidationPanel() {
     fetchData();
     const id = setInterval(fetchData, 10_000);
     return () => clearInterval(id);
-  }, []);
+  }, [symbol]);
 
   const fmtUsd = (v: number) => {
     if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
@@ -40,7 +42,7 @@ function LiquidationPanel() {
 
   return (
     <div style={panelStyles.card}>
-      <h2 style={panelStyles.title}>Liquidations — BTC/USDT</h2>
+      <h2 style={panelStyles.title}>Liquidations — {symbol.replace('USDT', '')}/USDT</h2>
 
       {/* Rolling stats bar */}
       {stats && (

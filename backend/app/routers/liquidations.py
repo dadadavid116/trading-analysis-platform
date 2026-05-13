@@ -22,13 +22,14 @@ router = APIRouter(prefix="/liquidations", tags=["liquidations"])
 
 @router.get("/recent", response_model=List[LiquidationSchema])
 async def get_recent_liquidations(
-    limit: int = Query(20, ge=1, le=100, description="Number of events to return"),
+    limit: int  = Query(20, ge=1, le=100, description="Number of events to return"),
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return the most recent N liquidation events for BTC, newest first."""
+    """Return the most recent N liquidation events for the given symbol, newest first."""
     result = await db.execute(
         select(Liquidation)
-        .where(Liquidation.symbol == "BTCUSDT")
+        .where(Liquidation.symbol == symbol.upper())
         .order_by(desc(Liquidation.timestamp))
         .limit(limit)
     )
@@ -36,13 +37,17 @@ async def get_recent_liquidations(
 
 
 @router.get("/stats")
-async def get_liquidation_stats(db: AsyncSession = Depends(get_db)):
+async def get_liquidation_stats(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Rolling window aggregates for BTC liquidations.
+    Rolling window aggregates for liquidations.
 
     Returns count, total USD value, and buy/sell breakdown for the last
     5 minutes, 15 minutes, and 1 hour.
     """
+    sym = symbol.upper()
     now = datetime.now(timezone.utc)
     windows = {"5m": 5, "15m": 15, "1h": 60}
     stats: dict = {}
@@ -54,7 +59,7 @@ async def get_liquidation_stats(db: AsyncSession = Depends(get_db)):
             select(Liquidation.side, Liquidation.price, Liquidation.quantity)
             .where(
                 and_(
-                    Liquidation.symbol == "BTCUSDT",
+                    Liquidation.symbol == sym,
                     Liquidation.timestamp >= since,
                 )
             )
@@ -77,4 +82,4 @@ async def get_liquidation_stats(db: AsyncSession = Depends(get_db)):
             "sell_usd":   round(sell_usd, 0),
         }
 
-    return {"symbol": "BTCUSDT", "windows": stats}
+    return {"symbol": sym, "windows": stats}

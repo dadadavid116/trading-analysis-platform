@@ -260,7 +260,7 @@ B. BACKTESTING AS CORE MODULE
 
 
 ================================================================================
-  PART 6 — COMPLETED PHASES (1 THROUGH 24b)
+  PART 6 — COMPLETED PHASES (1 THROUGH 28)
 ================================================================================
 
 Phase 1    Backend scaffold — FastAPI skeleton, DB models, stub endpoints
@@ -301,6 +301,16 @@ Phase 24   Browser desktop notifications — Notification API, seed-on-first-loa
 Phase 24b  Direction-aware chart analysis — prompt rewritten for long/short setups,
            Auto/Long/Short bias selector, user_bias field, resistance lines drawn,
            SSE stream unblocked via Caddy flush_interval fix
+Phase 25   Data Foundation, Governance, Observability — Alembic migrations, service
+           health endpoint, header health dots, daily backup container
+Phase 26   Market Intelligence Center — redesigned AnalysisPanel, liquidation rolling
+           stats, order book depth chart, indicator preferences gear modal
+Phase 27   Crypto Context Collector Pack — funding rate/OI/L/S ratio collectors,
+           derivatives API endpoints and DB models, DerivativesPanel
+Phase 28   Multi-Asset Universe + Exchange Alignment — OKX WebSocket as primary source
+           (price + order book), multi-symbol Binance liquidations, symbol registry
+           table (BTC/ETH/SOL), symbol selector in header, 24H relative strength
+           widget, all panels and API endpoints symbol-aware
 
 
 ================================================================================

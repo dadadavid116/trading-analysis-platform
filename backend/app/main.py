@@ -24,7 +24,8 @@ import app.models.analysis     # noqa: F401
 import app.models.alert        # noqa: F401
 import app.models.chat         # noqa: F401
 import app.models.derivatives  # noqa: F401
-from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives
+import app.models.symbol       # noqa: F401
+from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols
 
 logger = logging.getLogger(__name__)
 
@@ -121,3 +122,4 @@ app.include_router(strategy.router,     prefix="/api", dependencies=_auth)
 # Health endpoint — unauthenticated so monitoring tools can reach it without a key.
 app.include_router(health.router,       prefix="/api")
 app.include_router(derivatives.router,  prefix="/api", dependencies=_auth)
+app.include_router(symbols.router,      prefix="/api", dependencies=_auth)

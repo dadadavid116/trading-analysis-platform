@@ -14,24 +14,27 @@ import { panelStyles } from './panelStyles';
  * The bar width is proportional to cumulative quantity so you can
  * immediately see where large liquidity walls sit.
  */
-function OrderBookPanel() {
+interface OrderBookPanelProps { symbol?: string; }
+
+function OrderBookPanel({ symbol = 'BTCUSDT' }: OrderBookPanelProps) {
   const [snapshot, setSnapshot] = useState<OrderBookSnapshot | null>(null);
   const [error, setError]       = useState<string | null>(null);
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
     const fetchData = () => {
-      fetchOrderBookSnapshot()
+      fetchOrderBookSnapshot(symbol)
         .then((data) => { setSnapshot(data); setError(null); setLoading(false); })
         .catch((err: Error) => { setError(err.message); setLoading(false); });
     };
     fetchData();
     const id = setInterval(fetchData, 10_000);
     return () => clearInterval(id);
-  }, []);
+  }, [symbol]);
 
-  if (loading) return <div style={panelStyles.card}><h2 style={panelStyles.title}>Order Book — BTC/USDT</h2><p style={panelStyles.muted}>Loading…</p></div>;
-  if (error)   return <div style={panelStyles.card}><h2 style={panelStyles.title}>Order Book — BTC/USDT</h2><p style={panelStyles.error}>Could not load order book data.</p></div>;
+  const title = `Order Book — ${symbol.replace('USDT', '')}/USDT`;
+  if (loading) return <div style={panelStyles.card}><h2 style={panelStyles.title}>{title}</h2><p style={panelStyles.muted}>Loading…</p></div>;
+  if (error)   return <div style={panelStyles.card}><h2 style={panelStyles.title}>{title}</h2><p style={panelStyles.error}>Could not load order book data.</p></div>;
   if (!snapshot) return null;
 
   const DEPTH_LEVELS = 10;
@@ -62,7 +65,7 @@ function OrderBookPanel() {
 
   return (
     <div style={panelStyles.card}>
-      <h2 style={panelStyles.title}>Order Book — BTC/USDT</h2>
+      <h2 style={panelStyles.title}>{title}</h2>
 
       {/* Imbalance indicator */}
       <div style={imbalRowStyle}>

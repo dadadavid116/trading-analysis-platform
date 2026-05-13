@@ -84,10 +84,11 @@ const styles = {
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface PricePanelProps {
+  symbol:     string;
   onAnalysis: (message: string) => void;
 }
 
-function PricePanel({ onAnalysis }: PricePanelProps) {
+function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const [candle, setCandle] = useState<PriceCandle | null>(null);
   const [latestError, setLatestError] = useState<string | null>(null);
   const [latestLoading, setLatestLoading] = useState(true);
@@ -124,7 +125,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
 
   // ── Live price via SSE ────────────────────────────────────────────────────
   useEffect(() => {
-    const es = new EventSource('/api/price/stream');
+    const es = new EventSource(`/api/price/stream?symbol=${symbol}`);
     es.onmessage = (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data) as PriceCandle;
@@ -135,7 +136,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
     };
     es.onerror = () => setLatestError('Live stream reconnecting…');
     return () => es.close();
-  }, []);
+  }, [symbol]);
 
   // ── Countdown ticker (updates every second) ───────────────────────────────
   useEffect(() => {
@@ -276,7 +277,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
   useEffect(() => {
     const refreshLiveCandle = () => {
       if (!seriesRef.current) return;
-      fetchKlines(timeframe, 1)
+      fetchKlines(timeframe, 1, symbol)
         .then((data: KlineCandle[]) => {
           if (!seriesRef.current || data.length === 0) return;
           const c = data[0];
@@ -284,15 +285,24 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
             time: c.time as UTCTimestamp,
             open: c.open, high: c.high, low: c.low, close: c.close,
           });
-          lastCandleTimeRef.current = c.time; // keep countdown in sync
+          lastCandleTimeRef.current = c.time;
         })
         .catch(() => {});
     };
     const id = setInterval(refreshLiveCandle, 10_000);
     return () => clearInterval(id);
-  }, [timeframe]);
+  }, [timeframe, symbol]);
 
-  // ── Load full candle series on timeframe change ───────────────────────────
+  // ── Clear analysis lines when symbol changes ─────────────────────────────
+  useEffect(() => {
+    if (!seriesRef.current) return;
+    for (const line of analysisLinesRef.current) {
+      try { seriesRef.current.removePriceLine(line); } catch { /* ignore */ }
+    }
+    analysisLinesRef.current = [];
+  }, [symbol]);
+
+  // ── Load full candle series on timeframe or symbol change ─────────────────
   useEffect(() => {
     if (!seriesRef.current) return;
     const cfg = INTERVALS.find((i) => i.value === timeframe);
@@ -301,14 +311,13 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
     setChartLoading(true);
     setChartError(null);
 
-    fetchKlines(timeframe, cfg.limit)
+    fetchKlines(timeframe, cfg.limit, symbol)
       .then((data: KlineCandle[]) => {
         const chartData: CandlestickData[] = data.map((c) => ({
           time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close,
         }));
         seriesRef.current!.setData(chartData);
         chartRef.current!.timeScale().fitContent();
-        // Seed the countdown with the open time of the rightmost candle.
         if (chartData.length > 0)
           lastCandleTimeRef.current = chartData[chartData.length - 1].time as number;
         setChartLoading(false);
@@ -317,7 +326,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
         setChartError(err.message);
         setChartLoading(false);
       });
-  }, [timeframe]);
+  }, [timeframe, symbol]);
 
   // ── Create alert from popover ─────────────────────────────────────────────
   async function setAlertFromChart(conditionType: 'price_above' | 'price_below') {
@@ -325,8 +334,10 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
     setPopoverSaving(true);
     setPopoverError(null);
     try {
+      const baseAsset = symbol.replace('USDT', '');
       await createAlert({
-        name: `BTC ${conditionType === 'price_above' ? 'above' : 'below'} $${popover.price.toLocaleString()}`,
+        name: `${baseAsset} ${conditionType === 'price_above' ? 'above' : 'below'} $${popover.price.toLocaleString()}`,
+        symbol,
         condition_type: conditionType,
         threshold: popover.price,
         trigger_mode: 'once',
@@ -378,8 +389,9 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
       const trendEmoji = result.trend === 'bullish' ? '📈' : result.trend === 'bearish' ? '📉' : '➡️';
       const dirEmoji   = isShort ? '🔴 SHORT' : '🟢 LONG';
       const fmt = (n: number) => `$${n.toLocaleString()}`;
+      const baseAsset  = symbol.replace('USDT', '');
       const msg =
-        `## Chart Analysis — BTC/USDT (${result.timeframe.toUpperCase()})\n\n` +
+        `## Chart Analysis — ${baseAsset}/USDT (${result.timeframe.toUpperCase()})\n\n` +
         `**Trend:** ${trendEmoji} ${result.trend.charAt(0).toUpperCase() + result.trend.slice(1)} · **Setup:** ${dirEmoji}\n\n` +
         `**Support:** ${result.support_levels.map(fmt).join(' · ')}\n` +
         `**Resistance:** ${result.resistance_levels.map(fmt).join(' · ')}\n\n` +
@@ -406,7 +418,7 @@ function PricePanel({ onAnalysis }: PricePanelProps) {
       {/* Header: title + interval switcher */}
       <div style={styles.header}>
         <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
-          Price — BTC/USDT
+          Price — {symbol.replace('USDT', '')}/USDT
         </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={styles.switcherRow}>
