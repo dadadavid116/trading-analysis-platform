@@ -206,3 +206,24 @@ async def get_klines(
         for row in reversed(raw)
     ]
     return candles
+
+
+@router.get("/fear-greed")
+async def get_fear_greed():
+    """
+    Proxy the Crypto Fear & Greed Index from alternative.me.
+    Returns: { value: int (0-100), label: str, updated_at: str }
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get("https://api.alternative.me/fng/?limit=1")
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Fear & Greed API error: {exc}") from exc
+
+    entry = resp.json().get("data", [{}])[0]
+    return {
+        "value":      int(entry.get("value", 50)),
+        "label":      entry.get("value_classification", "Neutral"),
+        "updated_at": entry.get("timestamp", ""),
+    }

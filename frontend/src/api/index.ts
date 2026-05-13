@@ -675,3 +675,16 @@ export interface PriceLevelsData {
 export function fetchPriceLevels(symbol = 'BTCUSDT'): Promise<PriceLevelsData> {
   return apiFetch<PriceLevelsData>(`/price/levels?symbol=${symbol}`);
 }
+
+// ── Fear & Greed Index (Phase 49) ─────────────────────────────────────────────
+
+export interface FearGreedData {
+  value:      number;
+  label:      string;
+  updated_at: string;
+}
+
+/** Fetch the Crypto Fear & Greed Index (proxied from alternative.me). */
+export function fetchFearGreed(): Promise<FearGreedData> {
+  return apiFetch<FearGreedData>('/price/fear-greed');
+}

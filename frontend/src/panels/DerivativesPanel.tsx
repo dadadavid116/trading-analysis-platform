@@ -2,8 +2,10 @@ import { useState, useEffect, CSSProperties } from 'react';
 import {
   fetchFundingRate, fetchOpenInterest, fetchLSRatio,
   fetchFundingHistory, fetchOIHistory,
+  fetchFearGreed,
   FundingRateData, OpenInterestData, LSRatioData,
   FundingHistoryPoint, OIHistoryPoint,
+  FearGreedData,
 } from '../api';
 import { panelStyles } from './panelStyles';
 
@@ -86,10 +88,11 @@ function Sparkline({ values, color, height = 32, zeroLine = false }: SparklinePr
 // ── Component ──────────────────────────────────────────────────────────────────
 
 function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
-  const [funding, setFunding] = useState<FundingRateData | null>(null);
-  const [oi, setOI]           = useState<OpenInterestData | null>(null);
-  const [ls, setLS]           = useState<LSRatioData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [funding,   setFunding]   = useState<FundingRateData | null>(null);
+  const [oi,        setOI]        = useState<OpenInterestData | null>(null);
+  const [ls,        setLS]        = useState<LSRatioData | null>(null);
+  const [fearGreed, setFearGreed] = useState<FearGreedData | null>(null);
+  const [loading,   setLoading]   = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
   const [fundingHistory, setFundingHistory] = useState<FundingHistoryPoint[]>([]);
@@ -118,6 +121,7 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
     const loadHistory = () => {
       fetchFundingHistory(symbol, 24).then(setFundingHistory).catch(() => {});
       fetchOIHistory(symbol, 24).then(setOIHistory).catch(() => {});
+      fetchFearGreed().then(setFearGreed).catch(() => {});
     };
     loadHistory();
     const id = setInterval(loadHistory, 300_000);
@@ -267,6 +271,26 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
 
         </div>
       )}
+
+      {/* Fear & Greed Index */}
+      {fearGreed && (
+        <div style={fgRowStyle}>
+          <span style={cellLabelStyle}>FEAR &amp; GREED INDEX</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
+            {/* gauge track */}
+            <div style={fgTrackStyle}>
+              <div style={fgGradientStyle} />
+              <div style={{ ...fgNeedleStyle, left: `${fearGreed.value}%` }} />
+            </div>
+            <span style={{ ...cellValueStyle, color: fgColor(fearGreed.value), minWidth: '32px' }}>
+              {fearGreed.value}
+            </span>
+            <span style={{ ...cellSubStyle, color: fgColor(fearGreed.value), fontWeight: 700 }}>
+              {fearGreed.label}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -320,4 +344,47 @@ const lsBarTrackStyle: CSSProperties = {
   overflow: 'hidden',
   backgroundColor: '#222',
   margin: '2px 0',
+};
+
+function fgColor(v: number): string {
+  if (v <= 25) return '#ef5350';
+  if (v <= 45) return '#ff9800';
+  if (v <= 55) return '#aaa';
+  if (v <= 75) return '#66bb6a';
+  return '#26c6da';
+}
+
+const fgRowStyle: CSSProperties = {
+  backgroundColor: '#111114',
+  border:          '1px solid #2a2a2e',
+  borderRadius:    '6px',
+  padding:         '8px 10px',
+  marginTop:       '6px',
+};
+
+const fgTrackStyle: CSSProperties = {
+  flex:         1,
+  position:     'relative',
+  height:       '8px',
+  borderRadius: '4px',
+  overflow:     'visible',
+  minWidth:     0,
+};
+
+const fgGradientStyle: CSSProperties = {
+  position:     'absolute',
+  inset:        0,
+  borderRadius: '4px',
+  background:   'linear-gradient(to right, #ef5350, #ff9800, #aaa, #66bb6a, #26c6da)',
+};
+
+const fgNeedleStyle: CSSProperties = {
+  position:        'absolute',
+  top:             '-3px',
+  transform:       'translateX(-50%)',
+  width:           '3px',
+  height:          '14px',
+  borderRadius:    '1.5px',
+  backgroundColor: '#fff',
+  boxShadow:       '0 0 4px rgba(0,0,0,0.8)',
 };
