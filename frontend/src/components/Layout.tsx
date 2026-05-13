@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import ServiceHealth from './ServiceHealth';
 import RelativeStrength from './RelativeStrength';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] as const;
 const SYMBOL_LABELS: Record<string, string> = {
@@ -23,157 +24,207 @@ interface LayoutProps {
   onPageChange:   (page: Page) => void;
 }
 
-/**
- * Layout — two-column dashboard shell.
- *
- * Left side  (~2/3): scrollable grid of dashboard panels.
- * Right side (~1/3): fixed chat column, full viewport height.
- */
 const PAGES: { id: Page; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'console',   label: 'Console'   },
 ];
 
-function Layout({ children, chatPanel, chatOpen, onToggleChat, activeSymbol, onSymbolChange, activePage, onPageChange }: LayoutProps) {
+export default function Layout({
+  children, chatPanel, chatOpen, onToggleChat,
+  activeSymbol, onSymbolChange, activePage, onPageChange,
+}: LayoutProps) {
+  const isMobile = useIsMobile();
+  const isDash   = activePage === 'dashboard';
+
   return (
-    <div style={styles.root}>
+    <div style={rootStyle}>
       {/* ── Header ── */}
-      <header style={styles.header}>
-        <span style={styles.logo}>📈</span>
-        <h1 style={styles.title}>Trading Analysis Platform</h1>
+      {isMobile ? (
+        <header style={mobileHeaderStyle}>
+          {/* Row 1: title + page tabs + health */}
+          <div style={mobileRow1Style}>
+            <span style={mobileTitleStyle}>TAP</span>
+            <div style={navBarStyle}>
+              {PAGES.map((p) => (
+                <button key={p.id} style={navBtnStyle(p.id === activePage)} onClick={() => onPageChange(p.id)}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <ServiceHealth />
+          </div>
+          {/* Row 2 (dashboard only): symbol selector + relative strength */}
+          {isDash && (
+            <div style={mobileRow2Style}>
+              <div style={symbolBarStyle}>
+                {SYMBOLS.map((sym) => (
+                  <button key={sym} style={symbolBtnStyle(sym === activeSymbol)} onClick={() => onSymbolChange(sym)}>
+                    {SYMBOL_LABELS[sym]}
+                  </button>
+                ))}
+              </div>
+              <RelativeStrength />
+            </div>
+          )}
+        </header>
+      ) : (
+        <header style={desktopHeaderStyle}>
+          <span style={logoStyle}>TAP</span>
+          <h1 style={titleStyle}>Trading Analysis Platform</h1>
 
-        {/* Page navigation tabs */}
-        <div style={navBarStyle}>
-          {PAGES.map((p) => (
-            <button
-              key={p.id}
-              style={navBtnStyle(p.id === activePage)}
-              onClick={() => onPageChange(p.id)}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Symbol selector — dashboard only */}
-        {activePage === 'dashboard' && (
-          <div style={symbolBarStyle}>
-            {SYMBOLS.map((sym) => (
-              <button
-                key={sym}
-                style={symbolBtnStyle(sym === activeSymbol)}
-                onClick={() => onSymbolChange(sym)}
-              >
-                {SYMBOL_LABELS[sym]}
+          <div style={navBarStyle}>
+            {PAGES.map((p) => (
+              <button key={p.id} style={navBtnStyle(p.id === activePage)} onClick={() => onPageChange(p.id)}>
+                {p.label}
               </button>
             ))}
           </div>
-        )}
 
-        {/* 24H relative strength — dashboard only */}
-        {activePage === 'dashboard' && <RelativeStrength />}
+          {isDash && (
+            <div style={symbolBarStyle}>
+              {SYMBOLS.map((sym) => (
+                <button key={sym} style={symbolBtnStyle(sym === activeSymbol)} onClick={() => onSymbolChange(sym)}>
+                  {SYMBOL_LABELS[sym]}
+                </button>
+              ))}
+            </div>
+          )}
 
-        {/* Collector health dots */}
-        <ServiceHealth />
+          {isDash && <RelativeStrength />}
+          <ServiceHealth />
 
-        {/* Chat toggle — dashboard only */}
-        {activePage === 'dashboard' && (
-          <button style={styles.chatToggle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
-            {chatOpen ? 'Chat ◀' : 'Chat ▶'}
-          </button>
-        )}
-      </header>
+          {isDash && (
+            <button style={chatToggleStyle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
+              {chatOpen ? 'Chat ◀' : 'Chat ▶'}
+            </button>
+          )}
+        </header>
+      )}
 
-      {/* ── Body: left panel grid + right chat column ── */}
-      <div style={styles.body}>
-
-        {/* Left — two independent flex columns (children structured in App.tsx) */}
-        <div style={styles.panelArea}>
+      {/* ── Body ── */}
+      <div style={bodyStyle}>
+        <div style={panelAreaStyle}>
           {children}
         </div>
 
-        {/* Right — fixed-width chat column, console page hides it entirely */}
-        {activePage === 'dashboard' && (
-          <div style={styles.chatColumn(chatOpen)}>
+        {/* Chat column — desktop only, dashboard only */}
+        {!isMobile && isDash && (
+          <div style={chatColumnStyle(chatOpen)}>
             {chatPanel}
           </div>
         )}
-
       </div>
     </div>
   );
 }
 
-export default Layout;
-
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const HEADER_HEIGHT = '56px';
-
-const styles = {
-  root: {
-    height:          '100vh',
-    display:         'flex',
-    flexDirection:   'column',
-    backgroundColor: '#0f1117',
-    color:           '#e0e0e0',
-    overflow:        'hidden',
-  } as CSSProperties,
-
-  header: {
-    height:          HEADER_HEIGHT,
-    flexShrink:      0,
-    display:         'flex',
-    alignItems:      'center',
-    gap:             '12px',
-    padding:         '0 24px',
-    borderBottom:    '1px solid #2a2a2e',
-    backgroundColor: '#16161a',
-  } as CSSProperties,
-
-  logo:     { fontSize: '22px' } as CSSProperties,
-  title:    { fontSize: '17px', fontWeight: 600, color: '#f0f0f0', margin: 0 } as CSSProperties,
-
-  chatToggle: (open: boolean): CSSProperties => ({
-    backgroundColor: open ? '#1e3a5f' : '#111114',
-    border:          `1px solid ${open ? '#3a6a9f' : '#2a2a2e'}`,
-    borderRadius:    '5px',
-    color:           open ? '#90b8e0' : '#888',
-    cursor:          'pointer',
-    fontSize:        '12px',
-    fontWeight:      600,
-    padding:         '5px 12px',
-    marginLeft:      '8px',
-    transition:      'all 0.15s',
-    whiteSpace:      'nowrap',
-  }),
-
-  body: {
-    flex:          1,
-    display:       'flex',
-    flexDirection: 'row',
-    overflow:      'hidden',
-    height:        `calc(100vh - ${HEADER_HEIGHT})`,
-  } as CSSProperties,
-
-  panelArea: {
-    flex:          1,
-    overflow:      'hidden',
-    minWidth:      0,
-    display:       'flex',
-    flexDirection: 'row',
-  } as CSSProperties,
-
-  chatColumn: (open: boolean): CSSProperties => ({
-    width:         open ? 'clamp(340px, 33vw, 480px)' : '0',
-    flexShrink:    0,
-    overflow:      'hidden',
-    borderLeft:    open ? '1px solid #2a2a2e' : 'none',
-    transition:    'width 0.25s ease',
-    display:       'flex',
-    flexDirection: 'column',
-  }),
+const rootStyle: CSSProperties = {
+  height:          '100%',
+  display:         'flex',
+  flexDirection:   'column',
+  backgroundColor: '#0f1117',
+  color:           '#e0e0e0',
+  overflow:        'hidden',
 };
+
+const desktopHeaderStyle: CSSProperties = {
+  flexShrink:      0,
+  display:         'flex',
+  alignItems:      'center',
+  gap:             '12px',
+  padding:         '0 24px',
+  height:          '56px',
+  borderBottom:    '1px solid #2a2a2e',
+  backgroundColor: '#16161a',
+};
+
+const mobileHeaderStyle: CSSProperties = {
+  flexShrink:      0,
+  display:         'flex',
+  flexDirection:   'column',
+  borderBottom:    '1px solid #2a2a2e',
+  backgroundColor: '#16161a',
+};
+
+const mobileRow1Style: CSSProperties = {
+  display:     'flex',
+  alignItems:  'center',
+  gap:         '10px',
+  padding:     '0 14px',
+  height:      '44px',
+};
+
+const mobileRow2Style: CSSProperties = {
+  display:        'flex',
+  alignItems:     'center',
+  gap:            '10px',
+  padding:        '4px 14px 6px',
+  borderTop:      '1px solid #1e1e22',
+  justifyContent: 'space-between',
+};
+
+const mobileTitleStyle: CSSProperties = {
+  fontSize:      '14px',
+  fontWeight:    700,
+  color:         '#f0f0f0',
+  letterSpacing: '1px',
+};
+
+const logoStyle: CSSProperties = {
+  fontSize:      '14px',
+  fontWeight:    700,
+  color:         '#33aa66',
+  letterSpacing: '1px',
+};
+
+const titleStyle: CSSProperties = {
+  fontSize:   '17px',
+  fontWeight: 600,
+  color:      '#f0f0f0',
+  margin:     0,
+};
+
+const bodyStyle: CSSProperties = {
+  flex:          1,
+  display:       'flex',
+  flexDirection: 'row',
+  overflow:      'hidden',
+  minHeight:     0,
+};
+
+const panelAreaStyle: CSSProperties = {
+  flex:          1,
+  overflow:      'hidden',
+  minWidth:      0,
+  display:       'flex',
+  flexDirection: 'row',
+};
+
+const chatColumnStyle = (open: boolean): CSSProperties => ({
+  width:         open ? 'clamp(340px, 33vw, 480px)' : '0',
+  flexShrink:    0,
+  overflow:      'hidden',
+  borderLeft:    open ? '1px solid #2a2a2e' : 'none',
+  transition:    'width 0.25s ease',
+  display:       'flex',
+  flexDirection: 'column',
+});
+
+const chatToggleStyle = (open: boolean): CSSProperties => ({
+  backgroundColor: open ? '#1e3a5f' : '#111114',
+  border:          `1px solid ${open ? '#3a6a9f' : '#2a2a2e'}`,
+  borderRadius:    '5px',
+  color:           open ? '#90b8e0' : '#888',
+  cursor:          'pointer',
+  fontSize:        '12px',
+  fontWeight:      600,
+  padding:         '5px 12px',
+  marginLeft:      '8px',
+  transition:      'all 0.15s',
+  whiteSpace:      'nowrap',
+});
 
 const navBarStyle: CSSProperties = {
   display: 'flex',
@@ -188,7 +239,7 @@ const navBtnStyle = (active: boolean): CSSProperties => ({
   cursor:          'pointer',
   fontSize:        '12px',
   fontWeight:      active ? 700 : 500,
-  padding:         '4px 12px',
+  padding:         '4px 10px',
   transition:      'all 0.1s',
 });
 

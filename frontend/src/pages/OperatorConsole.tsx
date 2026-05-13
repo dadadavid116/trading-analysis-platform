@@ -5,16 +5,28 @@ import EventLogPanel from '../panels/EventLogPanel';
 import ScannerPanel from '../panels/ScannerPanel';
 import CandidatePanel from '../panels/CandidatePanel';
 import JournalPanel from '../panels/JournalPanel';
+import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab = 'events' | 'journal';
+type RightTab    = 'events' | 'journal';
+type MobileTab   = 'scanner' | 'candidate' | 'journal' | 'events';
+
+const MOBILE_TABS: { id: MobileTab; label: string }[] = [
+  { id: 'scanner',   label: 'Scanner'   },
+  { id: 'candidate', label: 'Candidate' },
+  { id: 'journal',   label: 'Journal'   },
+  { id: 'events',    label: 'Events'    },
+];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
 const dividerV: CSSProperties = { width: '1px',  flexShrink: 0, backgroundColor: '#1e1e22' };
 
 export default function OperatorConsole() {
-  const [scanner,   setScanner]   = useState<ScannerResponse | null>(null);
-  const [scanErr,   setScanErr]   = useState<string | null>(null);
-  const [rightTab,  setRightTab]  = useState<RightTab>('events');
+  const isMobile = useIsMobile();
+
+  const [scanner,    setScanner]    = useState<ScannerResponse | null>(null);
+  const [scanErr,    setScanErr]    = useState<string | null>(null);
+  const [rightTab,   setRightTab]   = useState<RightTab>('events');
+  const [mobileTab,  setMobileTab]  = useState<MobileTab>('scanner');
 
   useEffect(() => {
     const run = () => {
@@ -26,6 +38,40 @@ export default function OperatorConsole() {
     const id = setInterval(run, 30_000);
     return () => clearInterval(id);
   }, []);
+
+  // ── Mobile layout ──────────────────────────────────────────────────────────
+
+  if (isMobile) {
+    const activePanel = (() => {
+      switch (mobileTab) {
+        case 'scanner':   return <ScannerPanel data={scanner} error={scanErr} />;
+        case 'candidate': return <CandidatePanel data={scanner} />;
+        case 'journal':   return <JournalPanel />;
+        case 'events':    return <EventLogPanel />;
+      }
+    })();
+
+    return (
+      <div style={mobileWrapStyle}>
+        <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          {activePanel}
+        </div>
+        <nav style={bottomNavStyle}>
+          {MOBILE_TABS.map((t) => (
+            <button
+              key={t.id}
+              style={bottomTabStyle(t.id === mobileTab)}
+              onClick={() => setMobileTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      </div>
+    );
+  }
+
+  // ── Desktop layout ─────────────────────────────────────────────────────────
 
   return (
     <div style={rootStyle}>
@@ -44,7 +90,6 @@ export default function OperatorConsole() {
 
       {/* Right column: tabbed (Event Log | Journal) */}
       <div style={rightColStyle}>
-        {/* Tab bar */}
         <div style={tabBarStyle}>
           <button style={tabBtnStyle(rightTab === 'events')}  onClick={() => setRightTab('events')}>
             Event Log
@@ -61,6 +106,8 @@ export default function OperatorConsole() {
     </div>
   );
 }
+
+// ── Desktop styles ────────────────────────────────────────────────────────────
 
 const rootStyle: CSSProperties = {
   display:       'flex',
@@ -111,3 +158,34 @@ function tabBtnStyle(active: boolean): CSSProperties {
     transition:      'all 0.15s',
   };
 }
+
+// ── Mobile styles ─────────────────────────────────────────────────────────────
+
+const mobileWrapStyle: CSSProperties = {
+  display:       'flex',
+  flexDirection: 'column',
+  width:         '100%',
+  height:        '100%',
+  overflow:      'hidden',
+};
+
+const bottomNavStyle: CSSProperties = {
+  display:         'flex',
+  flexShrink:      0,
+  borderTop:       '1px solid #1e1e22',
+  backgroundColor: '#111115',
+  height:          '52px',
+};
+
+const bottomTabStyle = (active: boolean): CSSProperties => ({
+  flex:            1,
+  backgroundColor: active ? '#1a2440' : 'transparent',
+  border:          'none',
+  borderTop:       active ? '2px solid #3a6aaf' : '2px solid transparent',
+  color:           active ? '#90b8e0' : '#555',
+  cursor:          'pointer',
+  fontSize:        '11px',
+  fontWeight:      active ? 700 : 500,
+  padding:         '4px 0 6px',
+  transition:      'all 0.12s',
+});

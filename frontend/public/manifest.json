@@ -1,0 +1,18 @@
+{
+  "name": "Trading Analysis Platform",
+  "short_name": "TAP",
+  "description": "Real-time crypto market monitoring and AI trade analysis",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

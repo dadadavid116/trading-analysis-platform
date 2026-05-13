@@ -36,9 +36,10 @@
 | 30 | Market Scanner — momentum breakouts, liquidation clusters, OI divergence signals | ✅ Done |
 | 31 | AI Trade Setup — Claude Haiku structured entry/SL/TP generator in Candidate panel | ✅ Done |
 | 32 | Trade Journal — save AI setups, auto-outcome tracking (SL/TP1-3/expired) via price replay, win rate | ✅ Done |
+| 33 | Mobile-responsive layout + PWA — 2-row compact header, bottom-tab navigation, service worker + manifest | ✅ Done |
 
 ## Upcoming Phases
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 33 | Mobile-responsive layout / PWA | Planned |
+| 34 | TBD | Planned |
