@@ -214,6 +214,121 @@ function LevelRow({ label, price, pct, color, highlight }: {
   );
 }
 
+// ── Position Size Calculator ──────────────────────────────────────────────────
+
+const CALC_STORAGE_KEY = 'tap_calc_settings';
+
+function loadCalc() {
+  try {
+    const s = JSON.parse(localStorage.getItem(CALC_STORAGE_KEY) || '{}');
+    return { account: s.account || '10000', risk: s.risk || '1', leverage: s.leverage || '10' };
+  } catch { return { account: '10000', risk: '1', leverage: '10' }; }
+}
+
+function CalcInput({ label, value, unit, onChange }: {
+  label: string; value: string; unit: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: '8px', color: '#555', marginBottom: '2px', letterSpacing: '0.06em' }}>
+        {label.toUpperCase()}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#0d0d10', border: '1px solid #2a2a2e', borderRadius: '3px', padding: '3px 5px', gap: '2px' }}>
+        {unit === '$' && <span style={{ fontSize: '9px', color: '#555' }}>$</span>}
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          type="number"
+          min="0"
+          style={{ background: 'none', border: 'none', color: '#d0d0d0', fontSize: '11px', fontFamily: 'monospace', width: '100%', outline: 'none', padding: 0 }}
+        />
+        {unit !== '$' && <span style={{ fontSize: '9px', color: '#555' }}>{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+function CalcRow({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+      <span style={{ fontSize: '10px', color: '#555' }}>{label}</span>
+      <span style={{ fontSize: '11px', fontFamily: 'monospace', fontWeight: 600, color }}>{value}</span>
+    </div>
+  );
+}
+
+function PositionCalculator({ setup }: { setup: TradeSetup }) {
+  const init = loadCalc();
+  const [account,  setAccount]  = useState(init.account);
+  const [riskPct,  setRiskPct]  = useState(init.risk);
+  const [leverage, setLeverage] = useState(init.leverage);
+
+  const persist = (a: string, r: string, l: string) => {
+    try { localStorage.setItem(CALC_STORAGE_KEY, JSON.stringify({ account: a, risk: r, leverage: l })); } catch {}
+  };
+
+  const entryMid = (setup.entry_zone.low + setup.entry_zone.high) / 2;
+  const slDist   = entryMid !== 0 ? Math.abs(entryMid - setup.stop_loss) / entryMid : 0;
+
+  const acc  = Math.max(parseFloat(account)  || 0, 0);
+  const risk = Math.max(parseFloat(riskPct)  || 0, 0);
+  const lev  = Math.max(parseFloat(leverage) || 1, 1);
+
+  const dollarRisk = acc * risk / 100;
+  const notional   = slDist > 0 ? dollarRisk / slDist : 0;
+  const margin     = notional / lev;
+
+  const fmtUsd = (n: number) =>
+    n >= 1000 ? `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+              : n >= 1 ? `$${n.toFixed(0)}` : `$${n.toFixed(2)}`;
+
+  return (
+    <div style={calcContainerStyle}>
+      <div style={calcLabelRowStyle}>
+        <span style={calcHeaderStyle}>POSITION SIZE</span>
+        <span style={{ fontSize: '9px', color: '#444' }}>
+          entry {fmtPrice(entryMid)} · sl dist {(slDist * 100).toFixed(2)}%
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <CalcInput label="Account $" value={account} unit="$"
+          onChange={(v) => { setAccount(v); persist(v, riskPct, leverage); }} />
+        <CalcInput label="Risk %" value={riskPct} unit="%"
+          onChange={(v) => { setRiskPct(v); persist(account, v, leverage); }} />
+        <CalcInput label="Leverage" value={leverage} unit="×"
+          onChange={(v) => { setLeverage(v); persist(account, riskPct, v); }} />
+      </div>
+
+      {notional > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '4px' }}>
+          <CalcRow label="Notional position" value={fmtUsd(notional)} color="#e0e0e0" />
+          <CalcRow label={`Margin @ ${lev}×`} value={fmtUsd(margin)} color="#aaa" />
+          <CalcRow label="Dollar risk" value={fmtUsd(dollarRisk)} color="#cc3333" />
+          <div style={{ borderTop: '1px solid #1e1e22', margin: '2px 0' }} />
+          {setup.take_profit.map((tp, i) => {
+            const dist   = Math.abs(tp - entryMid) / entryMid;
+            const profit = notional * dist;
+            const pct    = acc > 0 ? (profit / acc * 100).toFixed(1) : '—';
+            return (
+              <CalcRow
+                key={i}
+                label={`TP${i + 1} profit`}
+                value={`+${fmtUsd(profit)} (${pct}%)`}
+                color="#33aa66"
+              />
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ fontSize: '10px', color: '#444', fontStyle: 'italic', marginTop: '2px' }}>
+          Enter account size above
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function CandidatePanel({ data }: Props) {
@@ -361,6 +476,9 @@ export default function CandidatePanel({ data }: Props) {
                 saved={saved}
               />
             )}
+
+            {/* Position size calculator */}
+            {setup && <PositionCalculator setup={setup} />}
           </div>
         )}
       </div>
@@ -542,3 +660,26 @@ const saveBtnStyle = (saving: boolean, saved: boolean): CSSProperties => ({
   width:           '100%',
   transition:      'all 0.2s',
 });
+
+const calcContainerStyle: CSSProperties = {
+  backgroundColor: '#111115',
+  border:          '1px solid #2a2a2e',
+  borderRadius:    '6px',
+  padding:         '10px 12px',
+  display:         'flex',
+  flexDirection:   'column',
+  gap:             '8px',
+};
+
+const calcLabelRowStyle: CSSProperties = {
+  display:        'flex',
+  justifyContent: 'space-between',
+  alignItems:     'baseline',
+};
+
+const calcHeaderStyle: CSSProperties = {
+  fontSize:      '9px',
+  fontWeight:    700,
+  color:         '#555',
+  letterSpacing: '0.08em',
+};
