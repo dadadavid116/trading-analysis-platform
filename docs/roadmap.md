@@ -46,4 +46,5 @@
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 37 | Key S&R Levels — pivot clustering, `/price/levels` endpoint, chart price lines, scanner signal | ✅ Done |
-| 38 | TBD | Planned |
+| 38 | Funding Rate & OI History Sparklines — 24H time-series charts in Derivatives panel | ✅ Done |
+| 39 | TBD | Planned |

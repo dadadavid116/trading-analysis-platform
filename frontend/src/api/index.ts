@@ -432,6 +432,26 @@ export async function fetchLSRatio(symbol = 'BTCUSDT'): Promise<LSRatioData | nu
   return r.json() as Promise<LSRatioData>;
 }
 
+export interface FundingHistoryPoint {
+  timestamp:    string;
+  funding_rate: number;
+}
+
+export interface OIHistoryPoint {
+  timestamp: string;
+  oi_value:  number;
+}
+
+/** Fetch time-series funding rate snapshots for sparkline display. */
+export function fetchFundingHistory(symbol = 'BTCUSDT', hours = 24): Promise<FundingHistoryPoint[]> {
+  return apiFetch<FundingHistoryPoint[]>(`/derivatives/funding-history?symbol=${symbol}&hours=${hours}`);
+}
+
+/** Fetch time-series open interest snapshots for sparkline display. */
+export function fetchOIHistory(symbol = 'BTCUSDT', hours = 24): Promise<OIHistoryPoint[]> {
+  return apiFetch<OIHistoryPoint[]>(`/derivatives/oi-history?symbol=${symbol}&hours=${hours}`);
+}
+
 // ── Symbol registry + relative strength (Phase 28) ────────────────────────────
 
 export interface SymbolInfo {

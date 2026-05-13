@@ -1,7 +1,9 @@
 import { useState, useEffect, CSSProperties } from 'react';
 import {
   fetchFundingRate, fetchOpenInterest, fetchLSRatio,
+  fetchFundingHistory, fetchOIHistory,
   FundingRateData, OpenInterestData, LSRatioData,
+  FundingHistoryPoint, OIHistoryPoint,
 } from '../api';
 import { panelStyles } from './panelStyles';
 
@@ -9,14 +11,79 @@ import { panelStyles } from './panelStyles';
  * DerivativesPanel — compact three-cell display for BTC/USDT perpetual context.
  *
  * Cells:
- *   Funding Rate — last settled rate, mark/index premium, sentiment
- *   Open Interest — current OI in BTC, 1H/4H deltas, expansion/contraction trend
+ *   Funding Rate — latest rate, sentiment, 24H sparkline
+ *   Open Interest — current OI, 1H/4H deltas, 24H sparkline
  *   L/S Ratio — top-trader long vs short %, global account ratio
  *
- * Polls all three endpoints every 60 s. On 404 (collector not started yet)
- * shows a "waiting for data" placeholder rather than an error.
+ * Polls latest values every 60 s; history (sparklines) refreshed every 5 min.
  */
 interface DerivativesPanelProps { symbol?: string; }
+
+// ── Sparkline ──────────────────────────────────────────────────────────────────
+
+interface SparklineProps {
+  values:    number[];
+  color:     string;
+  height?:   number;
+  zeroLine?: boolean;   // draw a dashed zero reference line
+}
+
+function Sparkline({ values, color, height = 32, zeroLine = false }: SparklineProps) {
+  if (values.length < 2) return null;
+  const min   = Math.min(...values);
+  const max   = Math.max(...values);
+  const range = max - min || Math.abs(max) * 0.02 || 1e-8;
+  const W     = 100;
+
+  const toY = (v: number) => height - ((v - min) / range) * (height - 2) - 1;
+
+  const points = values
+    .map((v, i) => `${((i / (values.length - 1)) * W).toFixed(2)},${toY(v).toFixed(2)}`)
+    .join(' ');
+
+  const zeroY = toY(0);
+  const showZero = zeroLine && zeroY >= 0 && zeroY <= height;
+
+  // Shade area under/over zero for funding sparklines
+  const lastVal  = values[values.length - 1];
+  const fillColor = lastVal > 0 ? '#ef535018' : lastVal < 0 ? '#26a69a18' : 'none';
+
+  const areaPoints = zeroLine
+    ? `0,${toY(0).toFixed(2)} ` + points + ` ${W},${toY(0).toFixed(2)}`
+    : `0,${height} ` + points + ` ${W},${height}`;
+
+  return (
+    <svg
+      width="100%"
+      height={height}
+      viewBox={`0 0 ${W} ${height}`}
+      preserveAspectRatio="none"
+      style={{ display: 'block', marginTop: '4px', overflow: 'visible' }}
+    >
+      {/* shaded area */}
+      <polygon points={areaPoints} fill={zeroLine ? fillColor : `${color}18`} />
+      {/* zero reference line */}
+      {showZero && (
+        <line
+          x1="0" y1={zeroY.toFixed(2)}
+          x2={W}  y2={zeroY.toFixed(2)}
+          stroke="#444" strokeWidth="0.5" strokeDasharray="2,2"
+        />
+      )}
+      {/* main sparkline */}
+      <polyline fill="none" stroke={color} strokeWidth="1.2" points={points} />
+      {/* end-dot */}
+      <circle
+        cx={W}
+        cy={toY(lastVal).toFixed(2)}
+        r="1.5"
+        fill={color}
+      />
+    </svg>
+  );
+}
+
+// ── Component ──────────────────────────────────────────────────────────────────
 
 function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
   const [funding, setFunding] = useState<FundingRateData | null>(null);
@@ -25,6 +92,10 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
+  const [fundingHistory, setFundingHistory] = useState<FundingHistoryPoint[]>([]);
+  const [oiHistory, setOIHistory]           = useState<OIHistoryPoint[]>([]);
+
+  // Latest values — every 60 s
   useEffect(() => {
     const load = () => {
       Promise.all([fetchFundingRate(symbol), fetchOpenInterest(symbol), fetchLSRatio(symbol)])
@@ -42,8 +113,19 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
     return () => clearInterval(id);
   }, [symbol]);
 
-  const fmtRate = (r: number) => `${r >= 0 ? '+' : ''}${(r * 100).toFixed(4)}%`;
-  const fmtOI   = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}K BTC` : `${v.toFixed(0)} BTC`;
+  // History for sparklines — every 5 min
+  useEffect(() => {
+    const loadHistory = () => {
+      fetchFundingHistory(symbol, 24).then(setFundingHistory).catch(() => {});
+      fetchOIHistory(symbol, 24).then(setOIHistory).catch(() => {});
+    };
+    loadHistory();
+    const id = setInterval(loadHistory, 300_000);
+    return () => clearInterval(id);
+  }, [symbol]);
+
+  const fmtRate  = (r: number) => `${r >= 0 ? '+' : ''}${(r * 100).toFixed(4)}%`;
+  const fmtOI    = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}K` : `${v.toFixed(0)}`;
   const fmtDelta = (d: number | null) => d === null ? '—' : `${d >= 0 ? '+' : ''}${d.toFixed(2)}%`;
 
   const sentimentColor = (s: string) =>
@@ -51,6 +133,9 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
 
   const trendColor = (t: string) =>
     t === 'expanding' ? '#66bb6a' : t === 'contracting' ? '#ef5350' : '#aaa';
+
+  const fundingSparkValues  = fundingHistory.map((p) => p.funding_rate);
+  const oiSparkValues       = oiHistory.map((p) => p.oi_value);
 
   const noData = !funding && !oi && !ls;
 
@@ -81,7 +166,12 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
 
           {/* Funding Rate */}
           <div style={cellStyle}>
-            <span style={cellLabelStyle}>FUNDING RATE</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span style={cellLabelStyle}>FUNDING RATE</span>
+              {fundingHistory.length > 1 && (
+                <span style={{ fontSize: '8px', color: '#444' }}>24H</span>
+              )}
+            </div>
             {funding ? (
               <>
                 <span style={{ ...cellValueStyle, color: funding.funding_rate > 0 ? '#ef5350' : funding.funding_rate < 0 ? '#66bb6a' : '#aaa' }}>
@@ -92,8 +182,15 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
                 </span>
                 {funding.mark_price && funding.index_price && (
                   <span style={cellSubStyle}>
-                    Premium {funding.premium_pct >= 0 ? '+' : ''}{funding.premium_pct.toFixed(4)}%
+                    Prem {funding.premium_pct >= 0 ? '+' : ''}{funding.premium_pct.toFixed(4)}%
                   </span>
+                )}
+                {fundingSparkValues.length > 1 && (
+                  <Sparkline
+                    values={fundingSparkValues}
+                    color={funding.funding_rate >= 0 ? '#ef5350' : '#26a69a'}
+                    zeroLine
+                  />
                 )}
               </>
             ) : (
@@ -103,16 +200,27 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
 
           {/* Open Interest */}
           <div style={cellStyle}>
-            <span style={cellLabelStyle}>OPEN INTEREST</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <span style={cellLabelStyle}>OPEN INTEREST</span>
+              {oiHistory.length > 1 && (
+                <span style={{ fontSize: '8px', color: '#444' }}>24H</span>
+              )}
+            </div>
             {oi ? (
               <>
-                <span style={cellValueStyle}>{fmtOI(oi.oi_value)}</span>
+                <span style={cellValueStyle}>{fmtOI(oi.oi_value)} BTC</span>
                 <span style={{ ...cellSubStyle, color: trendColor(oi.trend) }}>
                   {oi.trend.charAt(0).toUpperCase() + oi.trend.slice(1)}
                 </span>
                 <span style={cellSubStyle}>Δ1H: {fmtDelta(oi.delta_1h)}</span>
                 {oi.delta_4h !== null && (
                   <span style={cellSubStyle}>Δ4H: {fmtDelta(oi.delta_4h)}</span>
+                )}
+                {oiSparkValues.length > 1 && (
+                  <Sparkline
+                    values={oiSparkValues}
+                    color={oi.trend === 'expanding' ? '#66bb6a' : oi.trend === 'contracting' ? '#ef5350' : '#4a8aff'}
+                  />
                 )}
               </>
             ) : (
@@ -137,9 +245,19 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
                 </div>
                 <span style={cellSubStyle}>Top traders</span>
                 {ls.global_account && (
-                  <span style={cellSubStyle}>
-                    Global: {ls.global_account.long_pct.toFixed(1)}% / {ls.global_account.short_pct.toFixed(1)}%
-                  </span>
+                  <>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'baseline', marginTop: '4px' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#66bb6a' }}>{ls.global_account.long_pct.toFixed(1)}%</span>
+                      <span style={{ fontSize: '9px', color: '#555' }}>L</span>
+                      <span style={{ fontSize: '12px', fontWeight: 600, color: '#ef5350' }}>{ls.global_account.short_pct.toFixed(1)}%</span>
+                      <span style={{ fontSize: '9px', color: '#555' }}>S</span>
+                    </div>
+                    <div style={lsBarTrackStyle}>
+                      <div style={{ width: `${ls.global_account.long_pct}%`, height: '100%', backgroundColor: '#4caf5088' }} />
+                      <div style={{ width: `${ls.global_account.short_pct}%`, height: '100%', backgroundColor: '#f4433688' }} />
+                    </div>
+                    <span style={cellSubStyle}>Global</span>
+                  </>
                 )}
               </>
             ) : (

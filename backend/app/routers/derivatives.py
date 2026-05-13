@@ -2,9 +2,11 @@
 routers/derivatives.py — API endpoints for crypto derivatives context data.
 
 Endpoints:
-    GET /api/derivatives/funding   — latest funding rate + mark/index price
-    GET /api/derivatives/oi        — latest open interest + 1H/4H deltas
-    GET /api/derivatives/ls-ratio  — latest top-trader and global long/short ratios
+    GET /api/derivatives/funding          — latest funding rate + mark/index price
+    GET /api/derivatives/oi               — latest open interest + 1H/4H deltas
+    GET /api/derivatives/ls-ratio         — latest top-trader and global long/short ratios
+    GET /api/derivatives/funding-history  — time-series funding rate for sparkline
+    GET /api/derivatives/oi-history       — time-series open interest for sparkline
 """
 
 from datetime import datetime, timedelta, timezone
@@ -149,3 +151,49 @@ async def get_ls_ratio(
         top_account    = top,
         global_account = global_,
     )
+
+
+@router.get("/funding-history")
+async def get_funding_history(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    hours:  int = Query(24, ge=1, le=168, description="Look-back window in hours"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return time-series funding rate snapshots for the given symbol.
+    Used for the sparkline chart in the Derivatives panel.
+    """
+    sym   = symbol.upper()
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    result = await db.execute(
+        select(FundingRate.timestamp, FundingRate.funding_rate)
+        .where(FundingRate.symbol == sym, FundingRate.timestamp >= since)
+        .order_by(FundingRate.timestamp)
+    )
+    return [
+        {"timestamp": r.timestamp.isoformat(), "funding_rate": float(r.funding_rate)}
+        for r in result.all()
+    ]
+
+
+@router.get("/oi-history")
+async def get_oi_history(
+    symbol: str = Query("BTCUSDT", description="Symbol (BTCUSDT, ETHUSDT, SOLUSDT)"),
+    hours:  int = Query(24, ge=1, le=168, description="Look-back window in hours"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return time-series open interest snapshots for the given symbol.
+    Used for the sparkline chart in the Derivatives panel.
+    """
+    sym   = symbol.upper()
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    result = await db.execute(
+        select(OpenInterest.timestamp, OpenInterest.oi_value)
+        .where(OpenInterest.symbol == sym, OpenInterest.timestamp >= since)
+        .order_by(OpenInterest.timestamp)
+    )
+    return [
+        {"timestamp": r.timestamp.isoformat(), "oi_value": float(r.oi_value)}
+        for r in result.all()
+    ]
