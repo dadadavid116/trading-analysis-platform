@@ -150,6 +150,17 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
         await _set_triggered(alert.id)
         message = _build_message(alert, latest_close, threshold)
         await notify(alert.name, alert.condition_type, message)
+        try:
+            from app.services.event_logger import log_event
+            await log_event(
+                service    = "alert",
+                event_type = "alert_triggered",
+                message    = f"Alert '{alert.name}' triggered — {message}",
+                symbol     = alert.symbol,
+                detail     = {"alert_id": alert.id, "condition_type": alert.condition_type, "threshold": float(threshold)},
+            )
+        except Exception:
+            pass
 
     elif not condition_met and triggered and not is_once:
         # Rearm: condition is gone — reset so it can fire again.
@@ -159,6 +170,16 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
             alert.id,
             alert.name,
         )
+        try:
+            from app.services.event_logger import log_event
+            await log_event(
+                service    = "alert",
+                event_type = "alert_rearmed",
+                message    = f"Alert '{alert.name}' rearmed — condition cleared",
+                symbol     = alert.symbol,
+            )
+        except Exception:
+            pass
 
 
 def _build_message(alert: Alert, latest_close: float | None, threshold: float) -> str:

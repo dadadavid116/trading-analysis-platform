@@ -10,6 +10,8 @@ const SYMBOL_LABELS: Record<string, string> = {
   SOLUSDT: 'SOL',
 };
 
+type Page = 'dashboard' | 'console';
+
 interface LayoutProps {
   children:       ReactNode;
   chatPanel:      ReactNode;
@@ -17,6 +19,8 @@ interface LayoutProps {
   onToggleChat:   () => void;
   activeSymbol:   string;
   onSymbolChange: (symbol: string) => void;
+  activePage:     Page;
+  onPageChange:   (page: Page) => void;
 }
 
 /**
@@ -25,7 +29,12 @@ interface LayoutProps {
  * Left side  (~2/3): scrollable grid of dashboard panels.
  * Right side (~1/3): fixed chat column, full viewport height.
  */
-function Layout({ children, chatPanel, chatOpen, onToggleChat, activeSymbol, onSymbolChange }: LayoutProps) {
+const PAGES: { id: Page; label: string }[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'console',   label: 'Console'   },
+];
+
+function Layout({ children, chatPanel, chatOpen, onToggleChat, activeSymbol, onSymbolChange, activePage, onPageChange }: LayoutProps) {
   return (
     <div style={styles.root}>
       {/* ── Header ── */}
@@ -33,29 +42,46 @@ function Layout({ children, chatPanel, chatOpen, onToggleChat, activeSymbol, onS
         <span style={styles.logo}>📈</span>
         <h1 style={styles.title}>Trading Analysis Platform</h1>
 
-        {/* Symbol selector */}
-        <div style={symbolBarStyle}>
-          {SYMBOLS.map((sym) => (
+        {/* Page navigation tabs */}
+        <div style={navBarStyle}>
+          {PAGES.map((p) => (
             <button
-              key={sym}
-              style={symbolBtnStyle(sym === activeSymbol)}
-              onClick={() => onSymbolChange(sym)}
+              key={p.id}
+              style={navBtnStyle(p.id === activePage)}
+              onClick={() => onPageChange(p.id)}
             >
-              {SYMBOL_LABELS[sym]}
+              {p.label}
             </button>
           ))}
         </div>
 
-        {/* 24H relative strength */}
-        <RelativeStrength />
+        {/* Symbol selector — dashboard only */}
+        {activePage === 'dashboard' && (
+          <div style={symbolBarStyle}>
+            {SYMBOLS.map((sym) => (
+              <button
+                key={sym}
+                style={symbolBtnStyle(sym === activeSymbol)}
+                onClick={() => onSymbolChange(sym)}
+              >
+                {SYMBOL_LABELS[sym]}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 24H relative strength — dashboard only */}
+        {activePage === 'dashboard' && <RelativeStrength />}
 
         {/* Collector health dots */}
         <ServiceHealth />
 
-        {/* Chat toggle — sits at the far right of the header */}
-        <button style={styles.chatToggle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
-          {chatOpen ? 'Chat ◀' : 'Chat ▶'}
-        </button>
+        {/* Chat toggle — dashboard only */}
+        {activePage === 'dashboard' && (
+          <button style={styles.chatToggle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
+            {chatOpen ? 'Chat ◀' : 'Chat ▶'}
+          </button>
+        )}
       </header>
 
       {/* ── Body: left panel grid + right chat column ── */}
@@ -66,10 +92,12 @@ function Layout({ children, chatPanel, chatOpen, onToggleChat, activeSymbol, onS
           {children}
         </div>
 
-        {/* Right — fixed-width chat column, collapses to 0 when hidden */}
-        <div style={styles.chatColumn(chatOpen)}>
-          {chatPanel}
-        </div>
+        {/* Right — fixed-width chat column, console page hides it entirely */}
+        {activePage === 'dashboard' && (
+          <div style={styles.chatColumn(chatOpen)}>
+            {chatPanel}
+          </div>
+        )}
 
       </div>
     </div>
@@ -146,6 +174,23 @@ const styles = {
     flexDirection: 'column',
   }),
 };
+
+const navBarStyle: CSSProperties = {
+  display: 'flex',
+  gap:     '2px',
+};
+
+const navBtnStyle = (active: boolean): CSSProperties => ({
+  backgroundColor: active ? '#1a2440' : 'transparent',
+  border:          `1px solid ${active ? '#3a5a8f' : 'transparent'}`,
+  borderRadius:    '5px',
+  color:           active ? '#90b8e0' : '#556',
+  cursor:          'pointer',
+  fontSize:        '12px',
+  fontWeight:      active ? 700 : 500,
+  padding:         '4px 12px',
+  transition:      'all 0.1s',
+});
 
 const symbolBarStyle: CSSProperties = {
   display:    'flex',

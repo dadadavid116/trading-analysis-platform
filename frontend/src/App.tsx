@@ -7,6 +7,9 @@ import OrderBookPanel from './panels/OrderBookPanel';
 import AlertsPanel from './panels/AlertsPanel';
 import DerivativesPanel from './panels/DerivativesPanel';
 import ChatPanel from './panels/ChatPanel';
+import OperatorConsole from './pages/OperatorConsole';
+
+type Page = 'dashboard' | 'console';
 
 const col: CSSProperties = {
   flex:          1,
@@ -24,9 +27,10 @@ function cell(flex: number): CSSProperties {
 }
 
 function App() {
-  const [chatOpen,       setChatOpen]       = useState(true);
+  const [chatOpen,        setChatOpen]       = useState(true);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
-  const [activeSymbol,   setActiveSymbol]   = useState('BTCUSDT');
+  const [activeSymbol,    setActiveSymbol]   = useState('BTCUSDT');
+  const [activePage,      setActivePage]     = useState<Page>('dashboard');
 
   const handleAnalysis = useCallback((msg: string) => {
     setAnalysisMessage(msg);
@@ -43,6 +47,8 @@ function App() {
       onToggleChat={() => setChatOpen((prev) => !prev)}
       activeSymbol={activeSymbol}
       onSymbolChange={setActiveSymbol}
+      activePage={activePage}
+      onPageChange={setActivePage}
       chatPanel={
         <ChatPanel
           analysisMessage={analysisMessage}
@@ -50,23 +56,29 @@ function App() {
         />
       }
     >
-      {/* Left column: Price takes 2/3, OrderBook takes 1/3 */}
-      <div style={col}>
-        <div style={cell(2)}><PricePanel symbol={activeSymbol} onAnalysis={handleAnalysis} /></div>
-        <div style={dividerH} />
-        <div style={cell(1)}><OrderBookPanel symbol={activeSymbol} /></div>
-      </div>
+      {activePage === 'dashboard' ? (
+        <>
+          {/* Left column: Price takes 2/3, OrderBook takes 1/3 */}
+          <div style={col}>
+            <div style={cell(2)}><PricePanel symbol={activeSymbol} onAnalysis={handleAnalysis} /></div>
+            <div style={dividerH} />
+            <div style={cell(1)}><OrderBookPanel symbol={activeSymbol} /></div>
+          </div>
 
-      <div style={dividerV} />
+          <div style={dividerV} />
 
-      {/* Right column: Liquidation (top), Derivatives (mid), Alerts (bottom) */}
-      <div style={col}>
-        <div style={cell(3)}><LiquidationPanel symbol={activeSymbol} /></div>
-        <div style={dividerH} />
-        <div style={cell(1)}><DerivativesPanel symbol={activeSymbol} /></div>
-        <div style={dividerH} />
-        <div style={cell(2)}><AlertsPanel /></div>
-      </div>
+          {/* Right column: Liquidation (top), Derivatives (mid), Alerts (bottom) */}
+          <div style={col}>
+            <div style={cell(3)}><LiquidationPanel symbol={activeSymbol} /></div>
+            <div style={dividerH} />
+            <div style={cell(1)}><DerivativesPanel symbol={activeSymbol} /></div>
+            <div style={dividerH} />
+            <div style={cell(2)}><AlertsPanel /></div>
+          </div>
+        </>
+      ) : (
+        <OperatorConsole />
+      )}
     </Layout>
   );
 }

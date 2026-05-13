@@ -157,3 +157,16 @@ async def generate_and_store() -> None:
         CLAUDE_MODEL,
         len(summary_text),
     )
+
+    try:
+        from app.services.event_logger import log_event
+        price_str = f"${float(ctx['candle'].close):,.2f}" if ctx["candle"] else "n/a"
+        await log_event(
+            service    = "analysis",
+            event_type = "market_summary",
+            message    = f"Market summary generated — BTC {price_str} ({CLAUDE_MODEL})",
+            symbol     = "BTCUSDT",
+            detail     = {"model": CLAUDE_MODEL, "chars": len(summary_text)},
+        )
+    except Exception:
+        pass

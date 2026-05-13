@@ -434,3 +434,19 @@ export function fetchSymbols(): Promise<SymbolInfo[]> {
 export function fetchRelativeStrength(): Promise<RelativeStrengthEntry[]> {
   return apiFetch<RelativeStrengthEntry[]>('/symbols/relative-strength');
 }
+
+// ── Event log (Phase 29) ──────────────────────────────────────────────────────
+
+export interface EventLogEntry {
+  id:         number;
+  timestamp:  string;
+  service:    string;
+  event_type: string;
+  symbol:     string | null;
+  message:    string;
+}
+
+/** Fetch recent platform events, newest first. */
+export function fetchEvents(limit = 100, sinceId = 0): Promise<EventLogEntry[]> {
+  return apiFetch<EventLogEntry[]>(`/events/?limit=${limit}&since_id=${sinceId}`);
+}

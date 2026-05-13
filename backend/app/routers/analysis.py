@@ -70,6 +70,23 @@ async def chart_analysis(body: ChartAnalysisRequest):
     """
     try:
         from app.services.chart_analysis import analyze_chart
-        return await analyze_chart(body.timeframe, body.user_bias, body.active_indicators)
+        from app.services.event_logger import log_event
+        result = await analyze_chart(body.timeframe, body.user_bias, body.active_indicators)
+        await log_event(
+            service    = "analysis",
+            event_type = "chart_analysis",
+            message    = (
+                f"Chart analysis: BTCUSDT {body.timeframe.upper()} — "
+                f"{result.get('trend', '?')} {result.get('direction', '?')}"
+            ),
+            symbol = "BTCUSDT",
+            detail = {
+                "timeframe":  body.timeframe,
+                "trend":      result.get("trend"),
+                "direction":  result.get("direction"),
+                "bias":       body.user_bias or "auto",
+            },
+        )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
