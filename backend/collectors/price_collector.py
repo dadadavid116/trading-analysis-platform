@@ -68,7 +68,10 @@ async def run() -> None:
 
                     for candle in data:
                         # [ts_ms, open, high, low, close, vol, volCcy, volCcyQuote, confirm]
-                        ts        = datetime.fromtimestamp(int(candle[0]) / 1000, tz=timezone.utc)
+                        # Store CLOSE time (open + 60 s) to match Binance convention.
+                        # This keeps MAX(timestamp) ≤ 60 s old during normal operation
+                        # so the health check always reads "ok" while the collector runs.
+                        ts        = datetime.fromtimestamp((int(candle[0]) + 60_000) / 1000, tz=timezone.utc)
                         is_closed = candle[8] == "1"
 
                         stmt = (
