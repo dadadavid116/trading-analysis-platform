@@ -538,3 +538,63 @@ export async function requestTradeSetup(
   }
   return response.json() as Promise<TradeSetup>;
 }
+
+// ── Trade Journal (Phase 32) ──────────────────────────────────────────────────
+
+export type JournalOutcome = 'pending' | 'tp1' | 'tp2' | 'tp3' | 'sl' | 'expired';
+
+export interface JournalEntry {
+  id:           number;
+  created_at:   string;
+  symbol:       string;
+  bias:         'long' | 'short';
+  entry_low:    number;
+  entry_high:   number;
+  stop_loss:    number;
+  take_profit1: number;
+  take_profit2: number;
+  take_profit3: number;
+  risk_reward:  number;
+  reasoning:    string;
+  key_risks:    string;
+  scanner_bias: string | null;
+  outcome:      JournalOutcome;
+}
+
+/** Fetch all journal entries with auto-computed outcomes. */
+export function fetchJournal(): Promise<JournalEntry[]> {
+  return apiFetch<JournalEntry[]>('/journal');
+}
+
+/** Save an AI trade setup to the journal. */
+export async function saveToJournal(setup: TradeSetup): Promise<{ id: number }> {
+  const response = await fetch(`${BASE_URL}/journal`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({
+      symbol:       setup.symbol,
+      bias:         setup.bias,
+      entry_low:    setup.entry_zone.low,
+      entry_high:   setup.entry_zone.high,
+      stop_loss:    setup.stop_loss,
+      take_profit:  setup.take_profit,
+      risk_reward:  setup.risk_reward,
+      reasoning:    setup.reasoning,
+      key_risks:    setup.key_risks,
+      scanner_bias: setup.scanner_bias,
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error((detail as { detail?: string })?.detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<{ id: number }>;
+}
+
+/** Delete a journal entry by ID. */
+export async function deleteJournalEntry(id: number): Promise<void> {
+  const response = await fetch(`${BASE_URL}/journal/${id}`, { method: 'DELETE' });
+  if (!response.ok && response.status !== 404) {
+    throw new Error(`API error ${response.status}: ${response.statusText}`);
+  }
+}

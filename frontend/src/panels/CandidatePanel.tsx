@@ -1,5 +1,5 @@
-import { useState, CSSProperties } from 'react';
-import { requestTradeSetup } from '../api';
+import { useState, CSSProperties, type ReactNode } from 'react';
+import { requestTradeSetup, saveToJournal } from '../api';
 import type { ScannerResponse, SymbolScanResult, ScannerSignal, TradeSetup } from '../api';
 
 interface Props {
@@ -97,7 +97,14 @@ function SignalItem({ sig }: { sig: ScannerSignal }) {
   );
 }
 
-function SetupCard({ setup, onRegen, loading }: { setup: TradeSetup; onRegen: () => void; loading: boolean }) {
+function SetupCard({ setup, onRegen, onSave, loading, saving, saved }: {
+  setup: TradeSetup;
+  onRegen: () => void;
+  onSave:  () => void;
+  loading: boolean;
+  saving:  boolean;
+  saved:   boolean;
+}) {
   const isLong = setup.bias === 'long';
   const dirColor = isLong ? '#33aa66' : '#cc3333';
   const mid = (setup.entry_zone.low + setup.entry_zone.high) / 2;
@@ -163,7 +170,16 @@ function SetupCard({ setup, onRegen, loading }: { setup: TradeSetup; onRegen: ()
         <span style={{ fontSize: '10px', color: '#888', flex: 1 }}>{setup.key_risks}</span>
       </div>
 
-      <div style={{ fontSize: '9px', color: '#444', textAlign: 'right', marginTop: '6px' }}>
+      {/* Save to Journal */}
+      <button
+        style={saveBtnStyle(saving, saved)}
+        onClick={onSave}
+        disabled={saving || saved}
+      >
+        {saved ? '✓ Saved to Journal' : saving ? 'Saving…' : '📋 Save to Journal'}
+      </button>
+
+      <div style={{ fontSize: '9px', color: '#444', textAlign: 'right', marginTop: '2px' }}>
         Generated {time}
       </div>
     </div>
@@ -194,6 +210,8 @@ export default function CandidatePanel({ data }: Props) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
   const [lastSym, setLastSym] = useState<string | null>(null);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
 
   // Pick symbol with highest |composite| that actually has signals
   const top = data?.symbols.reduce<SymbolScanResult | null>((best, cur) => {
@@ -207,9 +225,11 @@ export default function CandidatePanel({ data }: Props) {
     setLastSym(top.symbol);
     setSetup(null);
     setError(null);
+    setSaved(false);
   }
 
   const handleGenerate = async () => {
+    setSaved(false);
     if (!top) return;
     setLoading(true);
     setError(null);
@@ -220,6 +240,19 @@ export default function CandidatePanel({ data }: Props) {
       setError(e instanceof Error ? e.message : 'Failed to generate setup.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!setup) return;
+    setSaving(true);
+    try {
+      await saveToJournal(setup);
+      setSaved(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Failed to save to journal.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -308,7 +341,14 @@ export default function CandidatePanel({ data }: Props) {
 
             {/* Setup card */}
             {setup && (
-              <SetupCard setup={setup} onRegen={handleGenerate} loading={loading} />
+              <SetupCard
+                setup={setup}
+                onRegen={handleGenerate}
+                onSave={handleSave}
+                loading={loading}
+                saving={saving}
+                saved={saved}
+              />
             )}
           </div>
         )}
@@ -317,7 +357,7 @@ export default function CandidatePanel({ data }: Props) {
   );
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+function Centered({ children }: { children: ReactNode }) {
   return (
     <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
       {children}
@@ -477,3 +517,17 @@ const retryBtnStyle: CSSProperties = {
   padding:         '2px 7px',
   flexShrink:      0,
 };
+
+const saveBtnStyle = (saving: boolean, saved: boolean): CSSProperties => ({
+  backgroundColor: saved ? '#0d2a1a' : saving ? '#1a1a1a' : '#12121a',
+  border:          `1px solid ${saved ? '#33aa6655' : saving ? '#333' : '#2a2a3a'}`,
+  borderRadius:    '4px',
+  color:           saved ? '#33aa66' : saving ? '#555' : '#8888aa',
+  cursor:          (saving || saved) ? 'default' : 'pointer',
+  fontSize:        '11px',
+  fontWeight:      600,
+  padding:         '6px 10px',
+  textAlign:       'center',
+  width:           '100%',
+  transition:      'all 0.2s',
+});

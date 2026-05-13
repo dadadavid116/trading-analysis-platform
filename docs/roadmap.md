@@ -33,12 +33,12 @@
 | 27 | Derivatives panel — funding rate, open interest, long/short ratio | ✅ Done |
 | 28 | Multi-asset universe — OKX as primary, BTC/ETH/SOL symbol registry, symbol selector, relative strength widget | ✅ Done |
 | 29 | Operator Console — event log DB + SSE terminal feed, navigation tabs, scanner/candidate placeholders | ✅ Done |
+| 30 | Market Scanner — momentum breakouts, liquidation clusters, OI divergence signals | ✅ Done |
+| 31 | AI Trade Setup — Claude Haiku structured entry/SL/TP generator in Candidate panel | ✅ Done |
+| 32 | Trade Journal — save AI setups, auto-outcome tracking (SL/TP1-3/expired) via price replay, win rate | ✅ Done |
 
 ## Upcoming Phases
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 30 | Market Scanner — momentum breakouts, liquidation clusters, OI divergence signals | Planned |
-| 31 | Trade Candidates — AI-ranked setups, risk/reward scoring, confluence | Planned |
-| 32 | Backtesting — historical signal replay, PnL simulation | Planned |
 | 33 | Mobile-responsive layout / PWA | Planned |
