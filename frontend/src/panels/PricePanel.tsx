@@ -93,6 +93,7 @@ const OVERLAY_OPTIONS = [
   { key: 'rsi',      label: 'RSI (14)',      color: '#e040fb' },
   { key: 'macd',     label: 'MACD (12,26)', color: '#ff9800' },
   { key: 'stochrsi', label: 'StochRSI',     color: '#26c6da' },
+  { key: 'cvd',      label: 'CVD',          color: '#64b5f6' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -211,6 +212,14 @@ function computeMACD(
   return { macd: macdLD, signal: signalLD, histogram };
 }
 
+function computeCVD(candles: KlineCandle[]): LineData[] {
+  let cum = 0;
+  return candles.map((c) => {
+    cum += c.close >= c.open ? c.volume : -c.volume;
+    return { time: c.time as UTCTimestamp, value: cum };
+  });
+}
+
 function computeStochRSI(
   closes: LineData[], rsiPeriod = 14, stochPeriod = 14, kSmooth = 3, dSmooth = 3,
 ): { k: LineData[]; d: LineData[] } {
@@ -304,6 +313,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const stochChartRef     = useRef<IChartApi | null>(null);
   const stochKRef         = useRef<ISeriesApi<'Line'> | null>(null);
   const stochDRef         = useRef<ISeriesApi<'Line'> | null>(null);
+
+  // CVD subplot — separate chart instance
+  const cvdContainerRef = useRef<HTMLDivElement>(null);
+  const cvdChartRef     = useRef<IChartApi | null>(null);
+  const cvdSeriesRef    = useRef<ISeriesApi<'Line'> | null>(null);
 
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
 
@@ -564,7 +578,30 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     stochKRef.current     = stochK;
     stochDRef.current     = stochD;
 
-    // ── Four-way time scale sync (main ↔ RSI ↔ MACD ↔ StochRSI) ─────────────
+    // ── CVD subplot chart ────────────────────────────────────────────────────
+    const cvdChart = createChart(cvdContainerRef.current!, {
+      layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
+      grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
+      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: '#2a2a2e', visible: false },
+      crosshair: {
+        vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+      },
+      handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false },
+      handleScale:  { mouseWheel: false, pinch: false },
+      width:  cvdContainerRef.current!.clientWidth,
+      height: cvdContainerRef.current!.clientHeight || 100,
+    });
+    const cvdSeries = cvdChart.addLineSeries({
+      color: '#64b5f6', lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true,
+    });
+    cvdSeries.createPriceLine({ price: 0, color: '#444', lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: false, title: '' });
+    cvdChartRef.current  = cvdChart;
+    cvdSeriesRef.current = cvdSeries;
+
+    // ── Five-way time scale sync (main ↔ RSI ↔ MACD ↔ StochRSI ↔ CVD) ───────
     let syncing = false;
     const syncAll = (src: IChartApi, others: IChartApi[]) => {
       src.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -574,10 +611,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         syncing = false;
       });
     };
-    syncAll(chart,      [rsiChart, macdChart, stochChart]);
-    syncAll(rsiChart,   [chart,    macdChart, stochChart]);
-    syncAll(macdChart,  [chart,    rsiChart,  stochChart]);
-    syncAll(stochChart, [chart,    rsiChart,  macdChart ]);
+    syncAll(chart,      [rsiChart, macdChart, stochChart, cvdChart]);
+    syncAll(rsiChart,   [chart,    macdChart, stochChart, cvdChart]);
+    syncAll(macdChart,  [chart,    rsiChart,  stochChart, cvdChart]);
+    syncAll(stochChart, [chart,    rsiChart,  macdChart,  cvdChart]);
+    syncAll(cvdChart,   [chart,    rsiChart,  macdChart,  stochChart]);
 
     // ResizeObserver keeps all charts in sync with panel width changes.
     const ro = new ResizeObserver(() => {
@@ -589,11 +627,14 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         macdChart.applyOptions({ width: macdContainerRef.current.clientWidth, height: macdContainerRef.current.clientHeight });
       if (stochContainerRef.current)
         stochChart.applyOptions({ width: stochContainerRef.current.clientWidth, height: stochContainerRef.current.clientHeight });
+      if (cvdContainerRef.current)
+        cvdChart.applyOptions({ width: cvdContainerRef.current.clientWidth, height: cvdContainerRef.current.clientHeight });
     });
     ro.observe(chartContainerRef.current);
     if (rsiContainerRef.current)   ro.observe(rsiContainerRef.current);
     if (macdContainerRef.current)  ro.observe(macdContainerRef.current);
     if (stochContainerRef.current) ro.observe(stochContainerRef.current);
+    if (cvdContainerRef.current)   ro.observe(cvdContainerRef.current);
 
     return () => {
       ro.disconnect();
@@ -601,6 +642,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       rsiChart.remove();
       macdChart.remove();
       stochChart.remove();
+      cvdChart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
       ema20Ref.current    = null;
@@ -620,6 +662,8 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       stochChartRef.current = null;
       stochKRef.current     = null;
       stochDRef.current     = null;
+      cvdChartRef.current  = null;
+      cvdSeriesRef.current = null;
     };
   }, []);
 
@@ -756,6 +800,9 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         stochKRef.current?.setData(stoch.k);
         stochDRef.current?.setData(stoch.d);
 
+        // CVD — cumulative signed volume
+        cvdSeriesRef.current?.setData(computeCVD(data));
+
         setChartLoading(false);
       })
       .catch((err: Error) => {
@@ -851,6 +898,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const showRsi   = overlays.has('rsi');
   const showMacd  = overlays.has('macd');
   const showStoch = overlays.has('stochrsi');
+  const showCvd   = overlays.has('cvd');
 
   return (
     <div style={{ ...panelStyles.card, position: 'relative' }}>
@@ -1088,6 +1136,18 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             flexShrink: 0,
             overflow: 'hidden',
             borderTop: showStoch ? '1px solid #1e1e22' : 'none',
+            transition: 'height 0.15s ease',
+          }}
+        />
+        {/* CVD subplot pane */}
+        <div
+          ref={cvdContainerRef}
+          style={{
+            width: '100%',
+            height: showCvd ? '110px' : '0px',
+            flexShrink: 0,
+            overflow: 'hidden',
+            borderTop: showCvd ? '1px solid #1e1e22' : 'none',
             transition: 'height 0.15s ease',
           }}
         />
