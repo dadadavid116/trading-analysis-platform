@@ -54,4 +54,5 @@
 | 43 | Position Size Calculator — account/risk/leverage inputs, notional/margin/TP profit rows in Candidate panel | ✅ Done |
 | 44 | StochRSI(3,3,14,14) Subplot — %K/%D lines in a fourth chart pane with 80/20 reference lines and four-way time scale sync | ✅ Done |
 | 45 | CVD (Cumulative Volume Delta) Subplot — cumulative signed-volume line with zero reference, five-way time scale sync | ✅ Done |
-| 46 | TBD | Planned |
+| 46 | Daily Pivot Points — PP/R1-R3/S1-S3 price lines from yesterday's OHLC, toggle chip, color-coded by level | ✅ Done |
+| 47 | TBD | Planned |

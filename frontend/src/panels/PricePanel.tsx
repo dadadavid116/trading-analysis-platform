@@ -94,6 +94,7 @@ const OVERLAY_OPTIONS = [
   { key: 'macd',     label: 'MACD (12,26)', color: '#ff9800' },
   { key: 'stochrsi', label: 'StochRSI',     color: '#26c6da' },
   { key: 'cvd',      label: 'CVD',          color: '#64b5f6' },
+  { key: 'pivots',   label: 'Pivots',       color: '#ffd54f' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -285,6 +286,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const [showIndicatorModal, setShowIndicatorModal] = useState(false);
   const analysisLinesRef = useRef<IPriceLine[]>([]);
   const levelsLinesRef   = useRef<IPriceLine[]>([]);
+  const pivotLinesRef    = useRef<IPriceLine[]>([]);
 
   // Overlay series (EMA 20/50/200, VWAP, Volume, Bollinger Bands)
   const ema20Ref    = useRef<ISeriesApi<'Line'>      | null>(null);
@@ -687,7 +689,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     return () => clearInterval(id);
   }, [timeframe, symbol]);
 
-  // ── Clear analysis + S&R lines when symbol changes ───────────────────────
+  // ── Clear analysis + S&R + pivot lines when symbol changes ───────────────
   useEffect(() => {
     if (!seriesRef.current) return;
     for (const line of analysisLinesRef.current) {
@@ -698,6 +700,10 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       try { seriesRef.current.removePriceLine(line); } catch { /* ignore */ }
     }
     levelsLinesRef.current = [];
+    for (const line of pivotLinesRef.current) {
+      try { seriesRef.current.removePriceLine(line); } catch { /* ignore */ }
+    }
+    pivotLinesRef.current = [];
   }, [symbol]);
 
   // ── Draw S&R level lines on symbol change ────────────────────────────────
@@ -731,6 +737,55 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [symbol]);
+
+  // ── Draw / remove daily pivot point lines ────────────────────────────────
+  // Re-runs only when the pivots toggle or symbol changes (not on every overlay tweak).
+  const pivotsOn = overlays.has('pivots');
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+
+    for (const line of pivotLinesRef.current) {
+      try { series.removePriceLine(line); } catch { /* ignore */ }
+    }
+    pivotLinesRef.current = [];
+
+    if (!pivotsOn) return;
+
+    let cancelled = false;
+    fetchKlines('1d', 3, symbol)
+      .then((candles) => {
+        if (cancelled || !seriesRef.current || candles.length < 2) return;
+        const prev = candles[candles.length - 2];     // yesterday's completed candle
+        const H = prev.high, L = prev.low, C = prev.close;
+        const PP = (H + L + C) / 3;
+        const R1 = 2 * PP - L;
+        const R2 = PP + (H - L);
+        const R3 = H + 2 * (PP - L);
+        const S1 = 2 * PP - H;
+        const S2 = PP - (H - L);
+        const S3 = L - 2 * (H - PP);
+
+        const addLine = (price: number, color: string, title: string, solid = false) => {
+          const line = seriesRef.current!.createPriceLine({
+            price, color, lineWidth: 1,
+            lineStyle: solid ? LineStyle.Solid : LineStyle.Dashed,
+            axisLabelVisible: true, title,
+          });
+          pivotLinesRef.current.push(line);
+        };
+
+        addLine(R3, '#ef5350', 'R3');
+        addLine(R2, '#ef535099', 'R2');
+        addLine(R1, '#ef535066', 'R1');
+        addLine(PP, '#ffd54f',   'PP', true);
+        addLine(S1, '#26a69a66', 'S1');
+        addLine(S2, '#26a69a99', 'S2');
+        addLine(S3, '#26a69a',   'S3');
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [pivotsOn, symbol]);
 
   // ── Sync overlay visibility when toggles change ───────────────────────────
   useEffect(() => {
