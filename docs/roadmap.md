@@ -49,4 +49,5 @@
 | 38 | Funding Rate & OI History Sparklines — 24H time-series charts in Derivatives panel | ✅ Done |
 | 39 | Chart Indicator Overlays — EMA 20/50/200 + VWAP line series with toggle chips | ✅ Done |
 | 40 | Volume Histogram + Bollinger Bands — chart overlays with direction-colored volume bars and BB(20,2) | ✅ Done |
-| 41 | TBD | Planned |
+| 41 | RSI(14) Subplot — separate chart pane below price chart with 30/70 reference lines and time scale sync | ✅ Done |
+| 42 | TBD | Planned |

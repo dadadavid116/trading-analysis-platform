@@ -90,6 +90,7 @@ const OVERLAY_OPTIONS = [
   { key: 'vwap',   label: 'VWAP',      color: '#4a9eff' },
   { key: 'volume', label: 'Volume',    color: '#26a69a' },
   { key: 'bb',     label: 'BB (20,2)', color: '#5588bb' },
+  { key: 'rsi',    label: 'RSI (14)',  color: '#e040fb' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -99,7 +100,7 @@ function loadOverlays(): Set<string> {
     const saved = localStorage.getItem(OVERLAY_STORAGE_KEY);
     if (saved) return new Set(JSON.parse(saved) as string[]);
   } catch { /* ignore */ }
-  return new Set(['ema20', 'ema50', 'volume']);
+  return new Set(['ema20', 'ema50', 'volume', 'rsi']);
 }
 
 function computeEMA(closes: LineData[], period: number): LineData[] {
@@ -142,6 +143,26 @@ function computeBollingerBands(
     lower.push({ time: t, value: sma - mult * std });
   }
   return { upper, middle, lower };
+}
+
+function computeRSI(closes: LineData[], period = 14): LineData[] {
+  if (closes.length < period + 1) return [];
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= period; i++) {
+    const d = closes[i].value - closes[i - 1].value;
+    if (d > 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
+  const rsi = (ag: number, al: number) => (al === 0 ? 100 : 100 - 100 / (1 + ag / al));
+  const result: LineData[] = [{ time: closes[period].time, value: rsi(avgGain, avgLoss) }];
+  for (let i = period + 1; i < closes.length; i++) {
+    const d = closes[i].value - closes[i - 1].value;
+    avgGain = (avgGain * (period - 1) + (d > 0 ? d : 0)) / period;
+    avgLoss = (avgLoss * (period - 1) + (d < 0 ? -d : 0)) / period;
+    result.push({ time: closes[i].time, value: rsi(avgGain, avgLoss) });
+  }
+  return result;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -191,6 +212,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const bbUpperRef  = useRef<ISeriesApi<'Line'>      | null>(null);
   const bbMiddleRef = useRef<ISeriesApi<'Line'>      | null>(null);
   const bbLowerRef  = useRef<ISeriesApi<'Line'>      | null>(null);
+
+  // RSI subplot — separate chart instance
+  const rsiContainerRef = useRef<HTMLDivElement>(null);
+  const rsiChartRef     = useRef<IChartApi | null>(null);
+  const rsiSeriesRef    = useRef<ISeriesApi<'Line'> | null>(null);
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
 
   function toggleOverlay(key: string) {
@@ -373,19 +399,69 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       setPopover({ x: param.point.x, y: param.point.y, price: Math.round(price) });
     });
 
-    // ResizeObserver keeps the chart in sync with panel width changes.
+    // ── RSI subplot chart ────────────────────────────────────────────────────
+    const rsiChart = createChart(rsiContainerRef.current!, {
+      layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
+      grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
+      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: '#2a2a2e', visible: false },
+      crosshair: {
+        vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+      },
+      handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false },
+      handleScale: { mouseWheel: false, pinch: false },
+      width:  rsiContainerRef.current!.clientWidth,
+      height: rsiContainerRef.current!.clientHeight || 100,
+    });
+
+    const rsiSeries = rsiChart.addLineSeries({
+      color: '#e040fb', lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: true,
+      crosshairMarkerVisible: true,
+    });
+    // Reference lines at 70 (overbought), 50 (midline), 30 (oversold)
+    rsiSeries.createPriceLine({ price: 70, color: '#ef535066', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '70' });
+    rsiSeries.createPriceLine({ price: 50, color: '#33333388', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: '' });
+    rsiSeries.createPriceLine({ price: 30, color: '#26a69a66', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '30' });
+    rsiChartRef.current  = rsiChart;
+    rsiSeriesRef.current = rsiSeries;
+
+    // ── Bidirectional time scale sync ────────────────────────────────────────
+    let syncing = false;
+    chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (syncing || !range) return;
+      syncing = true;
+      rsiChart.timeScale().setVisibleLogicalRange(range);
+      syncing = false;
+    });
+    rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+      if (syncing || !range) return;
+      syncing = true;
+      chart.timeScale().setVisibleLogicalRange(range);
+      syncing = false;
+    });
+
+    // ResizeObserver keeps both charts in sync with panel width changes.
     const ro = new ResizeObserver(() => {
       if (chartContainerRef.current)
         chart.applyOptions({
           width:  chartContainerRef.current.clientWidth,
           height: chartContainerRef.current.clientHeight,
         });
+      if (rsiContainerRef.current)
+        rsiChart.applyOptions({
+          width:  rsiContainerRef.current.clientWidth,
+          height: rsiContainerRef.current.clientHeight,
+        });
     });
     ro.observe(chartContainerRef.current);
+    if (rsiContainerRef.current) ro.observe(rsiContainerRef.current);
 
     return () => {
       ro.disconnect();
       chart.remove();
+      rsiChart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
       ema20Ref.current    = null;
@@ -396,6 +472,8 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       bbUpperRef.current  = null;
       bbMiddleRef.current = null;
       bbLowerRef.current  = null;
+      rsiChartRef.current  = null;
+      rsiSeriesRef.current = null;
     };
   }, []);
 
@@ -518,6 +596,9 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         bbMiddleRef.current?.setData(bb.middle);
         bbLowerRef.current?.setData(bb.lower);
 
+        // RSI (14)
+        rsiSeriesRef.current?.setData(computeRSI(closeLD));
+
         setChartLoading(false);
       })
       .catch((err: Error) => {
@@ -610,6 +691,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   const containerWidth = chartContainerRef.current?.clientWidth ?? 400;
+  const showRsi = overlays.has('rsi');
 
   return (
     <div style={{ ...panelStyles.card, position: 'relative' }}>
@@ -813,7 +895,19 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             Chart error: {chartError}
           </p>
         )}
-        <div ref={chartContainerRef} style={styles.chartContainer} />
+        <div ref={chartContainerRef} style={{ ...styles.chartContainer, flex: 1 }} />
+        {/* RSI subplot pane — collapses to zero height when hidden */}
+        <div
+          ref={rsiContainerRef}
+          style={{
+            width: '100%',
+            height: showRsi ? '110px' : '0px',
+            flexShrink: 0,
+            overflow: 'hidden',
+            borderTop: showRsi ? '1px solid #1e1e22' : 'none',
+            transition: 'height 0.15s ease',
+          }}
+        />
 
         {/* Crosshair price label — follows cursor, hidden while popover is open */}
         {crosshair && !popover && (
