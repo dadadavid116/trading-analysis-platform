@@ -90,7 +90,8 @@ const OVERLAY_OPTIONS = [
   { key: 'vwap',   label: 'VWAP',      color: '#4a9eff' },
   { key: 'volume', label: 'Volume',    color: '#26a69a' },
   { key: 'bb',     label: 'BB (20,2)', color: '#5588bb' },
-  { key: 'rsi',    label: 'RSI (14)',  color: '#e040fb' },
+  { key: 'rsi',    label: 'RSI (14)',     color: '#e040fb' },
+  { key: 'macd',   label: 'MACD (12,26)', color: '#ff9800' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -165,6 +166,50 @@ function computeRSI(closes: LineData[], period = 14): LineData[] {
   return result;
 }
 
+function emaArr(vals: number[], period: number): number[] {
+  const k   = 2 / (period + 1);
+  const out = new Array(vals.length).fill(NaN);
+  if (vals.length < period) return out;
+  out[period - 1] = vals.slice(0, period).reduce((s, v) => s + v, 0) / period;
+  for (let i = period; i < vals.length; i++)
+    out[i] = vals[i] * k + out[i - 1] * (1 - k);
+  return out;
+}
+
+interface MACDPoint { time: UTCTimestamp; value: number; color: string; }
+
+function computeMACD(
+  closes: LineData[], fast = 12, slow = 26, sig = 9,
+): { macd: LineData[]; signal: LineData[]; histogram: MACDPoint[] } {
+  const vals = closes.map(d => d.value);
+  const e12  = emaArr(vals, fast);
+  const e26  = emaArr(vals, slow);
+
+  // MACD line (valid once both EMAs have warmed up)
+  const macdLD: LineData[] = [];
+  for (let i = 0; i < closes.length; i++) {
+    if (!isNaN(e12[i]) && !isNaN(e26[i]))
+      macdLD.push({ time: closes[i].time, value: e12[i] - e26[i] });
+  }
+
+  // Signal line — EMA(sig) of MACD values
+  const sigArr  = emaArr(macdLD.map(d => d.value), sig);
+  const signalLD: LineData[] = macdLD
+    .map((d, i) => (isNaN(sigArr[i]) ? null : { time: d.time, value: sigArr[i] }))
+    .filter((x): x is LineData => x !== null);
+
+  // Histogram — MACD minus Signal where both are valid
+  const sigMap = new Map(signalLD.map(d => [d.time as number, d.value]));
+  const histogram: MACDPoint[] = macdLD
+    .filter(d => sigMap.has(d.time as number))
+    .map(d => {
+      const h = d.value - sigMap.get(d.time as number)!;
+      return { time: d.time as UTCTimestamp, value: h, color: h >= 0 ? '#26a69a99' : '#ef535099' };
+    });
+
+  return { macd: macdLD, signal: signalLD, histogram };
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface PricePanelProps {
@@ -217,6 +262,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const rsiContainerRef = useRef<HTMLDivElement>(null);
   const rsiChartRef     = useRef<IChartApi | null>(null);
   const rsiSeriesRef    = useRef<ISeriesApi<'Line'> | null>(null);
+
+  // MACD subplot — separate chart instance
+  const macdContainerRef = useRef<HTMLDivElement>(null);
+  const macdChartRef     = useRef<IChartApi | null>(null);
+  const macdLineRef      = useRef<ISeriesApi<'Line'>      | null>(null);
+  const macdSignalRef    = useRef<ISeriesApi<'Line'>      | null>(null);
+  const macdHistRef      = useRef<ISeriesApi<'Histogram'> | null>(null);
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
 
   function toggleOverlay(key: string) {
@@ -427,41 +479,63 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     rsiChartRef.current  = rsiChart;
     rsiSeriesRef.current = rsiSeries;
 
-    // ── Bidirectional time scale sync ────────────────────────────────────────
-    let syncing = false;
-    chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (syncing || !range) return;
-      syncing = true;
-      rsiChart.timeScale().setVisibleLogicalRange(range);
-      syncing = false;
-    });
-    rsiChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-      if (syncing || !range) return;
-      syncing = true;
-      chart.timeScale().setVisibleLogicalRange(range);
-      syncing = false;
-    });
+    // ── MACD subplot chart ───────────────────────────────────────────────────
+    const macdChartOpts = {
+      layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
+      grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
+      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: '#2a2a2e', visible: false },
+      crosshair: {
+        vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+      },
+      handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false },
+      handleScale: { mouseWheel: false, pinch: false },
+      width:  macdContainerRef.current!.clientWidth,
+      height: macdContainerRef.current!.clientHeight || 100,
+    };
+    const macdChart  = createChart(macdContainerRef.current!, macdChartOpts);
+    const macdLine   = macdChart.addLineSeries({ color: '#4a9eff', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
+    const macdSignal = macdChart.addLineSeries({ color: '#ff9800', lineWidth: 1, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: false });
+    const macdHist   = macdChart.addHistogramSeries({ priceFormat: { type: 'price', precision: 4, minMove: 0.0001 }, priceScaleId: 'right', lastValueVisible: false, priceLineVisible: false });
+    macdLine.createPriceLine({ price: 0, color: '#444', lineWidth: 1, lineStyle: LineStyle.Solid, axisLabelVisible: false, title: '' });
+    macdChartRef.current  = macdChart;
+    macdLineRef.current   = macdLine;
+    macdSignalRef.current = macdSignal;
+    macdHistRef.current   = macdHist;
 
-    // ResizeObserver keeps both charts in sync with panel width changes.
+    // ── Three-way time scale sync (main ↔ RSI ↔ MACD) ────────────────────────
+    let syncing = false;
+    const syncAll = (src: IChartApi, others: IChartApi[]) => {
+      src.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (syncing || !range) return;
+        syncing = true;
+        others.forEach(c => c.timeScale().setVisibleLogicalRange(range));
+        syncing = false;
+      });
+    };
+    syncAll(chart,    [rsiChart, macdChart]);
+    syncAll(rsiChart, [chart,    macdChart]);
+    syncAll(macdChart,[chart,    rsiChart ]);
+
+    // ResizeObserver keeps all charts in sync with panel width changes.
     const ro = new ResizeObserver(() => {
       if (chartContainerRef.current)
-        chart.applyOptions({
-          width:  chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight,
-        });
+        chart.applyOptions({ width: chartContainerRef.current.clientWidth, height: chartContainerRef.current.clientHeight });
       if (rsiContainerRef.current)
-        rsiChart.applyOptions({
-          width:  rsiContainerRef.current.clientWidth,
-          height: rsiContainerRef.current.clientHeight,
-        });
+        rsiChart.applyOptions({ width: rsiContainerRef.current.clientWidth, height: rsiContainerRef.current.clientHeight });
+      if (macdContainerRef.current)
+        macdChart.applyOptions({ width: macdContainerRef.current.clientWidth, height: macdContainerRef.current.clientHeight });
     });
     ro.observe(chartContainerRef.current);
-    if (rsiContainerRef.current) ro.observe(rsiContainerRef.current);
+    if (rsiContainerRef.current)  ro.observe(rsiContainerRef.current);
+    if (macdContainerRef.current) ro.observe(macdContainerRef.current);
 
     return () => {
       ro.disconnect();
       chart.remove();
       rsiChart.remove();
+      macdChart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
       ema20Ref.current    = null;
@@ -474,6 +548,10 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       bbLowerRef.current  = null;
       rsiChartRef.current  = null;
       rsiSeriesRef.current = null;
+      macdChartRef.current  = null;
+      macdLineRef.current   = null;
+      macdSignalRef.current = null;
+      macdHistRef.current   = null;
     };
   }, []);
 
@@ -599,6 +677,12 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         // RSI (14)
         rsiSeriesRef.current?.setData(computeRSI(closeLD));
 
+        // MACD (12, 26, 9)
+        const macd = computeMACD(closeLD);
+        macdLineRef.current?.setData(macd.macd);
+        macdSignalRef.current?.setData(macd.signal);
+        macdHistRef.current?.setData(macd.histogram);
+
         setChartLoading(false);
       })
       .catch((err: Error) => {
@@ -691,7 +775,8 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   const containerWidth = chartContainerRef.current?.clientWidth ?? 400;
-  const showRsi = overlays.has('rsi');
+  const showRsi  = overlays.has('rsi');
+  const showMacd = overlays.has('macd');
 
   return (
     <div style={{ ...panelStyles.card, position: 'relative' }}>
@@ -905,6 +990,18 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             flexShrink: 0,
             overflow: 'hidden',
             borderTop: showRsi ? '1px solid #1e1e22' : 'none',
+            transition: 'height 0.15s ease',
+          }}
+        />
+        {/* MACD subplot pane */}
+        <div
+          ref={macdContainerRef}
+          style={{
+            width: '100%',
+            height: showMacd ? '110px' : '0px',
+            flexShrink: 0,
+            overflow: 'hidden',
+            borderTop: showMacd ? '1px solid #1e1e22' : 'none',
             transition: 'height 0.15s ease',
           }}
         />
