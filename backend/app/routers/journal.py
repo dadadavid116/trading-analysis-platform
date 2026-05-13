@@ -3,6 +3,7 @@ routers/journal.py — Trade journal: save AI setups, track outcomes automatical
 
 POST /api/journal          — save a trade setup
 GET  /api/journal          — list all entries with auto-computed outcomes
+GET  /api/journal/stats    — aggregated performance statistics
 DELETE /api/journal/{id}   — remove a journal entry
 
 Outcome logic (checked on-the-fly against price_candles):
@@ -182,6 +183,95 @@ async def list_journal_entries(db: AsyncSession = Depends(get_db)):
             outcome      = outcome,
         ))
     return out
+
+
+@router.get("/stats")
+async def journal_performance_stats(db: AsyncSession = Depends(get_db)):
+    """
+    Compute aggregated performance statistics across all journal entries.
+
+    Returns win rate, expectancy, per-symbol and per-bias breakdowns, outcome
+    distribution, and the current win/loss streak (from newest entry backwards).
+    """
+    result  = await db.execute(select(JournalEntry).order_by(desc(JournalEntry.created_at)))
+    entries = result.scalars().all()
+
+    if not entries:
+        return {
+            "total": 0, "closed": 0, "pending": 0, "expired": 0,
+            "wins": 0, "losses": 0,
+            "win_rate": None, "avg_rr": None, "expectancy": None,
+            "by_outcome": {"tp1": 0, "tp2": 0, "tp3": 0, "sl": 0, "expired": 0, "pending": 0},
+            "by_symbol":  {},
+            "by_bias":    {"long": {"wins": 0, "losses": 0}, "short": {"wins": 0, "losses": 0}},
+            "streak":     0,
+        }
+
+    # Compute all outcomes in one pass (newest → oldest, matching entries order)
+    outcomes: list[str] = [await _compute_outcome(e, db) for e in entries]
+
+    by_outcome: dict[str, int] = {"tp1": 0, "tp2": 0, "tp3": 0, "sl": 0, "expired": 0, "pending": 0}
+    by_symbol:  dict[str, dict[str, int]] = {}
+    by_bias:    dict[str, dict[str, int]] = {
+        "long":  {"wins": 0, "losses": 0},
+        "short": {"wins": 0, "losses": 0},
+    }
+    rr_wins: list[float] = []
+
+    for entry, outcome in zip(entries, outcomes):
+        by_outcome[outcome] = by_outcome.get(outcome, 0) + 1
+
+        sym = entry.symbol
+        if sym not in by_symbol:
+            by_symbol[sym] = {"wins": 0, "losses": 0}
+
+        if outcome in ("tp1", "tp2", "tp3"):
+            by_symbol[sym]["wins"] += 1
+            by_bias[entry.bias]["wins"] += 1
+            rr_wins.append(entry.risk_reward)
+        elif outcome == "sl":
+            by_symbol[sym]["losses"] += 1
+            by_bias[entry.bias]["losses"] += 1
+
+    closed  = sum(by_outcome[k] for k in ("tp1", "tp2", "tp3", "sl"))
+    wins    = by_outcome["tp1"] + by_outcome["tp2"] + by_outcome["tp3"]
+    losses  = by_outcome["sl"]
+
+    win_rate   = round(wins / closed, 3)   if closed > 0           else None
+    avg_rr     = round(sum(rr_wins) / len(rr_wins), 2) if rr_wins  else None
+    expectancy = (
+        round(win_rate * avg_rr - (1 - win_rate), 3)
+        if win_rate is not None and avg_rr is not None
+        else None
+    )
+
+    # Streak: walk newest→oldest counting consecutive same-direction outcomes
+    streak = 0
+    for outcome in outcomes:
+        if outcome in ("tp1", "tp2", "tp3"):
+            if streak < 0: break
+            streak += 1
+        elif outcome == "sl":
+            if streak > 0: break
+            streak -= 1
+        else:
+            break  # pending / expired resets streak count
+
+    return {
+        "total":      len(entries),
+        "closed":     closed,
+        "pending":    by_outcome["pending"],
+        "expired":    by_outcome["expired"],
+        "wins":       wins,
+        "losses":     losses,
+        "win_rate":   win_rate,
+        "avg_rr":     avg_rr,
+        "expectancy": expectancy,
+        "by_outcome": by_outcome,
+        "by_symbol":  by_symbol,
+        "by_bias":    by_bias,
+        "streak":     streak,
+    }
 
 
 @router.delete("/{entry_id}", status_code=204)

@@ -598,3 +598,26 @@ export async function deleteJournalEntry(id: number): Promise<void> {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
   }
 }
+
+// ── Journal Stats (Phase 34) ──────────────────────────────────────────────────
+
+export interface JournalStats {
+  total:      number;
+  closed:     number;
+  pending:    number;
+  expired:    number;
+  wins:       number;
+  losses:     number;
+  win_rate:   number | null;
+  avg_rr:     number | null;
+  expectancy: number | null;
+  streak:     number;
+  by_outcome: Record<JournalOutcome, number>;
+  by_symbol:  Record<string, { wins: number; losses: number }>;
+  by_bias:    { long: { wins: number; losses: number }; short: { wins: number; losses: number } };
+}
+
+/** Fetch aggregated performance statistics from all journal entries. */
+export function fetchJournalStats(): Promise<JournalStats> {
+  return apiFetch<JournalStats>('/journal/stats');
+}

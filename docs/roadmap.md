@@ -37,9 +37,10 @@
 | 31 | AI Trade Setup — Claude Haiku structured entry/SL/TP generator in Candidate panel | ✅ Done |
 | 32 | Trade Journal — save AI setups, auto-outcome tracking (SL/TP1-3/expired) via price replay, win rate | ✅ Done |
 | 33 | Mobile-responsive layout + PWA — 2-row compact header, bottom-tab navigation, service worker + manifest | ✅ Done |
+| 34 | Trade Performance Dashboard — win rate, expectancy, per-symbol/bias breakdown, outcome bars, streak | ✅ Done |
 
 ## Upcoming Phases
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 34 | TBD | Planned |
+| 35 | TBD | Planned |

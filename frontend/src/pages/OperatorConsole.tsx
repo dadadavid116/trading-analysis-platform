@@ -5,16 +5,18 @@ import EventLogPanel from '../panels/EventLogPanel';
 import ScannerPanel from '../panels/ScannerPanel';
 import CandidatePanel from '../panels/CandidatePanel';
 import JournalPanel from '../panels/JournalPanel';
+import PerformancePanel from '../panels/PerformancePanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab    = 'events' | 'journal';
-type MobileTab   = 'scanner' | 'candidate' | 'journal' | 'events';
+type RightTab    = 'events' | 'journal' | 'performance';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
-  { id: 'scanner',   label: 'Scanner'   },
-  { id: 'candidate', label: 'Candidate' },
-  { id: 'journal',   label: 'Journal'   },
-  { id: 'events',    label: 'Events'    },
+  { id: 'scanner',     label: 'Scanner' },
+  { id: 'candidate',   label: 'Setup'   },
+  { id: 'performance', label: 'Stats'   },
+  { id: 'journal',     label: 'Journal' },
+  { id: 'events',      label: 'Events'  },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -44,10 +46,11 @@ export default function OperatorConsole() {
   if (isMobile) {
     const activePanel = (() => {
       switch (mobileTab) {
-        case 'scanner':   return <ScannerPanel data={scanner} error={scanErr} />;
-        case 'candidate': return <CandidatePanel data={scanner} />;
-        case 'journal':   return <JournalPanel />;
-        case 'events':    return <EventLogPanel />;
+        case 'scanner':     return <ScannerPanel data={scanner} error={scanErr} />;
+        case 'candidate':   return <CandidatePanel data={scanner} />;
+        case 'performance': return <PerformancePanel />;
+        case 'journal':     return <JournalPanel />;
+        case 'events':      return <EventLogPanel />;
       }
     })();
 
@@ -91,16 +94,20 @@ export default function OperatorConsole() {
       {/* Right column: tabbed (Event Log | Journal) */}
       <div style={rightColStyle}>
         <div style={tabBarStyle}>
-          <button style={tabBtnStyle(rightTab === 'events')}  onClick={() => setRightTab('events')}>
+          <button style={tabBtnStyle(rightTab === 'events')}      onClick={() => setRightTab('events')}>
             Event Log
           </button>
-          <button style={tabBtnStyle(rightTab === 'journal')} onClick={() => setRightTab('journal')}>
+          <button style={tabBtnStyle(rightTab === 'journal')}     onClick={() => setRightTab('journal')}>
             Journal
+          </button>
+          <button style={tabBtnStyle(rightTab === 'performance')} onClick={() => setRightTab('performance')}>
+            Performance
           </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {rightTab === 'events'  && <EventLogPanel />}
-          {rightTab === 'journal' && <JournalPanel />}
+          {rightTab === 'events'      && <EventLogPanel />}
+          {rightTab === 'journal'     && <JournalPanel />}
+          {rightTab === 'performance' && <PerformancePanel />}
         </div>
       </div>
     </div>
