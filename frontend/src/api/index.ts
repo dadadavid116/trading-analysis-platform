@@ -480,11 +480,12 @@ export function fetchEvents(limit = 100, sinceId = 0): Promise<EventLogEntry[]> 
 // ── Scanner (Phase 30) ────────────────────────────────────────────────────────
 
 export interface ScannerSignal {
-  type:      string;
-  label:     string;
-  severity:  'info' | 'warning' | 'alert';
-  direction: 'bullish' | 'bearish' | 'neutral';
-  value:     number;
+  type:       string;
+  label:      string;
+  severity:   'info' | 'warning' | 'alert';
+  direction:  'bullish' | 'bearish' | 'neutral';
+  value:      number;
+  timeframe?: string;   // "1m" | "15m" | "1H" | undefined (legacy signals)
 }
 
 export interface SymbolScanResult {

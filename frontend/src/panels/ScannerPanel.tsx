@@ -45,6 +45,25 @@ function ScoreBar({ composite }: { composite: number }) {
   );
 }
 
+const TF_COLOR: Record<string, string> = {
+  '1m':  '#444',
+  '15m': '#3a6aaf',
+  '1H':  '#33aa66',
+};
+
+function TfBadge({ tf }: { tf?: string }) {
+  if (!tf || tf === '1m') return null;
+  return (
+    <span style={{
+      fontSize: '8px', fontWeight: 700, color: TF_COLOR[tf] ?? '#555',
+      border: `1px solid ${TF_COLOR[tf] ?? '#555'}44`,
+      borderRadius: '2px', padding: '0 3px', flexShrink: 0, letterSpacing: '0.3px',
+    }}>
+      {tf}
+    </span>
+  );
+}
+
 function SignalRow({ sig }: { sig: ScannerSignal }) {
   return (
     <div style={sigRowStyle}>
@@ -57,6 +76,7 @@ function SignalRow({ sig }: { sig: ScannerSignal }) {
       <span style={{ color: '#aaa', fontSize: '10px', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {sig.label}
       </span>
+      <TfBadge tf={sig.timeframe} />
     </div>
   );
 }

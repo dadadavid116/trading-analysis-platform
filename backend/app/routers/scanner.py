@@ -18,15 +18,10 @@ from typing import Any, List
 import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.database import get_db
-from app.models.price import PriceCandle
-from app.models.liquidation import Liquidation
-from app.models.derivatives import FundingRate, OpenInterest, LSRatio
-
 from app.database import get_db
 from app.models.price import PriceCandle
 from app.models.liquidation import Liquidation
@@ -37,6 +32,55 @@ router = APIRouter(prefix="/scanner", tags=["scanner"])
 SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
 _SEVERITY_WEIGHT = {"info": 1, "warning": 2, "alert": 3}
+
+
+# ── Candle aggregation helper ──────────────────────────────────────────────────
+
+async def _aggregate_candles(
+    symbol: str, db: AsyncSession, interval_mins: int, limit_periods: int
+) -> list[dict]:
+    """
+    Aggregate stored 1m candles into higher-timeframe bars.
+    Returns at most `limit_periods` complete buckets, newest last.
+    """
+    n_1m = interval_mins * (limit_periods + 2)
+    result = await db.execute(
+        select(
+            PriceCandle.open, PriceCandle.high, PriceCandle.low,
+            PriceCandle.close, PriceCandle.volume, PriceCandle.timestamp,
+        )
+        .where(PriceCandle.symbol == symbol)
+        .order_by(desc(PriceCandle.timestamp))
+        .limit(n_1m)
+    )
+    rows = list(reversed(result.all()))  # oldest → newest
+
+    buckets: dict = {}
+    for row in rows:
+        ts = row.timestamp
+        snapped_min = (ts.minute // interval_mins) * interval_mins
+        bucket_ts   = ts.replace(minute=snapped_min, second=0, microsecond=0)
+        if bucket_ts not in buckets:
+            buckets[bucket_ts] = {
+                "ts":     bucket_ts,
+                "open":   float(row.open),
+                "high":   float(row.high),
+                "low":    float(row.low),
+                "close":  float(row.close),
+                "volume": float(row.volume),
+            }
+        else:
+            b = buckets[bucket_ts]
+            b["high"]   = max(b["high"],  float(row.high))
+            b["low"]    = min(b["low"],   float(row.low))
+            b["close"]  = float(row.close)
+            b["volume"] += float(row.volume)
+
+    sorted_bars = sorted(buckets.values(), key=lambda x: x["ts"])
+    # Drop the last (possibly incomplete) bucket
+    if len(sorted_bars) > 1:
+        sorted_bars = sorted_bars[:-1]
+    return sorted_bars[-limit_periods:]
 
 
 # ── Individual signal checks ───────────────────────────────────────────────────
@@ -216,16 +260,162 @@ async def _ls_signal(symbol: str, db: AsyncSession) -> list[dict]:
     return []
 
 
+# ── Multi-timeframe price signals ─────────────────────────────────────────────
+
+async def _price_signal_15m(symbol: str, db: AsyncSession) -> list[dict]:
+    """SMA14 momentum on 15-minute aggregated candles (threshold: ±0.5%, alert: ±1.5%)."""
+    bars = await _aggregate_candles(symbol, db, 15, 20)
+    if len(bars) < 14:
+        return []
+    closes  = [b["close"] for b in bars]
+    sma14   = sum(closes[-14:]) / 14
+    current = closes[-1]
+    pct     = (current - sma14) / sma14 * 100
+    if abs(pct) < 0.5:
+        return []
+    severity  = "alert" if abs(pct) >= 1.5 else "warning"
+    direction = "bullish" if pct > 0 else "bearish"
+    return [{
+        "type": "price_momentum_15m", "timeframe": "15m",
+        "label": f"15m: {pct:+.2f}% vs SMA14",
+        "severity": severity, "direction": direction, "value": round(pct, 3),
+    }]
+
+
+async def _price_signal_1h(symbol: str, db: AsyncSession) -> list[dict]:
+    """SMA10 momentum on 1-hour aggregated candles (threshold: ±0.8%, alert: ±2.0%)."""
+    bars = await _aggregate_candles(symbol, db, 60, 24)
+    if len(bars) < 10:
+        return []
+    closes  = [b["close"] for b in bars]
+    sma10   = sum(closes[-10:]) / 10
+    current = closes[-1]
+    pct     = (current - sma10) / sma10 * 100
+    if abs(pct) < 0.8:
+        return []
+    severity  = "alert" if abs(pct) >= 2.0 else "warning"
+    direction = "bullish" if pct > 0 else "bearish"
+    return [{
+        "type": "price_momentum_1h", "timeframe": "1H",
+        "label": f"1H: {pct:+.2f}% vs SMA10",
+        "severity": severity, "direction": direction, "value": round(pct, 3),
+    }]
+
+
+async def _candle_pattern_signal(symbol: str, db: AsyncSession) -> list[dict]:
+    """
+    Detect candlestick patterns on the last three 15-minute bars.
+    Patterns: doji, hammer, shooting star, bullish/bearish engulfing.
+    """
+    bars = await _aggregate_candles(symbol, db, 15, 5)
+    if len(bars) < 2:
+        return []
+
+    last = bars[-1]
+    prev = bars[-2]
+
+    o, h, l, c = last["open"], last["high"], last["low"], last["close"]
+    body        = abs(c - o)
+    range_      = h - l
+    if range_ < 1e-9:
+        return []
+
+    upper_wick  = h - max(o, c)
+    lower_wick  = min(o, c) - l
+    body_ratio  = body / range_
+
+    signals = []
+
+    # Doji: body < 10% of full range
+    if body_ratio < 0.10:
+        signals.append({
+            "type": "pattern_doji", "timeframe": "15m",
+            "label": "15m: Doji (indecision)", "severity": "info",
+            "direction": "neutral", "value": 0,
+        })
+
+    # Hammer: lower wick > 2× body, tiny upper wick
+    elif lower_wick > 2 * body and upper_wick < body and body > 0:
+        signals.append({
+            "type": "pattern_hammer", "timeframe": "15m",
+            "label": "15m: Hammer (bullish reversal)", "severity": "info",
+            "direction": "bullish", "value": 0,
+        })
+
+    # Shooting star: upper wick > 2× body, tiny lower wick
+    elif upper_wick > 2 * body and lower_wick < body and body > 0:
+        signals.append({
+            "type": "pattern_star", "timeframe": "15m",
+            "label": "15m: Shooting star (bearish reversal)", "severity": "info",
+            "direction": "bearish", "value": 0,
+        })
+
+    # Engulfing patterns
+    po, pc = prev["open"], prev["close"]
+    if c > o and pc < po and o < pc and c > po:
+        signals.append({
+            "type": "pattern_engulf_bull", "timeframe": "15m",
+            "label": "15m: Bullish engulfing", "severity": "warning",
+            "direction": "bullish", "value": 0,
+        })
+    elif c < o and pc > po and o > pc and c < po:
+        signals.append({
+            "type": "pattern_engulf_bear", "timeframe": "15m",
+            "label": "15m: Bearish engulfing", "severity": "warning",
+            "direction": "bearish", "value": 0,
+        })
+
+    return signals
+
+
+async def _volume_signal(symbol: str, db: AsyncSession) -> list[dict]:
+    """
+    Detect volume surges: compare last 5-minute volume to the hourly average rate.
+    Warns at 1.8×; alerts at 3×.
+    """
+    now      = datetime.now(timezone.utc)
+    since_5m = now - timedelta(minutes=5)
+    since_1h = now - timedelta(minutes=60)
+
+    res_5m = await db.execute(
+        select(func.sum(PriceCandle.volume))
+        .where(PriceCandle.symbol == symbol, PriceCandle.timestamp >= since_5m)
+    )
+    vol_5m = float(res_5m.scalar() or 0)
+
+    res_1h = await db.execute(
+        select(func.sum(PriceCandle.volume))
+        .where(PriceCandle.symbol == symbol, PriceCandle.timestamp >= since_1h)
+    )
+    vol_1h = float(res_1h.scalar() or 0)
+
+    avg_5m = vol_1h / 12 if vol_1h > 0 else 0   # 12 × 5-min segments per hour
+    if vol_5m == 0 or avg_5m == 0 or vol_5m < avg_5m * 1.8:
+        return []
+
+    ratio    = vol_5m / avg_5m
+    severity = "alert" if ratio >= 3.0 else "warning"
+    return [{
+        "type": "volume_surge", "timeframe": "1m",
+        "label": f"Volume spike {ratio:.1f}× avg (5m)",
+        "severity": severity, "direction": "neutral", "value": round(ratio, 2),
+    }]
+
+
 # ── Per-symbol aggregator ──────────────────────────────────────────────────────
 
 async def _scan_symbol(symbol: str, db: AsyncSession) -> dict:
-    price_sig = await _price_signal(symbol, db)
-    liq_sig   = await _liquidation_signal(symbol, db)
-    fund_sig  = await _funding_signal(symbol, db)
-    oi_sig    = await _oi_signal(symbol, db)
-    ls_sig    = await _ls_signal(symbol, db)
+    price_sig   = await _price_signal(symbol, db)
+    liq_sig     = await _liquidation_signal(symbol, db)
+    fund_sig    = await _funding_signal(symbol, db)
+    oi_sig      = await _oi_signal(symbol, db)
+    ls_sig      = await _ls_signal(symbol, db)
+    price_15m   = await _price_signal_15m(symbol, db)
+    price_1h    = await _price_signal_1h(symbol, db)
+    pattern_sig = await _candle_pattern_signal(symbol, db)
+    volume_sig  = await _volume_signal(symbol, db)
 
-    all_signals = price_sig + liq_sig + fund_sig + oi_sig + ls_sig
+    all_signals = price_sig + liq_sig + fund_sig + oi_sig + ls_sig + price_15m + price_1h + pattern_sig + volume_sig
 
     bull_score = sum(_SEVERITY_WEIGHT[s["severity"]] for s in all_signals if s["direction"] == "bullish")
     bear_score = sum(_SEVERITY_WEIGHT[s["severity"]] for s in all_signals if s["direction"] == "bearish")

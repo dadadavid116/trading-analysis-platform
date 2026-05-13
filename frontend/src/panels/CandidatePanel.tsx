@@ -78,6 +78,10 @@ function CompositeBar({ composite }: { composite: number }) {
   );
 }
 
+const TF_COLOR: Record<string, string> = {
+  '1m': '#444', '15m': '#3a6aaf', '1H': '#33aa66',
+};
+
 function SignalItem({ sig }: { sig: ScannerSignal }) {
   return (
     <div style={sigItemStyle}>
@@ -90,9 +94,16 @@ function SignalItem({ sig }: { sig: ScannerSignal }) {
       <span style={{ fontSize: '10px', color: '#999', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {sig.label}
       </span>
-      <span style={{ fontSize: '9px', color: '#444', flexShrink: 0, letterSpacing: '0.3px' }}>
-        {sig.severity.toUpperCase()}
-      </span>
+      {sig.timeframe && sig.timeframe !== '1m' && (
+        <span style={{
+          fontSize: '8px', fontWeight: 700, flexShrink: 0,
+          color: TF_COLOR[sig.timeframe] ?? '#555',
+          border: `1px solid ${TF_COLOR[sig.timeframe] ?? '#555'}44`,
+          borderRadius: '2px', padding: '0 3px', letterSpacing: '0.3px',
+        }}>
+          {sig.timeframe}
+        </span>
+      )}
     </div>
   );
 }
