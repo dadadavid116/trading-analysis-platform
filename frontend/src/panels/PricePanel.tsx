@@ -90,8 +90,9 @@ const OVERLAY_OPTIONS = [
   { key: 'vwap',   label: 'VWAP',      color: '#4a9eff' },
   { key: 'volume', label: 'Volume',    color: '#26a69a' },
   { key: 'bb',     label: 'BB (20,2)', color: '#5588bb' },
-  { key: 'rsi',    label: 'RSI (14)',     color: '#e040fb' },
-  { key: 'macd',   label: 'MACD (12,26)', color: '#ff9800' },
+  { key: 'rsi',      label: 'RSI (14)',      color: '#e040fb' },
+  { key: 'macd',     label: 'MACD (12,26)', color: '#ff9800' },
+  { key: 'stochrsi', label: 'StochRSI',     color: '#26c6da' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -210,6 +211,34 @@ function computeMACD(
   return { macd: macdLD, signal: signalLD, histogram };
 }
 
+function computeStochRSI(
+  closes: LineData[], rsiPeriod = 14, stochPeriod = 14, kSmooth = 3, dSmooth = 3,
+): { k: LineData[]; d: LineData[] } {
+  const rsiVals = computeRSI(closes, rsiPeriod);
+  if (rsiVals.length < stochPeriod) return { k: [], d: [] };
+
+  // Raw %K: position of current RSI within its stochPeriod window
+  const rawK: LineData[] = [];
+  for (let i = stochPeriod - 1; i < rsiVals.length; i++) {
+    const win = rsiVals.slice(i - stochPeriod + 1, i + 1).map((d) => d.value);
+    const lo  = Math.min(...win);
+    const hi  = Math.max(...win);
+    rawK.push({ time: rsiVals[i].time, value: hi === lo ? 50 : (rsiVals[i].value - lo) / (hi - lo) * 100 });
+  }
+
+  const sma = (arr: LineData[], n: number): LineData[] => {
+    const out: LineData[] = [];
+    for (let i = n - 1; i < arr.length; i++) {
+      const avg = arr.slice(i - n + 1, i + 1).reduce((s, d) => s + d.value, 0) / n;
+      out.push({ time: arr[i].time, value: avg });
+    }
+    return out;
+  };
+
+  const smoothedK = sma(rawK, kSmooth);
+  return { k: smoothedK, d: sma(smoothedK, dSmooth) };
+}
+
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface PricePanelProps {
@@ -269,6 +298,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const macdLineRef      = useRef<ISeriesApi<'Line'>      | null>(null);
   const macdSignalRef    = useRef<ISeriesApi<'Line'>      | null>(null);
   const macdHistRef      = useRef<ISeriesApi<'Histogram'> | null>(null);
+
+  // StochRSI subplot — separate chart instance
+  const stochContainerRef = useRef<HTMLDivElement>(null);
+  const stochChartRef     = useRef<IChartApi | null>(null);
+  const stochKRef         = useRef<ISeriesApi<'Line'> | null>(null);
+  const stochDRef         = useRef<ISeriesApi<'Line'> | null>(null);
+
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
 
   function toggleOverlay(key: string) {
@@ -504,7 +540,31 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     macdSignalRef.current = macdSignal;
     macdHistRef.current   = macdHist;
 
-    // ── Three-way time scale sync (main ↔ RSI ↔ MACD) ────────────────────────
+    // ── StochRSI subplot chart ───────────────────────────────────────────────
+    const stochChart = createChart(stochContainerRef.current!, {
+      layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
+      grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
+      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      timeScale: { borderColor: '#2a2a2e', visible: false },
+      crosshair: {
+        vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+        horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
+      },
+      handleScroll: { mouseWheel: false, pressedMouseMove: false, horzTouchDrag: false },
+      handleScale:  { mouseWheel: false, pinch: false },
+      width:  stochContainerRef.current!.clientWidth,
+      height: stochContainerRef.current!.clientHeight || 100,
+    });
+    const stochK = stochChart.addLineSeries({ color: '#26c6da', lineWidth: 1, priceLineVisible: false, lastValueVisible: true,  crosshairMarkerVisible: true });
+    const stochD = stochChart.addLineSeries({ color: '#ff9800', lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, lineStyle: LineStyle.Dashed });
+    stochK.createPriceLine({ price: 80, color: '#ef535066', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true,  title: '80' });
+    stochK.createPriceLine({ price: 50, color: '#33333388', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: false, title: '' });
+    stochK.createPriceLine({ price: 20, color: '#26a69a66', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true,  title: '20' });
+    stochChartRef.current = stochChart;
+    stochKRef.current     = stochK;
+    stochDRef.current     = stochD;
+
+    // ── Four-way time scale sync (main ↔ RSI ↔ MACD ↔ StochRSI) ─────────────
     let syncing = false;
     const syncAll = (src: IChartApi, others: IChartApi[]) => {
       src.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -514,9 +574,10 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         syncing = false;
       });
     };
-    syncAll(chart,    [rsiChart, macdChart]);
-    syncAll(rsiChart, [chart,    macdChart]);
-    syncAll(macdChart,[chart,    rsiChart ]);
+    syncAll(chart,      [rsiChart, macdChart, stochChart]);
+    syncAll(rsiChart,   [chart,    macdChart, stochChart]);
+    syncAll(macdChart,  [chart,    rsiChart,  stochChart]);
+    syncAll(stochChart, [chart,    rsiChart,  macdChart ]);
 
     // ResizeObserver keeps all charts in sync with panel width changes.
     const ro = new ResizeObserver(() => {
@@ -526,16 +587,20 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         rsiChart.applyOptions({ width: rsiContainerRef.current.clientWidth, height: rsiContainerRef.current.clientHeight });
       if (macdContainerRef.current)
         macdChart.applyOptions({ width: macdContainerRef.current.clientWidth, height: macdContainerRef.current.clientHeight });
+      if (stochContainerRef.current)
+        stochChart.applyOptions({ width: stochContainerRef.current.clientWidth, height: stochContainerRef.current.clientHeight });
     });
     ro.observe(chartContainerRef.current);
-    if (rsiContainerRef.current)  ro.observe(rsiContainerRef.current);
-    if (macdContainerRef.current) ro.observe(macdContainerRef.current);
+    if (rsiContainerRef.current)   ro.observe(rsiContainerRef.current);
+    if (macdContainerRef.current)  ro.observe(macdContainerRef.current);
+    if (stochContainerRef.current) ro.observe(stochContainerRef.current);
 
     return () => {
       ro.disconnect();
       chart.remove();
       rsiChart.remove();
       macdChart.remove();
+      stochChart.remove();
       chartRef.current  = null;
       seriesRef.current = null;
       ema20Ref.current    = null;
@@ -552,6 +617,9 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       macdLineRef.current   = null;
       macdSignalRef.current = null;
       macdHistRef.current   = null;
+      stochChartRef.current = null;
+      stochKRef.current     = null;
+      stochDRef.current     = null;
     };
   }, []);
 
@@ -683,6 +751,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         macdSignalRef.current?.setData(macd.signal);
         macdHistRef.current?.setData(macd.histogram);
 
+        // StochRSI (14, 14, 3, 3)
+        const stoch = computeStochRSI(closeLD);
+        stochKRef.current?.setData(stoch.k);
+        stochDRef.current?.setData(stoch.d);
+
         setChartLoading(false);
       })
       .catch((err: Error) => {
@@ -775,8 +848,9 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   // ── Render ────────────────────────────────────────────────────────────────
 
   const containerWidth = chartContainerRef.current?.clientWidth ?? 400;
-  const showRsi  = overlays.has('rsi');
-  const showMacd = overlays.has('macd');
+  const showRsi   = overlays.has('rsi');
+  const showMacd  = overlays.has('macd');
+  const showStoch = overlays.has('stochrsi');
 
   return (
     <div style={{ ...panelStyles.card, position: 'relative' }}>
@@ -1002,6 +1076,18 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             flexShrink: 0,
             overflow: 'hidden',
             borderTop: showMacd ? '1px solid #1e1e22' : 'none',
+            transition: 'height 0.15s ease',
+          }}
+        />
+        {/* StochRSI subplot pane */}
+        <div
+          ref={stochContainerRef}
+          style={{
+            width: '100%',
+            height: showStoch ? '110px' : '0px',
+            flexShrink: 0,
+            overflow: 'hidden',
+            borderTop: showStoch ? '1px solid #1e1e22' : 'none',
             transition: 'height 0.15s ease',
           }}
         />

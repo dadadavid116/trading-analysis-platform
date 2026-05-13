@@ -52,4 +52,5 @@
 | 41 | RSI(14) Subplot — separate chart pane below price chart with 30/70 reference lines and time scale sync | ✅ Done |
 | 42 | MACD(12,26,9) Subplot — histogram + MACD/signal lines in a third chart pane with three-way time scale sync | ✅ Done |
 | 43 | Position Size Calculator — account/risk/leverage inputs, notional/margin/TP profit rows in Candidate panel | ✅ Done |
-| 44 | TBD | Planned |
+| 44 | StochRSI(3,3,14,14) Subplot — %K/%D lines in a fourth chart pane with 80/20 reference lines and four-way time scale sync | ✅ Done |
+| 45 | TBD | Planned |
