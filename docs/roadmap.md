@@ -62,4 +62,5 @@
 | 51 | Global Market Stats — BTC/ETH dominance %, total market cap, 24H change via CoinGecko, summary bar in Heatmap panel | ✅ Done |
 | 52 | Crypto News Feed — CoinTelegraph + CoinDesk RSS proxy, scrollable headlines panel, News tab in OperatorConsole | ✅ Done |
 | 53 | Portfolio Tracker — add long/short positions with entry/size, live P&L from price feed, total PnL row, localStorage persistence | ✅ Done |
-| 54 | TBD | Planned |
+| 54 | Multi-Timeframe Signal Matrix — RSI(14) + EMA20 trend arrow for BTC/ETH/SOL × 15m/1H/4H/1D, color-coded grid, Signals tab | ✅ Done |
+| 55 | TBD | Planned |

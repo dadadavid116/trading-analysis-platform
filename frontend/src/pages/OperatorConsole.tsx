@@ -9,10 +9,11 @@ import PerformancePanel from '../panels/PerformancePanel';
 import HeatmapPanel from '../panels/HeatmapPanel';
 import NewsPanel from '../panels/NewsPanel';
 import PortfolioPanel from '../panels/PortfolioPanel';
+import SignalMatrixPanel from '../panels/SignalMatrixPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap' | 'news' | 'portfolio';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap' | 'news' | 'portfolio';
+type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap' | 'news' | 'portfolio' | 'signals';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap' | 'news' | 'portfolio' | 'signals';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner'   },
@@ -23,6 +24,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'heatmap',     label: 'Heat'      },
   { id: 'news',        label: 'News'      },
   { id: 'portfolio',   label: 'Portfolio' },
+  { id: 'signals',     label: 'Signals'   },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -60,6 +62,7 @@ export default function OperatorConsole() {
         case 'heatmap':     return <HeatmapPanel />;
         case 'news':        return <NewsPanel />;
         case 'portfolio':   return <PortfolioPanel />;
+        case 'signals':     return <SignalMatrixPanel />;
       }
     })();
 
@@ -121,6 +124,9 @@ export default function OperatorConsole() {
           <button style={tabBtnStyle(rightTab === 'portfolio')} onClick={() => setRightTab('portfolio')}>
             Portfolio
           </button>
+          <button style={tabBtnStyle(rightTab === 'signals')} onClick={() => setRightTab('signals')}>
+            Signals
+          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {rightTab === 'events'      && <EventLogPanel />}
@@ -129,6 +135,7 @@ export default function OperatorConsole() {
           {rightTab === 'heatmap'     && <HeatmapPanel />}
           {rightTab === 'news'        && <NewsPanel />}
           {rightTab === 'portfolio'   && <PortfolioPanel />}
+          {rightTab === 'signals'     && <SignalMatrixPanel />}
         </div>
       </div>
     </div>
