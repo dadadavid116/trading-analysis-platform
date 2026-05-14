@@ -59,4 +59,5 @@
 | 48 | Ichimoku Cloud — Tenkan/Kijun/Span A/Span B/Chikou as chart overlay, Span A/B projected 26 bars forward | ✅ Done |
 | 49 | Fear & Greed Index — alternative.me proxy endpoint, gauge bar in Derivatives panel | ✅ Done |
 | 50 | Asset Correlation Matrix — 30D Pearson correlation of BTC/ETH/SOL daily returns, color-coded 3×3 grid in Heatmap panel | ✅ Done |
-| 51 | TBD | Planned |
+| 51 | Global Market Stats — BTC/ETH dominance %, total market cap, 24H change via CoinGecko, summary bar in Heatmap panel | ✅ Done |
+| 52 | TBD | Planned |

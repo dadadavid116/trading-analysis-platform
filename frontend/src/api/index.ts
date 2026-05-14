@@ -688,3 +688,17 @@ export interface FearGreedData {
 export function fetchFearGreed(): Promise<FearGreedData> {
   return apiFetch<FearGreedData>('/price/fear-greed');
 }
+
+// ── Global Market Stats (Phase 51) ────────────────────────────────────────────
+
+export interface MarketGlobalData {
+  btc_dominance:        number;
+  eth_dominance:        number;
+  total_market_cap_usd: number;
+  market_cap_change_24h: number;
+}
+
+/** Fetch global crypto market stats (BTC/ETH dominance, total mcap) from CoinGecko. */
+export function fetchMarketGlobal(): Promise<MarketGlobalData> {
+  return apiFetch<MarketGlobalData>('/price/market-global');
+}

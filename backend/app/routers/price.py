@@ -208,6 +208,33 @@ async def get_klines(
     return candles
 
 
+@router.get("/market-global")
+async def get_market_global():
+    """
+    Proxy global crypto market stats from CoinGecko.
+    Returns: { btc_dominance, eth_dominance, total_market_cap_usd, market_cap_change_24h }
+    """
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(
+                "https://api.coingecko.com/api/v3/global",
+                headers={"Accept": "application/json"},
+            )
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"CoinGecko API error: {exc}") from exc
+
+    data = resp.json().get("data", {})
+    dom  = data.get("market_cap_percentage", {})
+    mcap = data.get("total_market_cap", {})
+    return {
+        "btc_dominance":       round(dom.get("btc", 0), 2),
+        "eth_dominance":       round(dom.get("eth", 0), 2),
+        "total_market_cap_usd": mcap.get("usd", 0),
+        "market_cap_change_24h": round(data.get("market_cap_change_percentage_24h_usd", 0), 2),
+    }
+
+
 @router.get("/fear-greed")
 async def get_fear_greed():
     """

@@ -1,5 +1,5 @@
 import { useState, useEffect, CSSProperties } from 'react';
-import { fetchKlines, KlineCandle } from '../api';
+import { fetchKlines, fetchMarketGlobal, KlineCandle, MarketGlobalData } from '../api';
 import { panelStyles } from './panelStyles';
 
 const SYMBOLS = [
@@ -80,9 +80,30 @@ function heatColor(pct: number): string {
   return pct > 0 ? '#66bb6a' : '#ef5350';
 }
 
+function fmtMcap(usd: number): string {
+  if (usd >= 1e12) return `$${(usd / 1e12).toFixed(2)}T`;
+  if (usd >= 1e9)  return `$${(usd / 1e9).toFixed(1)}B`;
+  return `$${(usd / 1e6).toFixed(0)}M`;
+}
+
+function GlobalStat({ label, value, change }: { label: string; value: string; change?: number }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flex: 1 }}>
+      <span style={{ fontSize: '8px', fontWeight: 700, color: '#555', letterSpacing: '0.07em' }}>{label}</span>
+      <span style={{ fontSize: '12px', fontWeight: 700, color: '#d0d0d0', fontFamily: 'monospace' }}>{value}</span>
+      {change !== undefined && (
+        <span style={{ fontSize: '9px', fontWeight: 600, color: change >= 0 ? '#66bb6a' : '#ef5350' }}>
+          {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function HeatmapPanel() {
   const [rows,       setRows]       = useState<Record<string, RowData>>({});
   const [corrMatrix, setCorrMatrix] = useState<number[][]>([]);
+  const [global,     setGlobal]     = useState<MarketGlobalData | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [updatedAt,  setUpdatedAt]  = useState<Date | null>(null);
 
@@ -90,8 +111,8 @@ export default function HeatmapPanel() {
     try {
       const result: Record<string, RowData> = {};
 
-      // Fetch heatmap columns + 30D daily candles for correlation in parallel
-      const [, dailyCandles] = await Promise.all([
+      // Fetch heatmap columns + 30D daily candles + global market stats in parallel
+      const [, dailyCandles, globalData] = await Promise.all([
         Promise.all(
           SYMBOLS.map(async ({ key }) => {
             const colData = await Promise.all(
@@ -113,9 +134,11 @@ export default function HeatmapPanel() {
             fetchKlines('1d', 31, key).catch(() => [] as KlineCandle[]),
           ),
         ),
+        fetchMarketGlobal().catch(() => null),
       ]);
 
       setRows(result);
+      if (globalData) setGlobal(globalData);
 
       const returns = dailyCandles.map(toReturns);
       setCorrMatrix(
@@ -152,6 +175,17 @@ export default function HeatmapPanel() {
           <span style={{ fontSize: '9px', color: '#444' }}>{updatedAt.toLocaleTimeString()}</span>
         )}
       </div>
+
+      {/* Global market stats bar */}
+      {global && (
+        <div style={globalBarStyle}>
+          <GlobalStat label="TOTAL MCAP" value={fmtMcap(global.total_market_cap_usd)} change={global.market_cap_change_24h} />
+          <div style={globalDividerStyle} />
+          <GlobalStat label="BTC DOM" value={`${global.btc_dominance.toFixed(1)}%`} />
+          <div style={globalDividerStyle} />
+          <GlobalStat label="ETH DOM" value={`${global.eth_dominance.toFixed(1)}%`} />
+        </div>
+      )}
 
       {loading && <p style={panelStyles.muted}>Loading…</p>}
 
@@ -315,6 +349,23 @@ const priceCellStyle: CSSProperties = {
   backgroundColor: '#111114',
   border:          '1px solid #1e1e22',
   borderRadius:    '3px',
+};
+
+const globalBarStyle: CSSProperties = {
+  display:         'flex',
+  alignItems:      'stretch',
+  backgroundColor: '#111114',
+  border:          '1px solid #2a2a2e',
+  borderRadius:    '6px',
+  padding:         '8px 6px',
+  marginTop:       '8px',
+};
+
+const globalDividerStyle: CSSProperties = {
+  width:           '1px',
+  backgroundColor: '#2a2a2e',
+  flexShrink:      0,
+  margin:          '0 4px',
 };
 
 const corrThStyle: CSSProperties = {
