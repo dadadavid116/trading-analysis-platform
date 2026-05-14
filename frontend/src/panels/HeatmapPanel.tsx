@@ -21,6 +21,45 @@ interface RowData {
   pct:   Record<string, number>;
 }
 
+function toReturns(candles: KlineCandle[]): number[] {
+  const ret: number[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    if (candles[i - 1].close !== 0)
+      ret.push(candles[i].close / candles[i - 1].close - 1);
+  }
+  return ret;
+}
+
+function pearson(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  if (n < 2) return 0;
+  let sumA = 0, sumB = 0;
+  for (let i = 0; i < n; i++) { sumA += a[i]; sumB += b[i]; }
+  const mA = sumA / n, mB = sumB / n;
+  let num = 0, varA = 0, varB = 0;
+  for (let i = 0; i < n; i++) {
+    const da = a[i] - mA, db = b[i] - mB;
+    num += da * db; varA += da * da; varB += db * db;
+  }
+  const denom = Math.sqrt(varA * varB);
+  return denom === 0 ? 0 : num / denom;
+}
+
+function corrBg(v: number): string {
+  const a = Math.min(Math.abs(v), 1) * 0.6 + 0.08;
+  return v > 0.1
+    ? `rgba(38,166,154,${a.toFixed(2)})`
+    : v < -0.1
+    ? `rgba(239,83,80,${a.toFixed(2)})`
+    : '#111114';
+}
+
+function corrColor(v: number): string {
+  if (v > 0.1)  return '#66bb6a';
+  if (v < -0.1) return '#ef5350';
+  return '#555';
+}
+
 function pctChange(candles: KlineCandle[]): number {
   if (candles.length < 2) return 0;
   const prev = candles[0];
@@ -42,30 +81,47 @@ function heatColor(pct: number): string {
 }
 
 export default function HeatmapPanel() {
-  const [rows,      setRows]      = useState<Record<string, RowData>>({});
-  const [loading,   setLoading]   = useState(true);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [rows,       setRows]       = useState<Record<string, RowData>>({});
+  const [corrMatrix, setCorrMatrix] = useState<number[][]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [updatedAt,  setUpdatedAt]  = useState<Date | null>(null);
 
   const load = async () => {
     try {
       const result: Record<string, RowData> = {};
-      await Promise.all(
-        SYMBOLS.map(async ({ key }) => {
-          const colData = await Promise.all(
-            COLS.map(({ key: colKey, interval }) =>
-              fetchKlines(interval, 2, key)
-                .then((c) => ({ colKey, pct: pctChange(c), last: c[c.length - 1] }))
-                .catch(() => ({ colKey, pct: 0, last: null as KlineCandle | null })),
-            ),
-          );
-          const ref5m = colData.find((r) => r.colKey === '5m');
-          result[key] = {
-            price: ref5m?.last?.close ?? 0,
-            pct:   Object.fromEntries(colData.map(({ colKey, pct }) => [colKey, pct])),
-          };
-        }),
-      );
+
+      // Fetch heatmap columns + 30D daily candles for correlation in parallel
+      const [, dailyCandles] = await Promise.all([
+        Promise.all(
+          SYMBOLS.map(async ({ key }) => {
+            const colData = await Promise.all(
+              COLS.map(({ key: colKey, interval }) =>
+                fetchKlines(interval, 2, key)
+                  .then((c) => ({ colKey, pct: pctChange(c), last: c[c.length - 1] }))
+                  .catch(() => ({ colKey, pct: 0, last: null as KlineCandle | null })),
+              ),
+            );
+            const ref5m = colData.find((r) => r.colKey === '5m');
+            result[key] = {
+              price: ref5m?.last?.close ?? 0,
+              pct:   Object.fromEntries(colData.map(({ colKey, pct }) => [colKey, pct])),
+            };
+          }),
+        ),
+        Promise.all(
+          SYMBOLS.map(({ key }) =>
+            fetchKlines('1d', 31, key).catch(() => [] as KlineCandle[]),
+          ),
+        ),
+      ]);
+
       setRows(result);
+
+      const returns = dailyCandles.map(toReturns);
+      setCorrMatrix(
+        SYMBOLS.map((_, i) => SYMBOLS.map((_, j) => pearson(returns[i], returns[j]))),
+      );
+
       setUpdatedAt(new Date());
       setLoading(false);
     } catch {
@@ -143,6 +199,51 @@ export default function HeatmapPanel() {
             </table>
           </div>
 
+          {/* Correlation matrix */}
+          {corrMatrix.length === SYMBOLS.length && (
+            <div style={{ marginTop: '12px', borderTop: '1px solid #1e1e22', paddingTop: '10px' }}>
+              <div style={{ fontSize: '9px', fontWeight: 700, color: '#555', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                30D RETURN CORRELATION
+              </div>
+              <table style={{ borderCollapse: 'separate', borderSpacing: '3px' }}>
+                <thead>
+                  <tr>
+                    <th style={corrThStyle} />
+                    {SYMBOLS.map(({ label }) => (
+                      <th key={label} style={corrThStyle}>{label.split('/')[0]}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {SYMBOLS.map(({ label }, i) => (
+                    <tr key={i}>
+                      <td style={corrLabelStyle}>{label.split('/')[0]}</td>
+                      {SYMBOLS.map((_, j) => {
+                        const v = corrMatrix[i]?.[j] ?? 0;
+                        const diag = i === j;
+                        return (
+                          <td
+                            key={j}
+                            style={{
+                              ...corrCellStyle,
+                              backgroundColor: diag ? '#1a1a1e' : corrBg(v),
+                              color:           diag ? '#333'   : corrColor(v),
+                            }}
+                          >
+                            {diag ? '—' : v.toFixed(2)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ fontSize: '9px', color: '#333', marginTop: '6px' }}>
+                Pearson ρ on daily log-returns · −1 (inverse) → 0 (none) → +1 (perfect)
+              </div>
+            </div>
+          )}
+
           {/* Legend */}
           <div style={legendStyle}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -214,6 +315,37 @@ const priceCellStyle: CSSProperties = {
   backgroundColor: '#111114',
   border:          '1px solid #1e1e22',
   borderRadius:    '3px',
+};
+
+const corrThStyle: CSSProperties = {
+  fontSize:      '9px',
+  fontWeight:    700,
+  color:         '#555',
+  padding:       '2px 8px',
+  textAlign:     'center',
+  whiteSpace:    'nowrap',
+};
+
+const corrLabelStyle: CSSProperties = {
+  fontSize:        '10px',
+  fontWeight:      700,
+  color:           '#888',
+  padding:         '5px 8px',
+  whiteSpace:      'nowrap',
+  backgroundColor: '#111114',
+  borderRadius:    '3px',
+};
+
+const corrCellStyle: CSSProperties = {
+  padding:      '5px 10px',
+  textAlign:    'center',
+  fontSize:     '11px',
+  fontWeight:   700,
+  fontFamily:   'monospace',
+  borderRadius: '3px',
+  whiteSpace:   'nowrap',
+  minWidth:     '48px',
+  transition:   'background-color 0.3s ease',
 };
 
 const legendStyle: CSSProperties = {

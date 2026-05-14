@@ -58,4 +58,5 @@
 | 47 | Market Heatmap — BTC/ETH/SOL × 5m/15m/1H/4H/24H % change color grid, OperatorConsole tab + mobile | ✅ Done |
 | 48 | Ichimoku Cloud — Tenkan/Kijun/Span A/Span B/Chikou as chart overlay, Span A/B projected 26 bars forward | ✅ Done |
 | 49 | Fear & Greed Index — alternative.me proxy endpoint, gauge bar in Derivatives panel | ✅ Done |
-| 50 | TBD | Planned |
+| 50 | Asset Correlation Matrix — 30D Pearson correlation of BTC/ETH/SOL daily returns, color-coded 3×3 grid in Heatmap panel | ✅ Done |
+| 51 | TBD | Planned |
