@@ -1,14 +1,30 @@
 """
-liquidation_collector.py — Multi-symbol liquidation collector via Binance Futures.
+liquidation_collector.py — Multi-symbol liquidation collector via OKX WebSocket.
 
-Uses the Binance Futures combined stream to receive forced-liquidation events
-for BTC, ETH, and SOL USDT perpetual futures simultaneously.
+Subscribes to OKX's public `liquidation-orders` channel (SWAP instType) which
+covers BTC/ETH/SOL perpetual swaps.
 
-Combined stream URL:
-  wss://fstream.binance.com/stream?streams=btcusdt@forceOrder/ethusdt@forceOrder/solusdt@forceOrder
+Switched from Binance fstream because Binance futures WebSocket is unreachable
+from many VPS regions.
 
-Each message is wrapped by the combined stream multiplexer:
-  {"stream": "btcusdt@forceOrder", "data": {"e": "forceOrder", "o": {...}}}
+OKX message format:
+  {
+    "arg":  { "channel": "liquidation-orders", "instType": "SWAP" },
+    "data": [{
+      "instId": "BTC-USDT-SWAP",
+      "ts":     "1623987654321",   # ms, outer timestamp
+      "details": [{
+        "side":    "sell",         # sell = long liq, buy = short liq
+        "posSide": "long",
+        "bkPx":   "65000",        # liquidation/bankruptcy price
+        "sz":     "1.2",          # size in contracts
+        "state":  "filled"
+      }]
+    }]
+  }
+
+OKX sends a plain-text "ping" every 25 s — we reply "pong".
+A 90 s receive timeout detects silent hangs and forces a reconnect.
 """
 
 import asyncio
@@ -23,42 +39,90 @@ from app.models.liquidation import Liquidation
 
 logger = logging.getLogger(__name__)
 
-_SYMBOLS   = ["btcusdt", "ethusdt", "solusdt"]
-STREAM_URL = "wss://fstream.binance.com/stream?streams=" + "/".join(
-    f"{s}@forceOrder" for s in _SYMBOLS
-)
+OKX_WS_URL = "wss://ws.okx.com:8443/ws/v5/public"
+
+SYMBOL_MAP: dict[str, str] = {
+    "BTC-USDT-SWAP": "BTCUSDT",
+    "ETH-USDT-SWAP": "ETHUSDT",
+    "SOL-USDT-SWAP": "SOLUSDT",
+}
+
+_SUBSCRIBE = json.dumps({
+    "op":   "subscribe",
+    "args": [{"channel": "liquidation-orders", "instType": "SWAP"}],
+})
+
+
+async def _store(inst_id: str, detail: dict, ts_ms: int) -> None:
+    canonical = SYMBOL_MAP.get(inst_id)
+    if not canonical:
+        return
+
+    side = detail.get("side", "")
+    if side not in ("buy", "sell"):
+        # Fallback: derive from position side
+        side = "sell" if detail.get("posSide") == "long" else "buy"
+
+    price = float(detail.get("bkPx") or 0)
+    qty   = float(detail.get("sz")   or 0)
+    if price <= 0 or qty <= 0:
+        return
+
+    liq = Liquidation(
+        symbol    = canonical,
+        timestamp = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc),
+        side      = side,
+        price     = price,
+        quantity  = qty,
+        exchange  = "okx",
+    )
+    async with AsyncSessionLocal() as session:
+        session.add(liq)
+        await session.commit()
+
+    logger.info("Liquidation: %s  side=%s  price=%.2f  qty=%.4f", canonical, side, price, qty)
 
 
 async def run() -> None:
-    logger.info("Liquidation collector starting (multi-symbol: %s)...", _SYMBOLS)
+    logger.info("Liquidation collector starting (OKX liquidation-orders WebSocket)...")
     while True:
         try:
-            async with websockets.connect(STREAM_URL) as ws:
-                logger.info("Liquidation collector: connected to Binance combined forceOrder stream.")
-                async for raw in ws:
-                    msg   = json.loads(raw)
-                    # Combined stream wraps each payload under "data"
-                    order = msg.get("data", {}).get("o") or msg.get("o")
-                    if not order:
+            async with websockets.connect(OKX_WS_URL) as ws:
+                await ws.send(_SUBSCRIBE)
+                logger.info("Liquidation collector: subscribed to OKX liquidation-orders (SWAP).")
+
+                while True:
+                    try:
+                        raw = await asyncio.wait_for(ws.recv(), timeout=90.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Liquidation WS: no message for 90 s — reconnecting.")
+                        break
+
+                    if raw == "ping":
+                        await ws.send("pong")
                         continue
 
-                    liq = Liquidation(
-                        symbol    = order["s"],
-                        timestamp = datetime.fromtimestamp(order["T"] / 1000, tz=timezone.utc),
-                        side      = order["S"].lower(),
-                        price     = float(order["p"]),
-                        quantity  = float(order["q"]),
-                        exchange  = "binance",
-                    )
-                    async with AsyncSessionLocal() as session:
-                        session.add(liq)
-                        await session.commit()
+                    try:
+                        msg = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
 
-                    logger.info(
-                        "Liquidation: %s  side=%s  price=%.4f  qty=%.4f",
-                        liq.symbol, liq.side, liq.price, liq.quantity,
-                    )
+                    if "event" in msg:
+                        logger.debug("Liquidation WS event: %s", msg)
+                        continue
+
+                    for item in msg.get("data", []):
+                        inst_id = item.get("instId", "")
+                        if inst_id not in SYMBOL_MAP:
+                            continue
+                        ts_ms = int(item.get("ts") or 0)
+                        for detail in item.get("details", []):
+                            try:
+                                await _store(inst_id, detail, ts_ms)
+                            except Exception as exc:
+                                logger.error("Error storing liquidation: %s", exc)
 
         except Exception as exc:
             logger.error("Liquidation collector error: %s — reconnecting in 5 s.", exc)
-            await asyncio.sleep(5)
+
+        await asyncio.sleep(5)

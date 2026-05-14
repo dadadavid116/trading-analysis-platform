@@ -1,24 +1,20 @@
 """
-price_collector.py — Multi-symbol live price collector via OKX WebSocket.
+price_collector.py — Multi-symbol live price collector via OKX REST polling.
 
-Primary source: OKX perpetual swap contracts (BTC/ETH/SOL USDT-SWAP).
-Subscribes to the candle1m channel and upserts on every tick so the DB
-stays within ~1 second of the live OKX price.
+Polls the OKX candles REST endpoint every 10 s for BTC/ETH/SOL USDT-SWAP.
+Switching from WebSocket to REST eliminates the silent-hang failure mode where
+the server keeps the WS connection open but stops sending frames, causing the
+collector to block indefinitely without triggering the reconnect logic.
 
-OKX candle1m data format:
-  [ts_ms, open, high, low, close, vol_contracts, vol_ccy, vol_ccy_quote, confirm]
-  confirm == "1" means the candle has closed; "0" means it is still live.
-
-The upsert key is (symbol, timestamp) matching the unique index created on startup.
-OKX sends a plain-text "ping" every 30 s — we reply "pong" to keep the connection.
+The same OKX endpoint is used by /api/price/klines so its reachability from
+this VPS is already proven.
 """
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timezone
 
-import websockets
+import httpx
 from sqlalchemy.dialects.postgresql import insert
 
 from app.database import AsyncSessionLocal
@@ -26,87 +22,74 @@ from app.models.price import PriceCandle
 
 logger = logging.getLogger(__name__)
 
-OKX_WS_URL  = "wss://ws.okx.com:8443/ws/v5/public"
-INSTRUMENTS = ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"]
-SYMBOL_MAP  = {
+OKX_CANDLES_URL = "https://www.okx.com/api/v5/market/candles"
+
+INSTRUMENTS: dict[str, str] = {
     "BTC-USDT-SWAP": "BTCUSDT",
     "ETH-USDT-SWAP": "ETHUSDT",
     "SOL-USDT-SWAP": "SOLUSDT",
 }
 
-_SUBSCRIBE = json.dumps({
-    "op": "subscribe",
-    "args": [{"channel": "candle1m", "instId": inst} for inst in INSTRUMENTS],
-})
+POLL_INTERVAL = 10  # seconds between polls
+
+
+async def _upsert(canonical: str, candle: list) -> None:
+    # Store close time (open_ts + 60 s) to keep MAX(timestamp) ≤ 70 s old.
+    ts = datetime.fromtimestamp((int(candle[0]) + 60_000) / 1000, tz=timezone.utc)
+    stmt = (
+        insert(PriceCandle)
+        .values(
+            symbol    = canonical,
+            timestamp = ts,
+            open      = float(candle[1]),
+            high      = float(candle[2]),
+            low       = float(candle[3]),
+            close     = float(candle[4]),
+            volume    = float(candle[5]),
+        )
+        .on_conflict_do_update(
+            index_elements=["symbol", "timestamp"],
+            set_={
+                "open":   float(candle[1]),
+                "high":   float(candle[2]),
+                "low":    float(candle[3]),
+                "close":  float(candle[4]),
+                "volume": float(candle[5]),
+            },
+        )
+    )
+    async with AsyncSessionLocal() as session:
+        await session.execute(stmt)
+        await session.commit()
+
+
+async def _poll_one(client: httpx.AsyncClient, inst_id: str, canonical: str) -> None:
+    try:
+        resp = await client.get(
+            OKX_CANDLES_URL,
+            params={"instId": inst_id, "bar": "1m", "limit": "2"},
+            timeout=8.0,
+        )
+        resp.raise_for_status()
+        for candle in resp.json().get("data", []):
+            await _upsert(canonical, candle)
+    except Exception as exc:
+        logger.error("Price poll error [%s]: %s", inst_id, exc)
 
 
 async def run() -> None:
-    logger.info("Price collector starting (OKX multi-symbol, instruments=%s)...", INSTRUMENTS)
+    logger.info(
+        "Price collector starting (OKX REST polling every %d s, symbols=%s)...",
+        POLL_INTERVAL,
+        list(INSTRUMENTS.values()),
+    )
     while True:
         try:
-            async with websockets.connect(OKX_WS_URL) as ws:
-                await ws.send(_SUBSCRIBE)
-                logger.info("Price collector: subscribed to OKX candle1m.")
-
-                async for raw in ws:
-                    # OKX keepalive — reply to avoid server-side disconnect
-                    if raw == "ping":
-                        await ws.send("pong")
-                        continue
-
-                    msg = json.loads(raw)
-
-                    # Skip subscription confirm / error events
-                    if "event" in msg:
-                        continue
-
-                    inst_id   = msg.get("arg", {}).get("instId", "")
-                    canonical = SYMBOL_MAP.get(inst_id)
-                    data      = msg.get("data", [])
-                    if not canonical or not data:
-                        continue
-
-                    for candle in data:
-                        # [ts_ms, open, high, low, close, vol, volCcy, volCcyQuote, confirm]
-                        # Store CLOSE time (open + 60 s) to match Binance convention.
-                        # This keeps MAX(timestamp) ≤ 60 s old during normal operation
-                        # so the health check always reads "ok" while the collector runs.
-                        ts        = datetime.fromtimestamp((int(candle[0]) + 60_000) / 1000, tz=timezone.utc)
-                        is_closed = candle[8] == "1"
-
-                        stmt = (
-                            insert(PriceCandle)
-                            .values(
-                                symbol    = canonical,
-                                timestamp = ts,
-                                open      = float(candle[1]),
-                                high      = float(candle[2]),
-                                low       = float(candle[3]),
-                                close     = float(candle[4]),
-                                volume    = float(candle[5]),
-                            )
-                            .on_conflict_do_update(
-                                index_elements=["symbol", "timestamp"],
-                                set_={
-                                    "open":   float(candle[1]),
-                                    "high":   float(candle[2]),
-                                    "low":    float(candle[3]),
-                                    "close":  float(candle[4]),
-                                    "volume": float(candle[5]),
-                                },
-                            )
-                        )
-
-                        async with AsyncSessionLocal() as session:
-                            await session.execute(stmt)
-                            await session.commit()
-
-                        if is_closed:
-                            logger.info(
-                                "Candle closed: %s  close=%.4f  vol=%.2f",
-                                canonical, float(candle[4]), float(candle[5]),
-                            )
-
+            async with httpx.AsyncClient() as client:
+                await asyncio.gather(*[
+                    _poll_one(client, inst_id, canonical)
+                    for inst_id, canonical in INSTRUMENTS.items()
+                ])
         except Exception as exc:
-            logger.error("Price collector error: %s — reconnecting in 5 s.", exc)
-            await asyncio.sleep(5)
+            logger.error("Price collector outer error: %s", exc)
+        await asyncio.sleep(POLL_INTERVAL)
