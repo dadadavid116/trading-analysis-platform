@@ -8,19 +8,21 @@ import JournalPanel from '../panels/JournalPanel';
 import PerformancePanel from '../panels/PerformancePanel';
 import HeatmapPanel from '../panels/HeatmapPanel';
 import NewsPanel from '../panels/NewsPanel';
+import PortfolioPanel from '../panels/PortfolioPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap' | 'news';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap' | 'news';
+type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap' | 'news' | 'portfolio';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap' | 'news' | 'portfolio';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
-  { id: 'scanner',     label: 'Scanner' },
-  { id: 'candidate',   label: 'Setup'   },
-  { id: 'performance', label: 'Stats'   },
-  { id: 'journal',     label: 'Journal' },
-  { id: 'events',      label: 'Events'  },
-  { id: 'heatmap',     label: 'Heat'    },
-  { id: 'news',        label: 'News'    },
+  { id: 'scanner',     label: 'Scanner'   },
+  { id: 'candidate',   label: 'Setup'     },
+  { id: 'performance', label: 'Stats'     },
+  { id: 'journal',     label: 'Journal'   },
+  { id: 'events',      label: 'Events'    },
+  { id: 'heatmap',     label: 'Heat'      },
+  { id: 'news',        label: 'News'      },
+  { id: 'portfolio',   label: 'Portfolio' },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -57,6 +59,7 @@ export default function OperatorConsole() {
         case 'events':      return <EventLogPanel />;
         case 'heatmap':     return <HeatmapPanel />;
         case 'news':        return <NewsPanel />;
+        case 'portfolio':   return <PortfolioPanel />;
       }
     })();
 
@@ -115,6 +118,9 @@ export default function OperatorConsole() {
           <button style={tabBtnStyle(rightTab === 'news')} onClick={() => setRightTab('news')}>
             News
           </button>
+          <button style={tabBtnStyle(rightTab === 'portfolio')} onClick={() => setRightTab('portfolio')}>
+            Portfolio
+          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {rightTab === 'events'      && <EventLogPanel />}
@@ -122,6 +128,7 @@ export default function OperatorConsole() {
           {rightTab === 'performance' && <PerformancePanel />}
           {rightTab === 'heatmap'     && <HeatmapPanel />}
           {rightTab === 'news'        && <NewsPanel />}
+          {rightTab === 'portfolio'   && <PortfolioPanel />}
         </div>
       </div>
     </div>

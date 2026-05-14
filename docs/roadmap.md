@@ -61,4 +61,5 @@
 | 50 | Asset Correlation Matrix — 30D Pearson correlation of BTC/ETH/SOL daily returns, color-coded 3×3 grid in Heatmap panel | ✅ Done |
 | 51 | Global Market Stats — BTC/ETH dominance %, total market cap, 24H change via CoinGecko, summary bar in Heatmap panel | ✅ Done |
 | 52 | Crypto News Feed — CoinTelegraph + CoinDesk RSS proxy, scrollable headlines panel, News tab in OperatorConsole | ✅ Done |
-| 53 | TBD | Planned |
+| 53 | Portfolio Tracker — add long/short positions with entry/size, live P&L from price feed, total PnL row, localStorage persistence | ✅ Done |
+| 54 | TBD | Planned |
