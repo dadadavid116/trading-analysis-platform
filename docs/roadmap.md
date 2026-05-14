@@ -60,4 +60,5 @@
 | 49 | Fear & Greed Index — alternative.me proxy endpoint, gauge bar in Derivatives panel | ✅ Done |
 | 50 | Asset Correlation Matrix — 30D Pearson correlation of BTC/ETH/SOL daily returns, color-coded 3×3 grid in Heatmap panel | ✅ Done |
 | 51 | Global Market Stats — BTC/ETH dominance %, total market cap, 24H change via CoinGecko, summary bar in Heatmap panel | ✅ Done |
-| 52 | TBD | Planned |
+| 52 | Crypto News Feed — CoinTelegraph + CoinDesk RSS proxy, scrollable headlines panel, News tab in OperatorConsole | ✅ Done |
+| 53 | TBD | Planned |

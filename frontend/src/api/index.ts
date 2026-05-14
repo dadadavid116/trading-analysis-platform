@@ -702,3 +702,18 @@ export interface MarketGlobalData {
 export function fetchMarketGlobal(): Promise<MarketGlobalData> {
   return apiFetch<MarketGlobalData>('/price/market-global');
 }
+
+// ── News Feed (Phase 52) ──────────────────────────────────────────────────────
+
+export interface NewsItem {
+  title:     string;
+  url:       string;
+  published: string;
+  summary:   string;
+  source:    string;
+}
+
+/** Fetch merged crypto news from CoinTelegraph + CoinDesk RSS feeds. */
+export function fetchNewsFeed(limit = 40): Promise<NewsItem[]> {
+  return apiFetch<NewsItem[]>(`/news/feed?limit=${limit}`);
+}

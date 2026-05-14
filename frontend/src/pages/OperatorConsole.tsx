@@ -7,10 +7,11 @@ import CandidatePanel from '../panels/CandidatePanel';
 import JournalPanel from '../panels/JournalPanel';
 import PerformancePanel from '../panels/PerformancePanel';
 import HeatmapPanel from '../panels/HeatmapPanel';
+import NewsPanel from '../panels/NewsPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap';
+type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap' | 'news';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap' | 'news';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner' },
@@ -19,6 +20,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'journal',     label: 'Journal' },
   { id: 'events',      label: 'Events'  },
   { id: 'heatmap',     label: 'Heat'    },
+  { id: 'news',        label: 'News'    },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -54,6 +56,7 @@ export default function OperatorConsole() {
         case 'journal':     return <JournalPanel />;
         case 'events':      return <EventLogPanel />;
         case 'heatmap':     return <HeatmapPanel />;
+        case 'news':        return <NewsPanel />;
       }
     })();
 
@@ -109,12 +112,16 @@ export default function OperatorConsole() {
           <button style={tabBtnStyle(rightTab === 'heatmap')} onClick={() => setRightTab('heatmap')}>
             Heatmap
           </button>
+          <button style={tabBtnStyle(rightTab === 'news')} onClick={() => setRightTab('news')}>
+            News
+          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {rightTab === 'events'      && <EventLogPanel />}
           {rightTab === 'journal'     && <JournalPanel />}
           {rightTab === 'performance' && <PerformancePanel />}
           {rightTab === 'heatmap'     && <HeatmapPanel />}
+          {rightTab === 'news'        && <NewsPanel />}
         </div>
       </div>
     </div>
