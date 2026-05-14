@@ -4,15 +4,19 @@ alerts/evaluator.py — Check active alert conditions against current market dat
 Called on a schedule by run.py.
 
 Supported condition types:
-    price_above        — triggers when latest BTC close > threshold
-    price_below        — triggers when latest BTC close < threshold
-    liquidation_spike  — triggers when liquidation count in the last
-                         window_minutes exceeds threshold
+    price_above          — triggers when latest BTC close > threshold
+    price_below          — triggers when latest BTC close < threshold
+    liquidation_spike    — triggers when liquidation count in the last
+                           window_minutes exceeds threshold
+    funding_rate_above   — triggers when latest funding rate (as %) > threshold
+    funding_rate_below   — triggers when latest funding rate (as %) < threshold
 
 Trigger modes:
     once  — fires once; the alert stays triggered and is not re-evaluated
     rearm — resets automatically when the condition is no longer met,
             allowing it to fire again the next time the threshold is crossed
+
+Funding rate threshold unit: percentage points (e.g. 0.05 means 0.05% = 0.0005 raw).
 """
 
 import logging
@@ -22,6 +26,7 @@ from sqlalchemy import func, select, desc
 
 from app.database import AsyncSessionLocal
 from app.models.alert import Alert
+from app.models.derivatives import FundingRate
 from app.models.liquidation import Liquidation
 from app.models.price import PriceCandle
 from alerts.notifications import notify
@@ -45,7 +50,7 @@ async def evaluate_all() -> None:
 
     logger.info("Evaluating %d alert(s)...", len(alerts))
 
-    # Fetch the latest price candle once — shared across all price alerts.
+    # Fetch shared data once — reused across all alerts of each type.
     latest_close: float | None = await _get_latest_close()
 
     for alert in alerts:
@@ -66,6 +71,19 @@ async def _get_latest_close() -> float | None:
         )
         candle = r.scalar_one_or_none()
     return float(candle.close) if candle is not None else None
+
+
+async def _get_latest_funding_rate(symbol: str) -> float | None:
+    """Return the most recent funding rate for symbol as a percentage value, or None."""
+    async with AsyncSessionLocal() as session:
+        r = await session.execute(
+            select(FundingRate)
+            .where(FundingRate.symbol == symbol)
+            .order_by(desc(FundingRate.timestamp))
+            .limit(1)
+        )
+        row = r.scalar_one_or_none()
+    return float(row.funding_rate) * 100 if row is not None else None
 
 
 async def _count_recent_liquidations(window_minutes: int) -> int:
@@ -121,6 +139,7 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
 
     # Determine whether the condition is currently met.
     condition_met: bool
+    fr: float | None = None  # populated only for funding_rate conditions
 
     if alert.condition_type in ("price_above", "price_below"):
         if latest_close is None:
@@ -136,6 +155,16 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
         count = await _count_recent_liquidations(window)
         condition_met = count > threshold
 
+    elif alert.condition_type in ("funding_rate_above", "funding_rate_below"):
+        fr = await _get_latest_funding_rate(alert.symbol)
+        if fr is None:
+            logger.debug("Alert %d skipped — no funding rate data for %s.", alert.id, alert.symbol)
+            return
+        if alert.condition_type == "funding_rate_above":
+            condition_met = fr > threshold
+        else:
+            condition_met = fr < threshold
+
     else:
         logger.warning(
             "Alert %d has unknown condition_type '%s' — skipping.",
@@ -148,7 +177,7 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
     if condition_met and not triggered:
         # Fire the alert.
         await _set_triggered(alert.id)
-        message = _build_message(alert, latest_close, threshold)
+        message = _build_message(alert, latest_close, threshold, fr)
         await notify(alert.name, alert.condition_type, message)
         try:
             from app.services.event_logger import log_event
@@ -182,13 +211,24 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
             pass
 
 
-def _build_message(alert: Alert, latest_close: float | None, threshold: float) -> str:
+def _build_message(
+    alert: Alert,
+    latest_close: float | None,
+    threshold: float,
+    funding_rate: float | None = None,
+) -> str:
     """Build a human-readable trigger message."""
     if alert.condition_type == "price_above":
-        return f"BTC price ${latest_close:,.2f} crossed above ${threshold:,.2f}"
+        return f"{alert.symbol} price ${latest_close:,.2f} crossed above ${threshold:,.2f}"
     if alert.condition_type == "price_below":
-        return f"BTC price ${latest_close:,.2f} dropped below ${threshold:,.2f}"
+        return f"{alert.symbol} price ${latest_close:,.2f} dropped below ${threshold:,.2f}"
     if alert.condition_type == "liquidation_spike":
         window = alert.window_minutes or 5
         return f"Liquidation spike in last {window} min exceeded threshold {threshold:.0f}"
+    if alert.condition_type == "funding_rate_above":
+        fr_str = f"{funding_rate:.4f}%" if funding_rate is not None else "?"
+        return f"{alert.symbol} funding rate {fr_str} crossed above {threshold:.4f}%"
+    if alert.condition_type == "funding_rate_below":
+        fr_str = f"{funding_rate:.4f}%" if funding_rate is not None else "?"
+        return f"{alert.symbol} funding rate {fr_str} dropped below {threshold:.4f}%"
     return f"Condition met for alert '{alert.name}'"

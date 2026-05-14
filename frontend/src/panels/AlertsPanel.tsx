@@ -46,10 +46,16 @@ function AlertsPanel() {
                 if (!knownTriggeredRef.current.has(id)) {
                   const alert = data.find((a) => a.id === id);
                   if (alert) {
-                    const body =
-                      alert.condition_type === 'liquidation_spike'
-                        ? `Liquidation spike exceeded ${alert.threshold} events`
-                        : `BTC ${alert.condition_type === 'price_above' ? 'rose above' : 'dropped below'} $${Number(alert.threshold).toLocaleString()}`;
+                    let body = '';
+                    if (alert.condition_type === 'liquidation_spike') {
+                      body = `Liquidation spike exceeded ${alert.threshold} events`;
+                    } else if (alert.condition_type === 'funding_rate_above') {
+                      body = `${alert.symbol} funding rate crossed above ${Number(alert.threshold).toFixed(4)}%`;
+                    } else if (alert.condition_type === 'funding_rate_below') {
+                      body = `${alert.symbol} funding rate dropped below ${Number(alert.threshold).toFixed(4)}%`;
+                    } else {
+                      body = `${alert.symbol} ${alert.condition_type === 'price_above' ? 'rose above' : 'dropped below'} $${Number(alert.threshold).toLocaleString()}`;
+                    }
                     new Notification(`🚨 ${alert.name}`, { body, icon: '/favicon.ico' });
                   }
                 }
@@ -127,13 +133,18 @@ function AlertsPanel() {
     if (alert.condition_type === 'liquidation_spike') {
       return `${alert.threshold} events / ${alert.window_minutes ?? '?'} min`;
     }
+    if (alert.condition_type === 'funding_rate_above' || alert.condition_type === 'funding_rate_below') {
+      return `${Number(alert.threshold).toFixed(4)}%`;
+    }
     return `$${Number(alert.threshold).toLocaleString()}`;
   };
 
   const conditionLabel = (type: string) => {
-    if (type === 'price_above')       return 'Price >';
-    if (type === 'price_below')       return 'Price <';
-    if (type === 'liquidation_spike') return 'Liq spike';
+    if (type === 'price_above')        return 'Price >';
+    if (type === 'price_below')        return 'Price <';
+    if (type === 'liquidation_spike')  return 'Liq spike';
+    if (type === 'funding_rate_above') return 'FR >';
+    if (type === 'funding_rate_below') return 'FR <';
     return type;
   };
 
@@ -264,11 +275,17 @@ function AlertsPanel() {
               <option value="price_above">Price above</option>
               <option value="price_below">Price below</option>
               <option value="liquidation_spike">Liquidation spike</option>
+              <option value="funding_rate_above">Funding rate above</option>
+              <option value="funding_rate_below">Funding rate below</option>
             </select>
             <input
               style={inputStyle}
               placeholder={
-                formType === 'liquidation_spike' ? 'Event count threshold' : 'Price threshold (USD)'
+                formType === 'liquidation_spike'
+                  ? 'Event count threshold'
+                  : formType === 'funding_rate_above' || formType === 'funding_rate_below'
+                  ? 'Rate threshold % (e.g. 0.05 for 0.05%)'
+                  : 'Price threshold (USD)'
               }
               value={formThreshold}
               onChange={(e) => setFormThreshold(e.target.value)}
