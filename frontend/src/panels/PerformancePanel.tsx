@@ -1,6 +1,6 @@
 import { useState, useEffect, CSSProperties, type ReactNode } from 'react';
-import { fetchJournalStats } from '../api';
-import type { JournalStats } from '../api';
+import { fetchJournalStats, fetchJournal } from '../api';
+import type { JournalStats, JournalEntry, JournalOutcome } from '../api';
 
 const DISPLAY: Record<string, string> = {
   BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL',
@@ -90,18 +90,94 @@ function StreakBadge({ streak }: { streak: number }) {
   );
 }
 
+// ── Equity curve ──────────────────────────────────────────────────────────────
+
+const OUTCOME_R: Partial<Record<JournalOutcome, number>> = {
+  sl: -1, tp1: 1, tp2: 2, tp3: 3, expired: 0,
+};
+
+function buildCurve(entries: JournalEntry[]): number[] {
+  const closed = entries
+    .filter((e) => e.outcome !== 'pending')
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  const points: number[] = [0];
+  let running = 0;
+  for (const e of closed) {
+    running += OUTCOME_R[e.outcome] ?? 0;
+    points.push(running);
+  }
+  return points;
+}
+
+function EquityCurve({ entries }: { entries: JournalEntry[] }) {
+  const points = buildCurve(entries);
+  if (points.length < 2) return null;
+
+  const W = 300, H = 80, PAD = 4;
+  const minY  = Math.min(...points);
+  const maxY  = Math.max(...points);
+  const rangeY = (maxY - minY) || 1;
+
+  const toX = (i: number) => PAD + (i / (points.length - 1)) * (W - PAD * 2);
+  const toY = (v: number) => PAD + ((maxY - v) / rangeY) * (H - PAD * 2);
+  const zeroY = toY(0);
+
+  const polyline = points.map((v, i) => `${toX(i)},${toY(v)}`).join(' ');
+  const area     = `M ${toX(0)},${zeroY} ` +
+    points.map((v, i) => `L ${toX(i)},${toY(v)}`).join(' ') +
+    ` L ${toX(points.length - 1)},${zeroY} Z`;
+
+  const finalR  = points[points.length - 1];
+  const color   = finalR >= 0 ? '#33aa66' : '#cc3333';
+  const fillClr = finalR >= 0 ? 'rgba(51,170,102,0.10)' : 'rgba(204,51,51,0.10)';
+
+  return (
+    <section style={sectionStyle}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={sectionTitleStyle}>Equity Curve</div>
+        <span style={{ fontSize: '11px', fontWeight: 700, color, fontFamily: 'monospace' }}>
+          {finalR >= 0 ? '+' : ''}{finalR.toFixed(0)}R
+        </span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height="70"
+        style={{ display: 'block', overflow: 'visible' }}
+      >
+        {/* Zero reference line */}
+        <line x1={PAD} y1={zeroY} x2={W - PAD} y2={zeroY}
+          stroke="#2a2a30" strokeWidth="1" strokeDasharray="3,3" />
+        {/* Area fill */}
+        <path d={area} fill={fillClr} />
+        {/* Curve line */}
+        <polyline points={polyline} fill="none" stroke={color} strokeWidth="1.5"
+          strokeLinejoin="round" strokeLinecap="round" />
+        {/* End dot */}
+        <circle cx={toX(points.length - 1)} cy={toY(finalR)} r="3" fill={color} />
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '-4px' }}>
+        <span style={{ fontSize: '9px', color: '#444' }}>Trade 1</span>
+        <span style={{ fontSize: '9px', color: '#444' }}>Trade {points.length - 1}</span>
+      </div>
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PerformancePanel() {
   const [stats,     setStats]     = useState<JournalStats | null>(null);
+  const [entries,   setEntries]   = useState<JournalEntry[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState(0);
 
   const load = async () => {
     try {
-      const data = await fetchJournalStats();
+      const [data, journal] = await Promise.all([fetchJournalStats(), fetchJournal()]);
       setStats(data);
+      setEntries(journal);
       setError(null);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load stats.');
@@ -180,6 +256,9 @@ export default function PerformancePanel() {
                   : '#888'}
               />
             </div>
+
+            {/* Equity curve */}
+            <EquityCurve entries={entries} />
 
             {/* Outcome distribution */}
             <section style={sectionStyle}>

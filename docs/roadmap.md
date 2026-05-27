@@ -66,4 +66,5 @@
 | 55 | Funding Rate Alerts — funding_rate_above / funding_rate_below conditions, % threshold, evaluator + UI | ✅ Done |
 | 56 | Multi-Symbol Alerts — price/liquidation/funding_rate alerts on BTC/ETH/SOL, symbol selector in form, symbol column in list | ✅ Done |
 | 57 | Live Price Ticker — BTC/ETH/SOL price + 24H % change in header, 5s poll, green/red flash on price change | ✅ Done |
-| 58 | TBD | Planned |
+| 58 | Equity Curve — SVG running-R chart in Performance panel, area fill + zero line + final R badge | ✅ Done |
+| 59 | TBD | Planned |
