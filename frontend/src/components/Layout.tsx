@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import type { CSSProperties } from 'react';
 import ServiceHealth from './ServiceHealth';
 import RelativeStrength from './RelativeStrength';
+import PriceTicker from './PriceTicker';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] as const;
@@ -63,7 +64,7 @@ export default function Layout({
                   </button>
                 ))}
               </div>
-              <RelativeStrength />
+              <PriceTicker />
             </div>
           )}
         </header>
@@ -79,6 +80,8 @@ export default function Layout({
               </button>
             ))}
           </div>
+
+          <PriceTicker />
 
           {isDash && (
             <div style={symbolBarStyle}>

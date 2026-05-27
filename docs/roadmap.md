@@ -65,4 +65,5 @@
 | 54 | Multi-Timeframe Signal Matrix — RSI(14) + EMA20 trend arrow for BTC/ETH/SOL × 15m/1H/4H/1D, color-coded grid, Signals tab | ✅ Done |
 | 55 | Funding Rate Alerts — funding_rate_above / funding_rate_below conditions, % threshold, evaluator + UI | ✅ Done |
 | 56 | Multi-Symbol Alerts — price/liquidation/funding_rate alerts on BTC/ETH/SOL, symbol selector in form, symbol column in list | ✅ Done |
-| 57 | TBD | Planned |
+| 57 | Live Price Ticker — BTC/ETH/SOL price + 24H % change in header, 5s poll, green/red flash on price change | ✅ Done |
+| 58 | TBD | Planned |
