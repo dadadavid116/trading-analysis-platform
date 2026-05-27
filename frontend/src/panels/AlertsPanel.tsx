@@ -10,6 +10,7 @@ function AlertsPanel() {
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [formName,        setFormName]        = useState('');
+  const [formSymbol,      setFormSymbol]      = useState('BTCUSDT');
   const [formType,        setFormType]        = useState('price_above');
   const [formThreshold,   setFormThreshold]   = useState('');
   const [formWindow,      setFormWindow]      = useState('');
@@ -95,6 +96,7 @@ function AlertsPanel() {
     try {
       await createAlert({
         name:           formName.trim(),
+        symbol:         formSymbol,
         condition_type: formType,
         threshold,
         window_minutes: formType === 'liquidation_spike' ? parseInt(formWindow, 10) : null,
@@ -104,6 +106,7 @@ function AlertsPanel() {
       setAlerts(updated);
       // Reset + close form on success
       setFormName('');
+      setFormSymbol('BTCUSDT');
       setFormThreshold('');
       setFormWindow('');
       setFormTriggerMode('once');
@@ -216,6 +219,7 @@ function AlertsPanel() {
             <thead>
               <tr>
                 <th style={panelStyles.th}>Name</th>
+                <th style={panelStyles.th}>Symbol</th>
                 <th style={panelStyles.th}>Condition</th>
                 <th style={panelStyles.th}>Threshold</th>
                 <th style={panelStyles.th}>Mode</th>
@@ -227,6 +231,7 @@ function AlertsPanel() {
               {alerts.map((a) => (
                 <tr key={a.id}>
                   <td style={panelStyles.td}>{a.name}</td>
+                  <td style={panelStyles.td}>{a.symbol.replace('USDT', '')}</td>
                   <td style={panelStyles.td}>{conditionLabel(a.condition_type)}</td>
                   <td style={panelStyles.td}>{formatThreshold(a)}</td>
                   <td style={panelStyles.td}>{a.trigger_mode}</td>
@@ -267,6 +272,15 @@ function AlertsPanel() {
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
             />
+            <select
+              style={inputStyle}
+              value={formSymbol}
+              onChange={(e) => setFormSymbol(e.target.value)}
+            >
+              <option value="BTCUSDT">BTC</option>
+              <option value="ETHUSDT">ETH</option>
+              <option value="SOLUSDT">SOL</option>
+            </select>
             <select
               style={inputStyle}
               value={formType}
@@ -410,7 +424,7 @@ const emptyCtaStyle: CSSProperties = {
 };
 
 const formPanelStyle = (open: boolean): CSSProperties => ({
-  maxHeight:    open ? '360px' : '0',
+  maxHeight:    open ? '420px' : '0',
   overflow:     'hidden',
   transition:   'max-height 0.25s ease',
   flexShrink:   0,

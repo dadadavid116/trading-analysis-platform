@@ -50,22 +50,19 @@ async def evaluate_all() -> None:
 
     logger.info("Evaluating %d alert(s)...", len(alerts))
 
-    # Fetch shared data once — reused across all alerts of each type.
-    latest_close: float | None = await _get_latest_close()
-
     for alert in alerts:
         try:
-            await _evaluate_one(alert, latest_close)
+            await _evaluate_one(alert)
         except Exception as exc:
             logger.error("Error evaluating alert %d (%s): %s", alert.id, alert.name, exc)
 
 
-async def _get_latest_close() -> float | None:
-    """Return the close price from the most recent BTC candle, or None."""
+async def _get_latest_close(symbol: str) -> float | None:
+    """Return the close price from the most recent candle for symbol, or None."""
     async with AsyncSessionLocal() as session:
         r = await session.execute(
             select(PriceCandle)
-            .where(PriceCandle.symbol == "BTCUSDT")
+            .where(PriceCandle.symbol == symbol)
             .order_by(desc(PriceCandle.timestamp))
             .limit(1)
         )
@@ -86,14 +83,14 @@ async def _get_latest_funding_rate(symbol: str) -> float | None:
     return float(row.funding_rate) * 100 if row is not None else None
 
 
-async def _count_recent_liquidations(window_minutes: int) -> int:
-    """Count BTC liquidation events in the last window_minutes."""
+async def _count_recent_liquidations(symbol: str, window_minutes: int) -> int:
+    """Count liquidation events for symbol in the last window_minutes."""
     cutoff = datetime.now(tz=timezone.utc) - timedelta(minutes=window_minutes)
     async with AsyncSessionLocal() as session:
         r = await session.execute(
             select(func.count())
             .select_from(Liquidation)
-            .where(Liquidation.symbol == "BTCUSDT")
+            .where(Liquidation.symbol == symbol)
             .where(Liquidation.timestamp >= cutoff)
         )
         return r.scalar_one()
@@ -117,7 +114,7 @@ async def _clear_triggered(alert_id: int) -> None:
         await session.commit()
 
 
-async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
+async def _evaluate_one(alert: Alert) -> None:
     """Evaluate a single alert and trigger / reset it as appropriate.
 
     once mode:
@@ -139,20 +136,19 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
 
     # Determine whether the condition is currently met.
     condition_met: bool
-    fr: float | None = None  # populated only for funding_rate conditions
+    latest_close: float | None = None
+    fr: float | None = None
 
     if alert.condition_type in ("price_above", "price_below"):
+        latest_close = await _get_latest_close(alert.symbol)
         if latest_close is None:
-            logger.debug("Alert %d skipped — no price data yet.", alert.id)
+            logger.debug("Alert %d skipped — no price data for %s.", alert.id, alert.symbol)
             return
-        if alert.condition_type == "price_above":
-            condition_met = latest_close > threshold
-        else:
-            condition_met = latest_close < threshold
+        condition_met = latest_close > threshold if alert.condition_type == "price_above" else latest_close < threshold
 
     elif alert.condition_type == "liquidation_spike":
         window = alert.window_minutes or 5
-        count = await _count_recent_liquidations(window)
+        count = await _count_recent_liquidations(alert.symbol, window)
         condition_met = count > threshold
 
     elif alert.condition_type in ("funding_rate_above", "funding_rate_below"):
@@ -160,10 +156,7 @@ async def _evaluate_one(alert: Alert, latest_close: float | None) -> None:
         if fr is None:
             logger.debug("Alert %d skipped — no funding rate data for %s.", alert.id, alert.symbol)
             return
-        if alert.condition_type == "funding_rate_above":
-            condition_met = fr > threshold
-        else:
-            condition_met = fr < threshold
+        condition_met = fr > threshold if alert.condition_type == "funding_rate_above" else fr < threshold
 
     else:
         logger.warning(
