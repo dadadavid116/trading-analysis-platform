@@ -156,6 +156,8 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
         )}
       </div>
 
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+
       {loading && <p style={panelStyles.muted}>Loading…</p>}
 
       {!loading && noData && (
@@ -291,6 +293,8 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
           </div>
         </div>
       )}
+
+      </div>{/* end scrollable body */}
     </div>
   );
 }

@@ -67,6 +67,8 @@ function OrderBookPanel({ symbol = 'BTCUSDT' }: OrderBookPanelProps) {
     <div style={panelStyles.card}>
       <h2 style={panelStyles.title}>{title}</h2>
 
+      <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
       {/* Imbalance indicator */}
       <div style={imbalRowStyle}>
         <span style={{ fontSize: '10px', color: '#666' }}>Imbalance</span>
@@ -136,6 +138,8 @@ function OrderBookPanel({ symbol = 'BTCUSDT' }: OrderBookPanelProps) {
           ))}
         </div>
       </div>
+
+      </div>{/* end scrollable body */}
     </div>
   );
 }
