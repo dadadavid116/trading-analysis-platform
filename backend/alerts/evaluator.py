@@ -28,7 +28,7 @@ from sqlalchemy import func, select, desc
 
 from app.database import AsyncSessionLocal
 from app.models.alert import Alert
-from app.models.derivatives import FundingRate
+from app.models.derivatives import FundingRate, OpenInterest
 from app.models.liquidation import Liquidation
 from app.models.price import PriceCandle
 from alerts.notifications import notify
@@ -121,6 +121,37 @@ async def _get_price_change_pct(symbol: str, window_minutes: int) -> float | Non
     return (float(latest.close) - base) / base * 100
 
 
+async def _get_oi_change_pct(symbol: str, window_minutes: int) -> float | None:
+    """Return % change in open interest over the last window_minutes for symbol, or None."""
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(minutes=window_minutes)
+    async with AsyncSessionLocal() as session:
+        r_latest = await session.execute(
+            select(OpenInterest)
+            .where(OpenInterest.symbol == symbol)
+            .order_by(desc(OpenInterest.timestamp))
+            .limit(1)
+        )
+        latest = r_latest.scalar_one_or_none()
+        if latest is None:
+            return None
+
+        r_oldest = await session.execute(
+            select(OpenInterest)
+            .where(OpenInterest.symbol == symbol)
+            .where(OpenInterest.timestamp >= cutoff)
+            .order_by(OpenInterest.timestamp)
+            .limit(1)
+        )
+        oldest = r_oldest.scalar_one_or_none()
+        if oldest is None:
+            return None
+
+    base = float(oldest.oi_value)
+    if base == 0:
+        return None
+    return (float(latest.oi_value) - base) / base * 100
+
+
 async def _count_recent_liquidations(symbol: str, window_minutes: int) -> int:
     """Count liquidation events for symbol in the last window_minutes."""
     cutoff = datetime.now(tz=timezone.utc) - timedelta(minutes=window_minutes)
@@ -177,6 +208,7 @@ async def _evaluate_one(alert: Alert) -> None:
     latest_close: float | None = None
     fr: float | None = None
     pct_change: float | None = None
+    oi_change: float | None = None
 
     if alert.condition_type in ("price_above", "price_below"):
         latest_close = await _get_latest_close(alert.symbol)
@@ -208,6 +240,14 @@ async def _evaluate_one(alert: Alert) -> None:
         else:
             condition_met = pct_change < -threshold
 
+    elif alert.condition_type == "oi_spike":
+        window = alert.window_minutes or 15
+        oi_change = await _get_oi_change_pct(alert.symbol, window)
+        if oi_change is None:
+            logger.debug("Alert %d skipped — insufficient OI history for %s.", alert.id, alert.symbol)
+            return
+        condition_met = abs(oi_change) > threshold
+
     else:
         logger.warning(
             "Alert %d has unknown condition_type '%s' — skipping.",
@@ -220,7 +260,7 @@ async def _evaluate_one(alert: Alert) -> None:
     if condition_met and not triggered:
         # Fire the alert.
         await _set_triggered(alert.id)
-        message = _build_message(alert, latest_close, threshold, fr, pct_change)
+        message = _build_message(alert, latest_close, threshold, fr, pct_change, oi_change)
         await notify(alert.name, alert.condition_type, message, getattr(alert, 'webhook_url', None))
         try:
             from app.services.event_logger import log_event
@@ -260,6 +300,7 @@ def _build_message(
     threshold: float,
     funding_rate: float | None = None,
     pct_change: float | None = None,
+    oi_change: float | None = None,
 ) -> str:
     """Build a human-readable trigger message."""
     if alert.condition_type == "price_above":
@@ -283,4 +324,8 @@ def _build_message(
         window = alert.window_minutes or 15
         chg = f"{pct_change:.2f}%" if pct_change is not None else "?"
         return f"{alert.symbol} dropped {chg} in {window} min (threshold: -{threshold:.2f}%)"
+    if alert.condition_type == "oi_spike":
+        window = alert.window_minutes or 15
+        chg = f"{oi_change:+.2f}%" if oi_change is not None else "?"
+        return f"{alert.symbol} OI changed {chg} in {window} min (threshold: ±{threshold:.2f}%)"
     return f"Condition met for alert '{alert.name}'"

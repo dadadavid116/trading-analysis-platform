@@ -66,6 +66,8 @@ function AlertsPanel() {
                       body = `${alert.symbol} spiked up >${Number(alert.threshold).toFixed(2)}% in ${alert.window_minutes ?? '?'} min`;
                     } else if (alert.condition_type === 'price_spike_down') {
                       body = `${alert.symbol} dropped >${Number(alert.threshold).toFixed(2)}% in ${alert.window_minutes ?? '?'} min`;
+                    } else if (alert.condition_type === 'oi_spike') {
+                      body = `${alert.symbol} OI moved >${Number(alert.threshold).toFixed(2)}% in ${alert.window_minutes ?? '?'} min`;
                     } else {
                       body = `${alert.symbol} ${alert.condition_type === 'price_above' ? 'rose above' : 'dropped below'} $${Number(alert.threshold).toLocaleString()}`;
                     }
@@ -113,7 +115,7 @@ function AlertsPanel() {
     const threshold = parseFloat(formThreshold);
     if (!formName.trim()) { setFormError('Name is required.'); return; }
     if (isNaN(threshold) || threshold <= 0) { setFormError('Threshold must be a positive number.'); return; }
-    const needsWindow = formType === 'liquidation_spike' || formType === 'price_spike_up' || formType === 'price_spike_down';
+    const needsWindow = formType === 'liquidation_spike' || formType === 'price_spike_up' || formType === 'price_spike_down' || formType === 'oi_spike';
     if (needsWindow && !formWindow.trim()) {
       setFormError('Window (minutes) is required for this condition.');
       return;
@@ -171,6 +173,9 @@ function AlertsPanel() {
     if (alert.condition_type === 'price_spike_up' || alert.condition_type === 'price_spike_down') {
       return `${Number(alert.threshold).toFixed(2)}% / ${alert.window_minutes ?? '?'} min`;
     }
+    if (alert.condition_type === 'oi_spike') {
+      return `±${Number(alert.threshold).toFixed(2)}% / ${alert.window_minutes ?? '?'} min`;
+    }
     return `$${Number(alert.threshold).toLocaleString()}`;
   };
 
@@ -182,6 +187,7 @@ function AlertsPanel() {
     if (type === 'funding_rate_below') return 'FR <';
     if (type === 'price_spike_up')     return 'Spike ↑';
     if (type === 'price_spike_down')   return 'Spike ↓';
+    if (type === 'oi_spike')           return 'OI spike';
     return type;
   };
 
@@ -393,6 +399,7 @@ function AlertsPanel() {
               <option value="liquidation_spike">Liquidation spike</option>
               <option value="funding_rate_above">Funding rate above</option>
               <option value="funding_rate_below">Funding rate below</option>
+              <option value="oi_spike">OI spike (±%)</option>
             </select>
             <input
               style={inputStyle}
@@ -403,6 +410,8 @@ function AlertsPanel() {
                   ? 'Rate threshold % (e.g. 0.05 for 0.05%)'
                   : formType === 'price_spike_up' || formType === 'price_spike_down'
                   ? '% move threshold (e.g. 3 for 3%)'
+                  : formType === 'oi_spike'
+                  ? 'OI % change threshold (e.g. 5 for ±5%)'
                   : 'Price threshold (USD)'
               }
               value={formThreshold}
@@ -411,7 +420,7 @@ function AlertsPanel() {
               min="0"
               step="any"
             />
-            {(formType === 'liquidation_spike' || formType === 'price_spike_up' || formType === 'price_spike_down') && (
+            {(formType === 'liquidation_spike' || formType === 'price_spike_up' || formType === 'price_spike_down' || formType === 'oi_spike') && (
               <input
                 style={inputStyle}
                 placeholder="Window (minutes)"

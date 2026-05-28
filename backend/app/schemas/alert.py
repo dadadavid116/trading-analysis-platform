@@ -9,7 +9,13 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-VALID_CONDITION_TYPES = {"price_above", "price_below", "liquidation_spike"}
+VALID_CONDITION_TYPES = {
+    "price_above", "price_below",
+    "liquidation_spike",
+    "funding_rate_above", "funding_rate_below",
+    "price_spike_up", "price_spike_down",
+    "oi_spike",
+}
 VALID_TRIGGER_MODES   = {"once", "rearm"}
 
 
@@ -72,10 +78,10 @@ class AlertCreate(BaseModel):
 
     @model_validator(mode="after")
     def window_required_for_spike(self) -> "AlertCreate":
-        if self.condition_type == "liquidation_spike":
+        if self.condition_type in ("liquidation_spike", "price_spike_up", "price_spike_down", "oi_spike"):
             if self.window_minutes is None or self.window_minutes <= 0:
                 raise ValueError(
-                    "window_minutes is required and must be > 0 for liquidation_spike"
+                    "window_minutes is required and must be > 0 for this condition type"
                 )
         return self
 
