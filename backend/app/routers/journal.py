@@ -48,6 +48,7 @@ class SaveSetupRequest(BaseModel):
     reasoning:   str
     key_risks:   str
     scanner_bias: str = "neutral"
+    notes:        str | None = None
 
 
 class JournalEntryOut(BaseModel):
@@ -65,6 +66,7 @@ class JournalEntryOut(BaseModel):
     reasoning:   str
     key_risks:   str
     scanner_bias: str | None
+    notes:        str | None
     outcome:     str   # "pending" | "tp1" | "tp2" | "tp3" | "sl" | "expired"
 
     class Config:
@@ -140,6 +142,7 @@ async def save_journal_entry(body: SaveSetupRequest, db: AsyncSession = Depends(
         reasoning    = body.reasoning,
         key_risks    = body.key_risks,
         scanner_bias = body.scanner_bias,
+        notes        = body.notes or None,
     )
     db.add(entry)
     await db.commit()
@@ -186,6 +189,7 @@ async def list_journal_entries(db: AsyncSession = Depends(get_db)):
             reasoning    = e.reasoning,
             key_risks    = e.key_risks,
             scanner_bias = e.scanner_bias,
+            notes        = e.notes,
             outcome      = outcome,
         ))
     return out

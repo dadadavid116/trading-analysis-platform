@@ -26,9 +26,9 @@ function exportCSV(entries: JournalEntry[]): void {
   const headers = [
     'Date', 'Symbol', 'Bias', 'Entry Low', 'Entry High',
     'Stop Loss', 'TP1', 'TP2', 'TP3', 'R/R', 'Outcome',
-    'Reasoning', 'Key Risks',
+    'Reasoning', 'Key Risks', 'Notes',
   ];
-  const escape = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+  const escape = (s: string | null | undefined) => `"${String(s ?? '').replace(/"/g, '""')}"`;
   const rows = entries.map(e => [
     new Date(e.created_at).toISOString(),
     e.symbol,
@@ -43,6 +43,7 @@ function exportCSV(entries: JournalEntry[]): void {
     e.outcome,
     escape(e.reasoning),
     escape(e.key_risks),
+    escape(e.notes),
   ].join(','));
   const csv  = [headers.join(','), ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -206,6 +207,14 @@ function EntryCard({ entry, onDelete }: { entry: JournalEntry; onDelete: () => v
           <p style={{ margin: '0 0 6px', fontSize: '10px', color: '#999', lineHeight: '1.5' }}>
             {entry.reasoning}
           </p>
+
+          {/* User notes */}
+          {entry.notes && (
+            <div style={{ fontSize: '10px', color: '#b0b8e0', background: '#12121a', border: '1px solid #2a2a3e', borderRadius: '4px', padding: '5px 8px', lineHeight: '1.5', marginBottom: '4px' }}>
+              <span style={{ color: '#4a6a9f', fontWeight: 700, marginRight: '5px' }}>✎</span>
+              {entry.notes}
+            </div>
+          )}
 
           {/* Risk */}
           <div style={{ fontSize: '10px', color: '#888', borderTop: '1px solid #1e1e22', paddingTop: '6px', display: 'flex', gap: '5px' }}>

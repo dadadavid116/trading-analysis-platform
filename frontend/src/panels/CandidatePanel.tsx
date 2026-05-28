@@ -108,13 +108,15 @@ function SignalItem({ sig }: { sig: ScannerSignal }) {
   );
 }
 
-function SetupCard({ setup, onRegen, onSave, loading, saving, saved }: {
-  setup: TradeSetup;
-  onRegen: () => void;
-  onSave:  () => void;
-  loading: boolean;
-  saving:  boolean;
-  saved:   boolean;
+function SetupCard({ setup, onRegen, onSave, loading, saving, saved, notes, onNotesChange }: {
+  setup:          TradeSetup;
+  onRegen:        () => void;
+  onSave:         () => void;
+  loading:        boolean;
+  saving:         boolean;
+  saved:          boolean;
+  notes:          string;
+  onNotesChange:  (v: string) => void;
 }) {
   const isLong = setup.bias === 'long';
   const dirColor = isLong ? '#33aa66' : '#cc3333';
@@ -180,6 +182,22 @@ function SetupCard({ setup, onRegen, onSave, loading, saving, saved }: {
         <span style={{ fontSize: '10px', color: '#f0a020', fontWeight: 700, flexShrink: 0 }}>⚠</span>
         <span style={{ fontSize: '10px', color: '#888', flex: 1 }}>{setup.key_risks}</span>
       </div>
+
+      {/* Notes */}
+      {!saved && (
+        <textarea
+          placeholder="Notes (optional) — add context before saving…"
+          value={notes}
+          onChange={(e) => onNotesChange(e.target.value)}
+          rows={2}
+          style={{
+            width: '100%', boxSizing: 'border-box',
+            backgroundColor: '#0d0d10', border: '1px solid #2a2a2e', borderRadius: '4px',
+            color: '#aaa', fontSize: '10px', padding: '5px 7px', resize: 'vertical',
+            fontFamily: 'inherit', lineHeight: 1.4, outline: 'none',
+          }}
+        />
+      )}
 
       {/* Save to Journal */}
       <button
@@ -338,6 +356,7 @@ export default function CandidatePanel({ data }: Props) {
   const [lastSym, setLastSym] = useState<string | null>(null);
   const [saving,  setSaving]  = useState(false);
   const [saved,   setSaved]   = useState(false);
+  const [notes,   setNotes]   = useState('');
 
   // Pick symbol with highest |composite| that actually has signals
   const top = data?.symbols.reduce<SymbolScanResult | null>((best, cur) => {
@@ -352,6 +371,7 @@ export default function CandidatePanel({ data }: Props) {
     setSetup(null);
     setError(null);
     setSaved(false);
+    setNotes('');
   }
 
   const handleGenerate = async () => {
@@ -373,7 +393,7 @@ export default function CandidatePanel({ data }: Props) {
     if (!setup) return;
     setSaving(true);
     try {
-      await saveToJournal(setup);
+      await saveToJournal(setup, notes.trim() || null);
       setSaved(true);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to save to journal.');
@@ -474,6 +494,8 @@ export default function CandidatePanel({ data }: Props) {
                 loading={loading}
                 saving={saving}
                 saved={saved}
+                notes={notes}
+                onNotesChange={setNotes}
               />
             )}
 

@@ -78,3 +78,4 @@
 | 67 | Custom webhook notifications — per-alert optional webhook URL, JSON POST on trigger alongside Telegram, DB migration, Hook column in alert table | ✅ Done |
 | 68 | OI spike alert — `oi_spike` condition type, ±% OI change over window, evaluator helper, schema validator, AlertsPanel UI | ✅ Done |
 | 69 | User chart annotations — click chart to mark price levels with custom label + color, stored per-symbol in localStorage, managed via inline list | ✅ Done |
+| 70 | Journal trade notes — optional notes textarea in Candidate panel before Save; stored in DB; shown in expanded journal card; included in CSV export | ✅ Done |

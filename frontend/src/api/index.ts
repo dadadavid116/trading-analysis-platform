@@ -600,6 +600,7 @@ export interface JournalEntry {
   reasoning:    string;
   key_risks:    string;
   scanner_bias: string | null;
+  notes:        string | null;
   outcome:      JournalOutcome;
 }
 
@@ -609,7 +610,7 @@ export function fetchJournal(): Promise<JournalEntry[]> {
 }
 
 /** Save an AI trade setup to the journal. */
-export async function saveToJournal(setup: TradeSetup): Promise<{ id: number }> {
+export async function saveToJournal(setup: TradeSetup, notes?: string | null): Promise<{ id: number }> {
   const response = await fetch(`${BASE_URL}/journal`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -624,6 +625,7 @@ export async function saveToJournal(setup: TradeSetup): Promise<{ id: number }> 
       reasoning:    setup.reasoning,
       key_risks:    setup.key_risks,
       scanner_bias: setup.scanner_bias,
+      notes:        notes || null,
     }),
   });
   if (!response.ok) {

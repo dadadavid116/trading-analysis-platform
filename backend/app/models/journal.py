@@ -33,3 +33,4 @@ class JournalEntry(Base):
     reasoning    = Column(Text,        nullable=False)
     key_risks    = Column(Text,        nullable=False)
     scanner_bias = Column(String(10))
+    notes        = Column(Text,        nullable=True)
