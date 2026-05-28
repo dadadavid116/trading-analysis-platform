@@ -470,7 +470,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
         horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
       },
-      rightPriceScale: { borderColor: '#2a2a2e' },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65 },
       timeScale: { borderColor: '#2a2a2e', timeVisible: true, secondsVisible: false },
       width:  chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight || 320,
@@ -558,7 +558,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const rsiChart = createChart(rsiContainerRef.current!, {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -586,7 +586,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const macdChartOpts = {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -611,7 +611,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const stochChart = createChart(stochContainerRef.current!, {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -635,7 +635,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const cvdChart = createChart(cvdContainerRef.current!, {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -1198,17 +1198,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         <p style={panelStyles.error}>Could not load price data — check that the API is running.</p>
       )}
       {candle && !latestLoading && (
-        <div style={panelStyles.dataGrid}>
-          <DataRow label="Close"  value={`$${candle.close.toLocaleString()}`} highlight />
-          <DataRow label="Open"   value={`$${candle.open.toLocaleString()}`} />
-          <DataRow label="High"   value={`$${candle.high.toLocaleString()}`} />
-          <DataRow label="Low"    value={`$${candle.low.toLocaleString()}`} />
-          <DataRow label="Volume" value={candle.volume.toLocaleString()} />
-          <DataRow label="Time"   value={new Date(candle.timestamp).toLocaleTimeString()} />
-          {/* Countdown timer — shows how long until the current candle closes */}
-          {countdown && (
-            <DataRow label="Candle closes" value={countdown} />
-          )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0 10px', fontFamily: 'monospace', fontSize: '11px', color: '#888', lineHeight: '18px', flexShrink: 0 }}>
+          <span><span style={{ color: '#666' }}>O</span> ${candle.open.toLocaleString()}</span>
+          <span><span style={{ color: '#26a69a' }}>H</span> ${candle.high.toLocaleString()}</span>
+          <span><span style={{ color: '#ef5350' }}>L</span> ${candle.low.toLocaleString()}</span>
+          <span><span style={{ color: '#ccc' }}>C</span> <strong style={{ color: '#ddd' }}>${candle.close.toLocaleString()}</strong></span>
+          <span><span style={{ color: '#666' }}>Vol</span> {candle.volume.toLocaleString()}</span>
+          {countdown && <span><span style={{ color: '#666' }}>⏱</span> {countdown}</span>}
         </div>
       )}
 

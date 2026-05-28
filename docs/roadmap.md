@@ -69,4 +69,4 @@
 | 58 | Equity Curve — SVG running-R chart in Performance panel, area fill + zero line + final R badge | ✅ Done |
 | 59 | % Price Change Alerts — price_spike_up / price_spike_down conditions, % threshold + window, DB candle lookback | ✅ Done |
 | 60 | Journal CSV Export + Outcome Filter — ↓ CSV download button, All/Open/Wins/Losses/Expired filter bar with counts | ✅ Done |
-| 61 | TBD | Planned |
+| 61 | Chart x-axis alignment — `minimumWidth: 65` on all 5 chart price scales; compact OHLCV strip replaces 7-row data grid | ✅ Done |
