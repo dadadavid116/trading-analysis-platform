@@ -108,6 +108,21 @@ function loadOverlays(): Set<string> {
   return new Set(['ema20', 'ema50', 'volume', 'rsi']);
 }
 
+function computeHA(candles: KlineCandle[]): CandlestickData[] {
+  const result: CandlestickData[] = [];
+  for (let i = 0; i < candles.length; i++) {
+    const c      = candles[i];
+    const haClose = (c.open + c.high + c.low + c.close) / 4;
+    const haOpen  = i === 0
+      ? (c.open + c.close) / 2
+      : (result[i - 1].open + result[i - 1].close) / 2;
+    const haHigh  = Math.max(c.high, haOpen, haClose);
+    const haLow   = Math.min(c.low,  haOpen, haClose);
+    result.push({ time: c.time as UTCTimestamp, open: haOpen, high: haHigh, low: haLow, close: haClose });
+  }
+  return result;
+}
+
 function computeEMA(closes: LineData[], period: number): LineData[] {
   if (closes.length < period) return [];
   const k = 2 / (period + 1);
@@ -360,12 +375,22 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const ichiChikouRef = useRef<ISeriesApi<'Line'> | null>(null);
 
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
+  const [showHA, setShowHA]     = useState(() => localStorage.getItem('tap_chart_ha') === '1');
+  const lastHACandleRef         = useRef<{ open: number; close: number } | null>(null);
 
   function toggleOverlay(key: string) {
     setOverlays((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key); else next.add(key);
       try { localStorage.setItem(OVERLAY_STORAGE_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  function toggleHA() {
+    setShowHA((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('tap_chart_ha', next ? '1' : '0'); } catch { /* ignore */ }
       return next;
     });
   }
@@ -733,17 +758,28 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         .then((data: KlineCandle[]) => {
           if (!seriesRef.current || data.length === 0) return;
           const c = data[0];
-          seriesRef.current.update({
-            time: c.time as UTCTimestamp,
-            open: c.open, high: c.high, low: c.low, close: c.close,
-          });
+          let upd: CandlestickData;
+          if (showHA && lastHACandleRef.current) {
+            const haClose = (c.open + c.high + c.low + c.close) / 4;
+            const haOpen  = (lastHACandleRef.current.open + lastHACandleRef.current.close) / 2;
+            upd = {
+              time:  c.time as UTCTimestamp,
+              open:  haOpen,
+              high:  Math.max(c.high, haOpen, haClose),
+              low:   Math.min(c.low,  haOpen, haClose),
+              close: haClose,
+            };
+          } else {
+            upd = { time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close };
+          }
+          seriesRef.current.update(upd);
           lastCandleTimeRef.current = c.time;
         })
         .catch(() => {});
     };
     const id = setInterval(refreshLiveCandle, 10_000);
     return () => clearInterval(id);
-  }, [timeframe, symbol]);
+  }, [timeframe, symbol, showHA]);
 
   // ── Clear analysis + S&R + pivot lines when symbol changes ───────────────
   useEffect(() => {
@@ -873,13 +909,17 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
 
     fetchKlines(timeframe, cfg.limit, symbol)
       .then((data: KlineCandle[]) => {
-        const chartData: CandlestickData[] = data.map((c) => ({
+        const rawData: CandlestickData[] = data.map((c) => ({
           time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close,
         }));
+        const chartData = showHA ? computeHA(data) : rawData;
         seriesRef.current!.setData(chartData);
         chartRef.current!.timeScale().fitContent();
-        if (chartData.length > 0)
+        if (chartData.length > 0) {
           lastCandleTimeRef.current = chartData[chartData.length - 1].time as number;
+          const last = chartData[chartData.length - 1];
+          lastHACandleRef.current = showHA ? { open: last.open, close: last.close } : null;
+        }
 
         // Compute and set overlay data
         const closeLD: LineData[] = data.map((c) => ({ time: c.time as UTCTimestamp, value: c.close }));
@@ -935,7 +975,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         setChartError(err.message);
         setChartLoading(false);
       });
-  }, [timeframe, symbol]);
+  }, [timeframe, symbol, showHA]);
 
   // ── Create alert from popover ─────────────────────────────────────────────
   async function setAlertFromChart(conditionType: 'price_above' | 'price_below') {
@@ -1129,6 +1169,20 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             </button>
           );
         })}
+        <span style={{ color: '#333', alignSelf: 'center', padding: '0 2px', fontSize: '10px' }}>|</span>
+        <button
+          onClick={toggleHA}
+          title="Toggle Heikin-Ashi smoothed candles"
+          style={{
+            backgroundColor: showHA ? '#ffd54f18' : 'transparent',
+            border: `1px solid ${showHA ? '#ffd54f66' : '#2a2a2e'}`,
+            borderRadius: '3px', color: showHA ? '#ffd54f' : '#444',
+            cursor: 'pointer', fontSize: '10px', fontWeight: showHA ? 600 : 400,
+            padding: '2px 6px', transition: 'all 0.12s',
+          }}
+        >
+          HA
+        </button>
       </div>
 
       {/* Indicator preferences modal */}
