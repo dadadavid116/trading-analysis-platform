@@ -2,6 +2,58 @@ import { useState, useEffect, CSSProperties, type MouseEvent } from 'react';
 import { fetchJournal, deleteJournalEntry } from '../api';
 import type { JournalEntry, JournalOutcome } from '../api';
 
+type Filter = 'all' | 'open' | 'wins' | 'losses' | 'expired';
+
+const FILTERS: { id: Filter; label: string }[] = [
+  { id: 'all',     label: 'All'     },
+  { id: 'open',    label: 'Open'    },
+  { id: 'wins',    label: 'Wins'    },
+  { id: 'losses',  label: 'Losses'  },
+  { id: 'expired', label: 'Expired' },
+];
+
+function applyFilter(entries: JournalEntry[], filter: Filter): JournalEntry[] {
+  switch (filter) {
+    case 'open':    return entries.filter(e => e.outcome === 'pending');
+    case 'wins':    return entries.filter(e => e.outcome === 'tp1' || e.outcome === 'tp2' || e.outcome === 'tp3');
+    case 'losses':  return entries.filter(e => e.outcome === 'sl');
+    case 'expired': return entries.filter(e => e.outcome === 'expired');
+    default:        return entries;
+  }
+}
+
+function exportCSV(entries: JournalEntry[]): void {
+  const headers = [
+    'Date', 'Symbol', 'Bias', 'Entry Low', 'Entry High',
+    'Stop Loss', 'TP1', 'TP2', 'TP3', 'R/R', 'Outcome',
+    'Reasoning', 'Key Risks',
+  ];
+  const escape = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
+  const rows = entries.map(e => [
+    new Date(e.created_at).toISOString(),
+    e.symbol,
+    e.bias,
+    e.entry_low,
+    e.entry_high,
+    e.stop_loss,
+    e.take_profit1,
+    e.take_profit2,
+    e.take_profit3,
+    e.risk_reward,
+    e.outcome,
+    escape(e.reasoning),
+    escape(e.key_risks),
+  ].join(','));
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `trade-journal-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 const DISPLAY: Record<string, string> = {
   BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL',
 };
@@ -172,9 +224,10 @@ function EntryCard({ entry, onDelete }: { entry: JournalEntry; onDelete: () => v
 }
 
 export default function JournalPanel() {
-  const [entries,  setEntries]  = useState<JournalEntry[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [error,    setError]    = useState<string | null>(null);
+  const [entries,   setEntries]   = useState<JournalEntry[]>([]);
+  const [filter,    setFilter]    = useState<Filter>('all');
+  const [loading,   setLoading]   = useState(true);
+  const [error,     setError]     = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState(0);
 
   const load = async () => {
@@ -209,6 +262,15 @@ export default function JournalPanel() {
         <span style={{ fontSize: '9px', color: '#444', marginLeft: 'auto' }}>
           {lastFetch > 0 ? `Updated ${new Date(lastFetch).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}
         </span>
+        {entries.length > 0 && (
+          <button
+            style={exportBtnStyle}
+            onClick={() => exportCSV(entries)}
+            title="Export all entries as CSV"
+          >
+            ↓ CSV
+          </button>
+        )}
         <button style={refreshBtnStyle} onClick={load} title="Refresh outcomes">↻</button>
       </div>
 
@@ -240,10 +302,35 @@ export default function JournalPanel() {
         {!loading && entries.length > 0 && (
           <>
             <WinRate entries={entries} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 10px' }}>
-              {entries.map(e => (
-                <EntryCard key={e.id} entry={e} onDelete={() => handleDelete(e.id)} />
+
+            {/* Filter bar */}
+            <div style={filterBarStyle}>
+              {FILTERS.map(f => (
+                <button
+                  key={f.id}
+                  style={filterBtnStyle(f.id === filter)}
+                  onClick={() => setFilter(f.id)}
+                >
+                  {f.label}
+                  {f.id !== 'all' && (
+                    <span style={{ marginLeft: '3px', opacity: 0.6 }}>
+                      ({applyFilter(entries, f.id).length})
+                    </span>
+                  )}
+                </button>
               ))}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 10px' }}>
+              {applyFilter(entries, filter).length === 0 ? (
+                <div style={{ textAlign: 'center', color: '#444', fontSize: '11px', padding: '20px 0' }}>
+                  No entries match this filter.
+                </div>
+              ) : (
+                applyFilter(entries, filter).map(e => (
+                  <EntryCard key={e.id} entry={e} onDelete={() => handleDelete(e.id)} />
+                ))
+              )}
             </div>
           </>
         )}
@@ -359,3 +446,37 @@ const refreshBtnStyle: CSSProperties = {
   fontSize:        '13px',
   padding:         '0 2px',
 };
+
+const exportBtnStyle: CSSProperties = {
+  backgroundColor: 'transparent',
+  border:          '1px solid #2a4a2a',
+  borderRadius:    '3px',
+  color:           '#4a8a4a',
+  cursor:          'pointer',
+  fontSize:        '10px',
+  fontWeight:      600,
+  padding:         '2px 7px',
+  whiteSpace:      'nowrap',
+};
+
+const filterBarStyle: CSSProperties = {
+  display:         'flex',
+  gap:             '3px',
+  padding:         '5px 10px',
+  borderBottom:    '1px solid #1a1a1e',
+  backgroundColor: '#0f0f12',
+  flexShrink:      0,
+  flexWrap:        'wrap',
+};
+
+const filterBtnStyle = (active: boolean): CSSProperties => ({
+  backgroundColor: active ? '#1a2a3a' : 'transparent',
+  border:          `1px solid ${active ? '#3a5a8f' : 'transparent'}`,
+  borderRadius:    '3px',
+  color:           active ? '#90b8e0' : '#555',
+  cursor:          'pointer',
+  fontSize:        '10px',
+  fontWeight:      active ? 700 : 400,
+  padding:         '2px 8px',
+  transition:      'all 0.1s',
+});

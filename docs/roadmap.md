@@ -68,4 +68,5 @@
 | 57 | Live Price Ticker — BTC/ETH/SOL price + 24H % change in header, 5s poll, green/red flash on price change | ✅ Done |
 | 58 | Equity Curve — SVG running-R chart in Performance panel, area fill + zero line + final R badge | ✅ Done |
 | 59 | % Price Change Alerts — price_spike_up / price_spike_down conditions, % threshold + window, DB candle lookback | ✅ Done |
-| 60 | TBD | Planned |
+| 60 | Journal CSV Export + Outcome Filter — ↓ CSV download button, All/Open/Wins/Losses/Expired filter bar with counts | ✅ Done |
+| 61 | TBD | Planned |
