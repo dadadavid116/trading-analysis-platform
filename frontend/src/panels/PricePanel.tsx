@@ -3,6 +3,24 @@ import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, Line
 import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, fetchPriceLevels, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
+// ── User chart annotations ─────────────────────────────────────────────────────
+
+interface Annotation { id: string; price: number; label: string; color: string; }
+
+const ANN_COLORS = ['#ffd54f', '#26c6da', '#ff9800', '#ce93d8', '#66bb6a', '#ef5350'];
+
+function loadAnnotations(sym: string): Annotation[] {
+  try {
+    const s = localStorage.getItem(`tap_ann_${sym}`);
+    if (s) return JSON.parse(s) as Annotation[];
+  } catch { /* ignore */ }
+  return [];
+}
+
+function saveAnnotationsList(sym: string, list: Annotation[]): void {
+  try { localStorage.setItem(`tap_ann_${sym}`, JSON.stringify(list)); } catch { /* ignore */ }
+}
+
 // ── Indicator definitions ──────────────────────────────────────────────────────
 
 const INDICATOR_OPTIONS: { key: string; label: string; description: string; phase?: number }[] = [
@@ -434,6 +452,14 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const [popoverSaving, setPopoverSaving] = useState(false);
   const [popoverError, setPopoverError]   = useState<string | null>(null);
 
+  // User annotations — persistent horizontal price labels per symbol.
+  const [annotations, setAnnotations]       = useState<Annotation[]>([]);
+  const [showAnnList, setShowAnnList]       = useState(false);
+  const [popoverMarkMode, setPopoverMarkMode] = useState(false);
+  const [popoverLabel, setPopoverLabel]     = useState('');
+  const [popoverColor, setPopoverColor]     = useState(ANN_COLORS[0]);
+  const annotationLinesRef = useRef<Map<string, IPriceLine>>(new Map());
+
   // ── Live price via SSE ────────────────────────────────────────────────────
   useEffect(() => {
     const es = new EventSource(`/api/price/stream?symbol=${symbol}`);
@@ -511,6 +537,38 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const id = setInterval(syncLines, 15_000);
     return () => clearInterval(id);
   }, []);
+
+  // ── Load annotations when symbol changes ─────────────────────────────────
+  useEffect(() => {
+    setAnnotations(loadAnnotations(symbol));
+    setPopover(null);
+    setPopoverMarkMode(false);
+    setShowAnnList(false);
+  }, [symbol]);
+
+  // ── Sync annotation price lines whenever annotations state changes ─────────
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    const linesMap = annotationLinesRef.current;
+    const activeIds = new Set(annotations.map((a) => a.id));
+
+    for (const [id, line] of linesMap) {
+      if (!activeIds.has(id)) {
+        try { series.removePriceLine(line); } catch { /* ignore */ }
+        linesMap.delete(id);
+      }
+    }
+    for (const ann of annotations) {
+      if (linesMap.has(ann.id)) continue;
+      const line = series.createPriceLine({
+        price: ann.price, color: ann.color, lineWidth: 2,
+        lineStyle: LineStyle.Solid, axisLabelVisible: true,
+        title: ann.label,
+      });
+      linesMap.set(ann.id, line);
+    }
+  }, [annotations]);
 
   // ── Create chart once on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -1024,6 +1082,29 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       });
   }, [timeframe, symbol, showHA]);
 
+  // ── Annotation helpers ────────────────────────────────────────────────────
+  function addAnnotation() {
+    if (!popover) return;
+    const ann: Annotation = {
+      id: `${Date.now()}`,
+      price: popover.price,
+      label: popoverLabel.trim() || `$${popover.price.toLocaleString()}`,
+      color: popoverColor,
+    };
+    const next = [...annotations, ann];
+    setAnnotations(next);
+    saveAnnotationsList(symbol, next);
+    setPopoverLabel('');
+    setPopoverMarkMode(false);
+    setPopover(null);
+  }
+
+  function removeAnnotation(id: string) {
+    const next = annotations.filter((a) => a.id !== id);
+    setAnnotations(next);
+    saveAnnotationsList(symbol, next);
+  }
+
   // ── Create alert from popover ─────────────────────────────────────────────
   async function setAlertFromChart(conditionType: 'price_above' | 'price_below') {
     if (!popover) return;
@@ -1309,6 +1390,44 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         </div>
       )}
 
+      {/* Annotations bar — shown only when there are marks */}
+      {annotations.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flexShrink: 0, minHeight: 0 }}>
+          <button
+            onClick={() => setShowAnnList((v) => !v)}
+            style={{
+              background: 'none', border: '1px solid #2a2a2e', borderRadius: '3px',
+              color: '#888', cursor: 'pointer', fontSize: '10px', padding: '1px 6px',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            ✏ {annotations.length} mark{annotations.length !== 1 ? 's' : ''} {showAnnList ? '▲' : '▼'}
+          </button>
+          {showAnnList && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', flex: 1 }}>
+              {annotations.map((ann) => (
+                <span
+                  key={ann.id}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    backgroundColor: `${ann.color}18`, border: `1px solid ${ann.color}55`,
+                    borderRadius: '3px', padding: '1px 5px', fontSize: '10px', color: ann.color,
+                  }}
+                >
+                  ${ann.price.toLocaleString()} {ann.label !== `$${ann.price.toLocaleString()}` ? `· ${ann.label}` : ''}
+                  <button
+                    onClick={() => removeAnnotation(ann.id)}
+                    style={{ background: 'none', border: 'none', color: '#666', cursor: 'pointer', fontSize: '11px', padding: 0, lineHeight: 1 }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {analyzeError && (
         <p style={{ ...panelStyles.error, margin: 0 }}>Analysis error: {analyzeError}</p>
       )}
@@ -1423,22 +1542,65 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
             </div>
 
             {/* Alert buttons */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              <button
-                disabled={popoverSaving}
-                onClick={() => setAlertFromChart('price_above')}
-                style={popoverButtonStyle('#1e3a1e', '#2a6a2a', '#66bb6a')}
-              >
-                ↑ Alert above
-              </button>
-              <button
-                disabled={popoverSaving}
-                onClick={() => setAlertFromChart('price_below')}
-                style={popoverButtonStyle('#3a1e1e', '#6a2a2a', '#ef5350')}
-              >
-                ↓ Alert below
-              </button>
-            </div>
+            {!popoverMarkMode && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                <button
+                  disabled={popoverSaving}
+                  onClick={() => setAlertFromChart('price_above')}
+                  style={popoverButtonStyle('#1e3a1e', '#2a6a2a', '#66bb6a')}
+                >
+                  ↑ Alert above
+                </button>
+                <button
+                  disabled={popoverSaving}
+                  onClick={() => setAlertFromChart('price_below')}
+                  style={popoverButtonStyle('#3a1e1e', '#6a2a2a', '#ef5350')}
+                >
+                  ↓ Alert below
+                </button>
+                <button
+                  onClick={() => setPopoverMarkMode(true)}
+                  style={popoverButtonStyle('#1e1e2a', '#3a3a5e', '#b0b8e0')}
+                >
+                  ✏ Mark level
+                </button>
+              </div>
+            )}
+
+            {/* Annotation input mode */}
+            {popoverMarkMode && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <input
+                  autoFocus
+                  placeholder="Label (optional)"
+                  value={popoverLabel}
+                  onChange={(e) => setPopoverLabel(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') addAnnotation(); if (e.key === 'Escape') setPopoverMarkMode(false); }}
+                  style={{
+                    backgroundColor: '#111114', border: '1px solid #2a2a2e', borderRadius: '4px',
+                    color: '#d0d0d0', fontSize: '11px', padding: '4px 6px', width: '100%', boxSizing: 'border-box',
+                  }}
+                />
+                {/* Color swatches */}
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {ANN_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      onClick={() => setPopoverColor(c)}
+                      style={{
+                        width: '18px', height: '18px', borderRadius: '3px',
+                        backgroundColor: c, border: `2px solid ${popoverColor === c ? '#fff' : 'transparent'}`,
+                        cursor: 'pointer', padding: 0, flexShrink: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button onClick={addAnnotation} style={{ ...popoverButtonStyle('#1e2a1e', '#2a5a2a', '#66bb6a'), flex: 1 }}>Save</button>
+                  <button onClick={() => setPopoverMarkMode(false)} style={{ ...popoverButtonStyle('#1e1e1e', '#333', '#666'), flex: 1 }}>Back</button>
+                </div>
+              </div>
+            )}
 
             {popoverError && (
               <p style={{ color: '#f44336', fontSize: '10px', margin: '6px 0 0' }}>{popoverError}</p>
