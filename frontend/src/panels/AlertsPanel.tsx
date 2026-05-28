@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef, CSSProperties, FormEvent } from 'react';
-import { fetchAlerts, createAlert, deleteAlert, Alert } from '../api';
+import { fetchAlerts, createAlert, deleteAlert, fetchAlertEvents, Alert, EventLogEntry } from '../api';
 import { panelStyles } from './panelStyles';
 
+type Tab = 'active' | 'history';
+
 function AlertsPanel() {
+  const [tab, setTab]         = useState<Tab>('active');
   const [alerts, setAlerts]   = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
+
+  // ── History tab state ──────────────────────────────────────────────────────
+  const [historyEvents,  setHistoryEvents]  = useState<EventLogEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [formName,        setFormName]        = useState('');
@@ -82,6 +89,20 @@ function AlertsPanel() {
     const interval = setInterval(load, 15_000);
     return () => clearInterval(interval);
   }, []);
+
+  // ── History tab — load on tab switch, then poll every 30 s ────────────────
+  useEffect(() => {
+    if (tab !== 'history') return;
+    setHistoryLoading(true);
+    const load = () => {
+      fetchAlertEvents(50)
+        .then((data) => { setHistoryEvents(data); setHistoryLoading(false); })
+        .catch(() => setHistoryLoading(false));
+    };
+    load();
+    const id = setInterval(load, 30_000);
+    return () => clearInterval(id);
+  }, [tab]);
 
   // ── Create alert ───────────────────────────────────────────────────────────
   const handleCreate = async (e: FormEvent) => {
@@ -171,6 +192,28 @@ function AlertsPanel() {
           Alerts
         </h2>
 
+        {/* Tab switcher */}
+        <div style={{ display: 'flex', gap: '2px', margin: '0 10px' }}>
+          {(['active', 'history'] as Tab[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                background:   tab === t ? '#1e3a5f' : 'transparent',
+                border:       `1px solid ${tab === t ? '#3a6a9f' : '#2a2a2e'}`,
+                borderRadius: '3px',
+                color:        tab === t ? '#90b8e0' : '#555',
+                cursor:       'pointer',
+                fontSize:     '10px',
+                fontWeight:   tab === t ? 600 : 400,
+                padding:      '2px 8px',
+              }}
+            >
+              {t === 'active' ? 'Active' : 'History'}
+            </button>
+          ))}
+        </div>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
           {/* Notification permission indicator */}
           {'Notification' in window && (
@@ -199,7 +242,42 @@ function AlertsPanel() {
         </div>
       </div>
 
+      {/* ── History tab ────────────────────────────────────────────────────── */}
+      {tab === 'history' && (
+        <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+          {historyLoading && <p style={panelStyles.muted}>Loading…</p>}
+          {!historyLoading && historyEvents.length === 0 && (
+            <p style={{ ...panelStyles.muted, padding: '16px 0' }}>
+              No alert events yet — trigger history appears here once alerts fire.
+            </p>
+          )}
+          {!historyLoading && historyEvents.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px' }}>
+              {historyEvents.map((ev) => (
+                <div key={ev.id} style={historyRowStyle}>
+                  <span style={historyBadgeStyle(ev.event_type)}>
+                    {ev.event_type === 'alert_triggered' ? 'FIRED' : 'REARM'}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: '11px', color: '#ccc' }}>{ev.message}</span>
+                    {ev.symbol && (
+                      <span style={{ fontSize: '10px', color: '#555', marginLeft: '6px' }}>
+                        {ev.symbol.replace('USDT', '')}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '9px', color: '#444', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {new Date(ev.timestamp).toLocaleString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ── Alert list ─────────────────────────────────────────────────────── */}
+      {tab === 'active' && (
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
         {loading && <p style={panelStyles.muted}>Loading…</p>}
 
@@ -270,6 +348,7 @@ function AlertsPanel() {
           </table>
         )}
       </div>
+      )}{/* end active tab */}
 
       {/* ── Collapsible create form ─────────────────────────────────────────── */}
       <div style={formPanelStyle(formOpen)}>
@@ -490,5 +569,28 @@ const cancelBtnStyle: CSSProperties = {
   fontSize:        '12px',
   cursor:          'pointer',
 };
+
+const historyRowStyle: CSSProperties = {
+  display:      'flex',
+  alignItems:   'flex-start',
+  gap:          '8px',
+  padding:      '5px 6px',
+  borderRadius: '4px',
+  background:   '#111114',
+  border:       '1px solid #1e1e22',
+};
+
+const historyBadgeStyle = (eventType: string): CSSProperties => ({
+  fontSize:        '9px',
+  fontWeight:      700,
+  letterSpacing:   '0.06em',
+  padding:         '1px 5px',
+  borderRadius:    '3px',
+  flexShrink:      0,
+  backgroundColor: eventType === 'alert_triggered' ? '#f4433618' : '#2a2a2e',
+  color:           eventType === 'alert_triggered' ? '#f44336'   : '#666',
+  border:          `1px solid ${eventType === 'alert_triggered' ? '#f4433633' : '#2a2a2e'}`,
+  alignSelf:       'center',
+});
 
 export default AlertsPanel;

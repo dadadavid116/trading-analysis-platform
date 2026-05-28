@@ -497,6 +497,11 @@ export function fetchEvents(limit = 100, sinceId = 0): Promise<EventLogEntry[]> 
   return apiFetch<EventLogEntry[]>(`/events/?limit=${limit}&since_id=${sinceId}`);
 }
 
+/** Fetch alert-service events (triggered / rearmed), newest first. */
+export function fetchAlertEvents(limit = 50): Promise<EventLogEntry[]> {
+  return apiFetch<EventLogEntry[]>(`/events/?service=alert&limit=${limit}`);
+}
+
 // ── Scanner (Phase 30) ────────────────────────────────────────────────────────
 
 export interface ScannerSignal {

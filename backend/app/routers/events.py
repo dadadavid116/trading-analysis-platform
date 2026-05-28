@@ -36,17 +36,16 @@ class EventSchema(BaseModel):
 
 @router.get("/", response_model=List[EventSchema])
 async def list_events(
-    limit:    int = Query(100, ge=1, le=500),
-    since_id: int = Query(0,   ge=0, description="Return only events with id > since_id"),
+    limit:    int          = Query(100, ge=1, le=500),
+    since_id: int          = Query(0,   ge=0, description="Return only events with id > since_id"),
+    service:  str | None   = Query(None, description="Filter by service name, e.g. 'alert'"),
     db: AsyncSession = Depends(get_db),
 ):
     """Return recent platform events, newest first."""
-    result = await db.execute(
-        select(EventLog)
-        .where(EventLog.id > since_id)
-        .order_by(desc(EventLog.timestamp))
-        .limit(limit)
-    )
+    q = select(EventLog).where(EventLog.id > since_id)
+    if service:
+        q = q.where(EventLog.service == service)
+    result = await db.execute(q.order_by(desc(EventLog.timestamp)).limit(limit))
     rows = result.scalars().all()
     return [
         EventSchema(

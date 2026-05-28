@@ -72,3 +72,4 @@
 | 61 | Chart x-axis alignment — `minimumWidth: 65` on all 5 chart price scales; compact OHLCV strip replaces 7-row data grid | ✅ Done |
 | 62 | OrderBook + Derivatives panel scrollability — `overflowY: auto` scrollable body wrapper below sticky title so content is never clipped | ✅ Done |
 | 63 | Heikin-Ashi toggle — HA chip in overlay row, `computeHA` function, live-candle HA update, localStorage persistence | ✅ Done |
+| 64 | Alert history log — Active/History tabs in AlertsPanel, service filter on /api/events/, FIRED/REARM badges | ✅ Done |
