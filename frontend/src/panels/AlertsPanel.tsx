@@ -54,6 +54,10 @@ function AlertsPanel() {
                       body = `${alert.symbol} funding rate crossed above ${Number(alert.threshold).toFixed(4)}%`;
                     } else if (alert.condition_type === 'funding_rate_below') {
                       body = `${alert.symbol} funding rate dropped below ${Number(alert.threshold).toFixed(4)}%`;
+                    } else if (alert.condition_type === 'price_spike_up') {
+                      body = `${alert.symbol} spiked up >${Number(alert.threshold).toFixed(2)}% in ${alert.window_minutes ?? '?'} min`;
+                    } else if (alert.condition_type === 'price_spike_down') {
+                      body = `${alert.symbol} dropped >${Number(alert.threshold).toFixed(2)}% in ${alert.window_minutes ?? '?'} min`;
                     } else {
                       body = `${alert.symbol} ${alert.condition_type === 'price_above' ? 'rose above' : 'dropped below'} $${Number(alert.threshold).toLocaleString()}`;
                     }
@@ -87,8 +91,9 @@ function AlertsPanel() {
     const threshold = parseFloat(formThreshold);
     if (!formName.trim()) { setFormError('Name is required.'); return; }
     if (isNaN(threshold) || threshold <= 0) { setFormError('Threshold must be a positive number.'); return; }
-    if (formType === 'liquidation_spike' && !formWindow.trim()) {
-      setFormError('Window (minutes) is required for liquidation_spike.');
+    const needsWindow = formType === 'liquidation_spike' || formType === 'price_spike_up' || formType === 'price_spike_down';
+    if (needsWindow && !formWindow.trim()) {
+      setFormError('Window (minutes) is required for this condition.');
       return;
     }
 
@@ -99,7 +104,7 @@ function AlertsPanel() {
         symbol:         formSymbol,
         condition_type: formType,
         threshold,
-        window_minutes: formType === 'liquidation_spike' ? parseInt(formWindow, 10) : null,
+        window_minutes: needsWindow ? parseInt(formWindow, 10) : null,
         trigger_mode:   formTriggerMode,
       });
       const updated = await fetchAlerts();
@@ -139,6 +144,9 @@ function AlertsPanel() {
     if (alert.condition_type === 'funding_rate_above' || alert.condition_type === 'funding_rate_below') {
       return `${Number(alert.threshold).toFixed(4)}%`;
     }
+    if (alert.condition_type === 'price_spike_up' || alert.condition_type === 'price_spike_down') {
+      return `${Number(alert.threshold).toFixed(2)}% / ${alert.window_minutes ?? '?'} min`;
+    }
     return `$${Number(alert.threshold).toLocaleString()}`;
   };
 
@@ -148,6 +156,8 @@ function AlertsPanel() {
     if (type === 'liquidation_spike')  return 'Liq spike';
     if (type === 'funding_rate_above') return 'FR >';
     if (type === 'funding_rate_below') return 'FR <';
+    if (type === 'price_spike_up')     return 'Spike ↑';
+    if (type === 'price_spike_down')   return 'Spike ↓';
     return type;
   };
 
@@ -288,6 +298,8 @@ function AlertsPanel() {
             >
               <option value="price_above">Price above</option>
               <option value="price_below">Price below</option>
+              <option value="price_spike_up">Price spike up ↑</option>
+              <option value="price_spike_down">Price spike down ↓</option>
               <option value="liquidation_spike">Liquidation spike</option>
               <option value="funding_rate_above">Funding rate above</option>
               <option value="funding_rate_below">Funding rate below</option>
@@ -299,6 +311,8 @@ function AlertsPanel() {
                   ? 'Event count threshold'
                   : formType === 'funding_rate_above' || formType === 'funding_rate_below'
                   ? 'Rate threshold % (e.g. 0.05 for 0.05%)'
+                  : formType === 'price_spike_up' || formType === 'price_spike_down'
+                  ? '% move threshold (e.g. 3 for 3%)'
                   : 'Price threshold (USD)'
               }
               value={formThreshold}
@@ -307,7 +321,7 @@ function AlertsPanel() {
               min="0"
               step="any"
             />
-            {formType === 'liquidation_spike' && (
+            {(formType === 'liquidation_spike' || formType === 'price_spike_up' || formType === 'price_spike_down') && (
               <input
                 style={inputStyle}
                 placeholder="Window (minutes)"

@@ -67,4 +67,5 @@
 | 56 | Multi-Symbol Alerts — price/liquidation/funding_rate alerts on BTC/ETH/SOL, symbol selector in form, symbol column in list | ✅ Done |
 | 57 | Live Price Ticker — BTC/ETH/SOL price + 24H % change in header, 5s poll, green/red flash on price change | ✅ Done |
 | 58 | Equity Curve — SVG running-R chart in Performance panel, area fill + zero line + final R badge | ✅ Done |
-| 59 | TBD | Planned |
+| 59 | % Price Change Alerts — price_spike_up / price_spike_down conditions, % threshold + window, DB candle lookback | ✅ Done |
+| 60 | TBD | Planned |
