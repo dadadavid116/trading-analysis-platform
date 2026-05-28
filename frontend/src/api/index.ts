@@ -153,6 +153,7 @@ export interface Alert {
   window_minutes: number | null;
   trigger_mode:   string;   // 'once' | 'rearm'
   is_active:      boolean;
+  webhook_url:    string | null;
   triggered_at:   string | null;
   created_at:     string;
 }
@@ -164,6 +165,7 @@ export interface AlertCreate {
   threshold:       number;
   window_minutes?: number | null;
   trigger_mode?:   string;  // defaults to 'once' on the backend
+  webhook_url?:    string | null;
 }
 
 /** Fetch all alert rules. */

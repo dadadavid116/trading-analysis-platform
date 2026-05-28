@@ -221,7 +221,7 @@ async def _evaluate_one(alert: Alert) -> None:
         # Fire the alert.
         await _set_triggered(alert.id)
         message = _build_message(alert, latest_close, threshold, fr, pct_change)
-        await notify(alert.name, alert.condition_type, message)
+        await notify(alert.name, alert.condition_type, message, getattr(alert, 'webhook_url', None))
         try:
             from app.services.event_logger import log_event
             await log_event(

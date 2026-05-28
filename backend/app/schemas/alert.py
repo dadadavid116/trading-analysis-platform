@@ -35,6 +35,7 @@ class AlertCreate(BaseModel):
     threshold:      float
     window_minutes: Optional[int] = None   # required for liquidation_spike
     trigger_mode:   str = "once"
+    webhook_url:    Optional[str] = None   # optional URL for custom webhook delivery
 
     @field_validator("name")
     @classmethod
@@ -94,5 +95,6 @@ class AlertSchema(BaseModel):
     window_minutes: Optional[int]
     trigger_mode:   str
     is_active:      bool
+    webhook_url:    Optional[str]
     triggered_at:   Optional[datetime]
     created_at:     datetime

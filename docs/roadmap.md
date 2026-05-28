@@ -75,3 +75,4 @@
 | 64 | Alert history log — Active/History tabs in AlertsPanel, service filter on /api/events/, FIRED/REARM badges | ✅ Done |
 | 65 | Candlestick pattern markers — Doji/Hammer/Shooting Star/Bullish+Bearish Engulfing pins on chart, Patterns toggle chip | ✅ Done |
 | 66 | AI Journal Insights — POST /api/journal/insights, Claude Haiku analyzes trade patterns/biases/suggestions, ✦ AI Insights button in PerformancePanel | ✅ Done |
+| 67 | Custom webhook notifications — per-alert optional webhook URL, JSON POST on trigger alongside Telegram, DB migration, Hook column in alert table | ✅ Done |

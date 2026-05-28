@@ -47,6 +47,7 @@ async def create_alert(body: AlertCreate, db: AsyncSession = Depends(get_db)):
         threshold=body.threshold,
         window_minutes=body.window_minutes,
         trigger_mode=body.trigger_mode,
+        webhook_url=body.webhook_url,
         created_at=datetime.now(tz=timezone.utc),
     )
     db.add(alert)

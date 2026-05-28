@@ -22,6 +22,7 @@ function AlertsPanel() {
   const [formThreshold,   setFormThreshold]   = useState('');
   const [formWindow,      setFormWindow]      = useState('');
   const [formTriggerMode, setFormTriggerMode] = useState('once');
+  const [formWebhook,     setFormWebhook]     = useState('');
   const [formError,       setFormError]       = useState<string | null>(null);
   const [submitting,      setSubmitting]      = useState(false);
   const [deletingId,      setDeletingId]      = useState<number | null>(null);
@@ -127,6 +128,7 @@ function AlertsPanel() {
         threshold,
         window_minutes: needsWindow ? parseInt(formWindow, 10) : null,
         trigger_mode:   formTriggerMode,
+        webhook_url:    formWebhook.trim() || null,
       });
       const updated = await fetchAlerts();
       setAlerts(updated);
@@ -136,6 +138,7 @@ function AlertsPanel() {
       setFormThreshold('');
       setFormWindow('');
       setFormTriggerMode('once');
+      setFormWebhook('');
       setFormOpen(false);
     } catch (err: unknown) {
       setFormError(err instanceof Error ? err.message : 'Could not create alert.');
@@ -311,6 +314,7 @@ function AlertsPanel() {
                 <th style={panelStyles.th}>Condition</th>
                 <th style={panelStyles.th}>Threshold</th>
                 <th style={panelStyles.th}>Mode</th>
+                <th style={panelStyles.th}>Hook</th>
                 <th style={panelStyles.th}>Status</th>
                 <th style={panelStyles.th}></th>
               </tr>
@@ -323,6 +327,13 @@ function AlertsPanel() {
                   <td style={panelStyles.td}>{conditionLabel(a.condition_type)}</td>
                   <td style={panelStyles.td}>{formatThreshold(a)}</td>
                   <td style={panelStyles.td}>{a.trigger_mode}</td>
+                  <td style={panelStyles.td}>
+                    {a.webhook_url ? (
+                      <span title={a.webhook_url} style={{ color: '#4a9eff', fontSize: '11px', cursor: 'default' }}>⛓</span>
+                    ) : (
+                      <span style={{ color: '#333' }}>—</span>
+                    )}
+                  </td>
                   <td style={panelStyles.td}>
                     {a.triggered_at ? (
                       <span style={{ color: '#f44336' }}>
@@ -419,6 +430,13 @@ function AlertsPanel() {
               <option value="once">Once — trigger once, then stay triggered</option>
               <option value="rearm">Rearm — reset and trigger again</option>
             </select>
+            <input
+              style={inputStyle}
+              placeholder="Webhook URL (optional) — https://..."
+              value={formWebhook}
+              onChange={(e) => setFormWebhook(e.target.value)}
+              type="url"
+            />
             {formError && <p style={panelStyles.error}>{formError}</p>}
             <div style={{ display: 'flex', gap: '6px' }}>
               <button type="submit" style={buttonStyle} disabled={submitting}>

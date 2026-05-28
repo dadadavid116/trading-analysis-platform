@@ -33,6 +33,8 @@ class Alert(Base):
     # rearm = reset when condition clears, allowing it to fire again
     trigger_mode   = Column(String(10), nullable=False, default="once")
     is_active      = Column(Boolean, nullable=False, default=True)
+    # Optional URL to POST a JSON payload to when this alert fires.
+    webhook_url    = Column(String(500), nullable=True)
     # NULL while the alert is pending; set to the trigger time when it fires.
     # For rearm alerts, this is cleared when the condition is no longer met.
     triggered_at   = Column(DateTime(timezone=True), nullable=True)

@@ -46,6 +46,10 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE IF EXISTS alerts "
             "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
         ))
+        await conn.execute(text(
+            "ALTER TABLE IF EXISTS alerts "
+            "ADD COLUMN IF NOT EXISTS webhook_url VARCHAR(500)"
+        ))
         # Schema migration: unique index on (symbol, timestamp) so the collector
         # can upsert live candle data on every tick instead of only on close.
         # IF NOT EXISTS makes this safe to run on every startup.
