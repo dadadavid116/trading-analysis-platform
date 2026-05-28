@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, CSSProperties } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine, LineData } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine, LineData, SeriesMarker } from 'lightweight-charts';
 import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, fetchPriceLevels, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
 
@@ -96,6 +96,7 @@ const OVERLAY_OPTIONS = [
   { key: 'cvd',      label: 'CVD',          color: '#64b5f6' },
   { key: 'pivots',   label: 'Pivots',       color: '#ffd54f' },
   { key: 'ichimoku', label: 'Ichimoku',     color: '#e91e63' },
+  { key: 'patterns', label: 'Patterns',    color: '#ffd54f' },
 ] as const;
 
 const OVERLAY_STORAGE_KEY = 'tap_chart_overlays';
@@ -106,6 +107,38 @@ function loadOverlays(): Set<string> {
     if (saved) return new Set(JSON.parse(saved) as string[]);
   } catch { /* ignore */ }
   return new Set(['ema20', 'ema50', 'volume', 'rsi']);
+}
+
+function computePatternMarkers(candles: KlineCandle[]): SeriesMarker<UTCTimestamp>[] {
+  const markers: SeriesMarker<UTCTimestamp>[] = [];
+  for (let i = 1; i < candles.length; i++) {
+    const c    = candles[i];
+    const prev = candles[i - 1];
+    const o = c.open, h = c.high, l = c.low, cl = c.close;
+    const body       = Math.abs(cl - o);
+    const range      = h - l;
+    if (range < 1e-9) continue;
+    const upperWick  = h - Math.max(o, cl);
+    const lowerWick  = Math.min(o, cl) - l;
+    const bodyRatio  = body / range;
+    const t          = c.time as UTCTimestamp;
+
+    if (bodyRatio < 0.10) {
+      markers.push({ time: t, position: 'inBar',   color: '#888',     shape: 'circle',    text: 'D' });
+    } else if (lowerWick > 2 * body && upperWick < body && body > 0) {
+      markers.push({ time: t, position: 'belowBar', color: '#26a69a', shape: 'arrowUp',   text: 'H' });
+    } else if (upperWick > 2 * body && lowerWick < body && body > 0) {
+      markers.push({ time: t, position: 'aboveBar', color: '#ef5350', shape: 'arrowDown', text: 'S' });
+    } else {
+      const po = prev.open, pc = prev.close;
+      if (cl > o && pc < po && o < pc && cl > po) {
+        markers.push({ time: t, position: 'belowBar', color: '#26a69a', shape: 'arrowUp',   text: 'BE' });
+      } else if (cl < o && pc > po && o > pc && cl < po) {
+        markers.push({ time: t, position: 'aboveBar', color: '#ef5350', shape: 'arrowDown', text: 'BE' });
+      }
+    }
+  }
+  return markers.sort((a, b) => (a.time as number) - (b.time as number));
 }
 
 function computeHA(candles: KlineCandle[]): CandlestickData[] {
@@ -377,6 +410,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const [overlays, setOverlays] = useState<Set<string>>(loadOverlays);
   const [showHA, setShowHA]     = useState(() => localStorage.getItem('tap_chart_ha') === '1');
   const lastHACandleRef         = useRef<{ open: number; close: number } | null>(null);
+  const rawCandlesRef           = useRef<KlineCandle[]>([]);
 
   function toggleOverlay(key: string) {
     setOverlays((prev) => {
@@ -896,6 +930,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     ichiSpanARef.current?.applyOptions({ visible: ichiOn });
     ichiSpanBRef.current?.applyOptions({ visible: ichiOn });
     ichiChikouRef.current?.applyOptions({ visible: ichiOn });
+    if (seriesRef.current) {
+      seriesRef.current.setMarkers(
+        overlays.has('patterns') && rawCandlesRef.current.length > 0
+          ? computePatternMarkers(rawCandlesRef.current)
+          : [],
+      );
+    }
   }, [overlays]);
 
   // ── Load full candle series on timeframe or symbol change ─────────────────
@@ -909,6 +950,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
 
     fetchKlines(timeframe, cfg.limit, symbol)
       .then((data: KlineCandle[]) => {
+        rawCandlesRef.current = data;
         const rawData: CandlestickData[] = data.map((c) => ({
           time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close,
         }));
@@ -968,6 +1010,11 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         ichiSpanARef.current?.setData(ichi.spanA);
         ichiSpanBRef.current?.setData(ichi.spanB);
         ichiChikouRef.current?.setData(ichi.chikou);
+
+        // Pattern markers — applied after setData so time order is guaranteed
+        seriesRef.current!.setMarkers(
+          overlays.has('patterns') ? computePatternMarkers(data) : [],
+        );
 
         setChartLoading(false);
       })

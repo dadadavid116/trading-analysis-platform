@@ -73,3 +73,4 @@
 | 62 | OrderBook + Derivatives panel scrollability — `overflowY: auto` scrollable body wrapper below sticky title so content is never clipped | ✅ Done |
 | 63 | Heikin-Ashi toggle — HA chip in overlay row, `computeHA` function, live-candle HA update, localStorage persistence | ✅ Done |
 | 64 | Alert history log — Active/History tabs in AlertsPanel, service filter on /api/events/, FIRED/REARM badges | ✅ Done |
+| 65 | Candlestick pattern markers — Doji/Hammer/Shooting Star/Bullish+Bearish Engulfing pins on chart, Patterns toggle chip | ✅ Done |
