@@ -1,6 +1,6 @@
 import { useState, useEffect, CSSProperties, type ReactNode } from 'react';
-import { fetchJournalStats, fetchJournal } from '../api';
-import type { JournalStats, JournalEntry, JournalOutcome } from '../api';
+import { fetchJournalStats, fetchJournal, fetchJournalInsights } from '../api';
+import type { JournalStats, JournalEntry, JournalOutcome, JournalInsights } from '../api';
 
 const DISPLAY: Record<string, string> = {
   BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL',
@@ -173,6 +173,23 @@ export default function PerformancePanel() {
   const [error,     setError]     = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState(0);
 
+  const [insights,   setInsights]   = useState<JournalInsights | null>(null);
+  const [analyzing,  setAnalyzing]  = useState(false);
+  const [analyzeErr, setAnalyzeErr] = useState<string | null>(null);
+
+  async function handleAnalyze() {
+    setAnalyzing(true);
+    setAnalyzeErr(null);
+    try {
+      const data = await fetchJournalInsights();
+      setInsights(data);
+    } catch (e: unknown) {
+      setAnalyzeErr(e instanceof Error ? e.message : 'Analysis failed.');
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
   const load = async () => {
     try {
       const [data, journal] = await Promise.all([fetchJournalStats(), fetchJournal()]);
@@ -200,6 +217,25 @@ export default function PerformancePanel() {
         <span style={{ fontSize: '9px', color: '#444', marginLeft: 'auto' }}>
           {lastFetch > 0 ? new Date(lastFetch).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
         </span>
+        <button
+          onClick={handleAnalyze}
+          disabled={analyzing || loading || (stats?.closed ?? 0) === 0}
+          title="Analyze trade patterns with Claude AI"
+          style={{
+            backgroundColor: analyzing ? '#111' : '#1a2a1a',
+            border:    `1px solid ${analyzing ? '#333' : '#2a6a2a'}`,
+            borderRadius: '4px',
+            color:     analyzing ? '#444' : '#66bb6a',
+            cursor:    analyzing || (stats?.closed ?? 0) === 0 ? 'not-allowed' : 'pointer',
+            fontSize:  '10px',
+            fontWeight: 600,
+            padding:   '2px 8px',
+            whiteSpace: 'nowrap' as const,
+            marginRight: '4px',
+          }}
+        >
+          {analyzing ? 'Analyzing…' : '✦ AI Insights'}
+        </button>
         <button style={refreshBtnStyle} onClick={load} title="Refresh">↻</button>
       </div>
 
@@ -324,6 +360,48 @@ export default function PerformancePanel() {
                 );
               })}
             </section>
+          {/* AI Insights */}
+          {analyzeErr && (
+            <section style={sectionStyle}>
+              <span style={{ fontSize: '10px', color: '#f44' }}>{analyzeErr}</span>
+            </section>
+          )}
+          {insights && (
+            <section style={{ ...sectionStyle, gap: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={sectionTitleStyle}>AI Insights</div>
+                <button
+                  onClick={() => setInsights(null)}
+                  style={{ background: 'none', border: 'none', color: '#444', cursor: 'pointer', fontSize: '12px', padding: '0 2px' }}
+                >×</button>
+              </div>
+              <p style={{ fontSize: '11px', color: '#aaa', lineHeight: 1.5, margin: 0 }}>{insights.summary}</p>
+              {insights.patterns.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '9px', color: '#555', fontWeight: 700, letterSpacing: '0.06em', marginBottom: '4px' }}>PATTERNS</div>
+                  {insights.patterns.map((p, i) => (
+                    <div key={i} style={{ fontSize: '10px', color: '#888', padding: '2px 0', lineHeight: 1.4 }}>· {p}</div>
+                  ))}
+                </div>
+              )}
+              {insights.biases.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '9px', color: '#555', fontWeight: 700, letterSpacing: '0.06em', marginBottom: '4px' }}>BIASES</div>
+                  {insights.biases.map((b, i) => (
+                    <div key={i} style={{ fontSize: '10px', color: '#f5a62388', padding: '2px 0', lineHeight: 1.4 }}>· {b}</div>
+                  ))}
+                </div>
+              )}
+              {insights.suggestions.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '9px', color: '#555', fontWeight: 700, letterSpacing: '0.06em', marginBottom: '4px' }}>SUGGESTIONS</div>
+                  {insights.suggestions.map((s, i) => (
+                    <div key={i} style={{ fontSize: '10px', color: '#66bb6a88', padding: '2px 0', lineHeight: 1.4 }}>· {s}</div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
           </div>
         )}
       </div>

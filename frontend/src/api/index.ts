@@ -52,8 +52,8 @@ const BASE_URL = '/api';
 /**
  * Generic fetch wrapper. Throws an error if the response is not OK.
  */
-async function apiFetch<T>(path: string): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`);
+async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, init);
   if (!response.ok) {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
   }
@@ -660,6 +660,18 @@ export interface JournalStats {
 /** Fetch aggregated performance statistics from all journal entries. */
 export function fetchJournalStats(): Promise<JournalStats> {
   return apiFetch<JournalStats>('/journal/stats');
+}
+
+export interface JournalInsights {
+  summary:     string;
+  patterns:    string[];
+  biases:      string[];
+  suggestions: string[];
+}
+
+/** Ask Claude to analyze trade journal patterns and return improvement suggestions. */
+export function fetchJournalInsights(): Promise<JournalInsights> {
+  return apiFetch<JournalInsights>('/journal/insights', { method: 'POST' });
 }
 
 // ── Price Levels (Phase 37) ───────────────────────────────────────────────────

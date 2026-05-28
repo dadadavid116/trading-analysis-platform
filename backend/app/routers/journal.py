@@ -13,16 +13,22 @@ Outcome logic (checked on-the-fly against price_candles):
   If it's been <24 h and nothing hit → pending.
 """
 
+import json
+import logging
 from datetime import datetime, timedelta, timezone
 
+import anthropic
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.journal import JournalEntry
 from app.models.price import PriceCandle
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/journal", tags=["journal"])
 
@@ -272,6 +278,71 @@ async def journal_performance_stats(db: AsyncSession = Depends(get_db)):
         "by_bias":    by_bias,
         "streak":     streak,
     }
+
+
+@router.post("/insights")
+async def journal_insights(db: AsyncSession = Depends(get_db)):
+    """
+    Ask Claude to analyze the trade journal and return structured improvement feedback.
+
+    Returns: { summary, patterns, biases, suggestions }
+    """
+    result  = await db.execute(select(JournalEntry).order_by(desc(JournalEntry.created_at)))
+    entries = result.scalars().all()
+
+    if not entries:
+        raise HTTPException(status_code=400, detail="No journal entries to analyze.")
+
+    outcomes = [await _compute_outcome(e, db) for e in entries]
+
+    # Summary stats
+    wins    = sum(1 for o in outcomes if o in ("tp1", "tp2", "tp3"))
+    losses  = sum(1 for o in outcomes if o == "sl")
+    closed  = wins + losses
+    wr_text = f"{wins/closed*100:.1f}%" if closed > 0 else "N/A"
+
+    # Most recent 20 non-pending trades as text rows
+    trade_rows = []
+    for e, o in zip(entries, outcomes):
+        if o == "pending" or len(trade_rows) >= 20:
+            continue
+        date = e.created_at.strftime("%Y-%m-%d")
+        sym  = e.symbol.replace("USDT", "")
+        reasoning_short = (e.reasoning or "")[:80].replace("\n", " ")
+        trade_rows.append(
+            f"- {date} {sym} {e.bias.upper()} → {o.upper()} "
+            f"(R/R {e.risk_reward:.1f}x) | {reasoning_short}"
+        )
+
+    trades_text = "\n".join(trade_rows) if trade_rows else "No closed trades yet."
+
+    prompt = (
+        f"You are analyzing a crypto trader's journal. Be concise and specific.\n\n"
+        f"Stats: {closed} closed trades · {wins}W / {losses}L · win rate {wr_text}\n\n"
+        f"Recent trades:\n{trades_text}\n\n"
+        "Respond with valid JSON only, no markdown fences:\n"
+        '{"summary":"2-3 sentence assessment",'
+        '"patterns":["pattern 1","pattern 2","pattern 3"],'
+        '"biases":["bias 1","bias 2"],'
+        '"suggestions":["suggestion 1","suggestion 2","suggestion 3"]}'
+    )
+
+    try:
+        client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        msg    = await client.messages.create(
+            model      = "claude-haiku-4-5-20251001",
+            max_tokens = 600,
+            messages   = [{"role": "user", "content": prompt}],
+        )
+        raw  = msg.content[0].text.strip()
+        # Strip markdown fences if model adds them
+        if raw.startswith("```"):
+            parts = raw.split("```")
+            raw   = parts[1].lstrip("json").strip() if len(parts) > 1 else raw
+        return json.loads(raw)
+    except Exception as exc:
+        logger.error("Journal insights error: %s", exc)
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {exc}")
 
 
 @router.delete("/{entry_id}", status_code=204)
