@@ -1356,14 +1356,6 @@ export default PricePanel;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function DataRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div style={panelStyles.row}>
-      <span style={panelStyles.label}>{label}</span>
-      <span style={highlight ? panelStyles.valueHighlight : panelStyles.value}>{value}</span>
-    </div>
-  );
-}
 
 function popoverButtonStyle(bg: string, border: string, color: string): React.CSSProperties {
   return {
