@@ -79,3 +79,4 @@
 | 68 | OI spike alert — `oi_spike` condition type, ±% OI change over window, evaluator helper, schema validator, AlertsPanel UI | ✅ Done |
 | 69 | User chart annotations — click chart to mark price levels with custom label + color, stored per-symbol in localStorage, managed via inline list | ✅ Done |
 | 70 | Journal trade notes — optional notes textarea in Candidate panel before Save; stored in DB; shown in expanded journal card; included in CSV export | ✅ Done |
+| 71 | Open trade live monitor — SL→TP1 progress bar on every pending journal card; white price marker + orange entry marker; green/red fill; 10s price polling | ✅ Done |

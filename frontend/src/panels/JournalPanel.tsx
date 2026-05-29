@@ -1,5 +1,5 @@
 import { useState, useEffect, CSSProperties, type MouseEvent } from 'react';
-import { fetchJournal, deleteJournalEntry } from '../api';
+import { fetchJournal, fetchLatestPrice, deleteJournalEntry } from '../api';
 import type { JournalEntry, JournalOutcome } from '../api';
 
 type Filter = 'all' | 'open' | 'wins' | 'losses' | 'expired';
@@ -121,7 +121,72 @@ function WinRate({ entries }: { entries: JournalEntry[] }) {
   );
 }
 
-function EntryCard({ entry, onDelete }: { entry: JournalEntry; onDelete: () => void }) {
+function TradeProgress({ entry, currentPrice }: { entry: JournalEntry; currentPrice: number }) {
+  const isLong = entry.bias === 'long';
+  const sl  = entry.stop_loss;
+  const tp  = entry.take_profit1;
+  const mid = (entry.entry_low + entry.entry_high) / 2;
+  const range = Math.abs(tp - sl);
+  if (range === 0) return null;
+
+  // progress 0 = at SL, 1 = at TP1
+  const progress     = isLong ? (currentPrice - sl) / range : (sl - currentPrice) / range;
+  const entryProg    = isLong ? (mid - sl) / range          : (sl - mid) / range;
+  const clamped      = Math.max(0, Math.min(1.05, progress));
+  const entryPct     = Math.min(Math.max(entryProg, 0), 1) * 100;
+  const isFavorable  = isLong ? currentPrice > mid : currentPrice < mid;
+  const barColor     = isFavorable ? '#33aa66' : '#cc3333';
+  const distSL       = ((Math.abs(currentPrice - sl) / sl) * 100).toFixed(2);
+  const distTP1      = ((Math.abs(tp - currentPrice) / tp) * 100).toFixed(2);
+
+  return (
+    <div style={{ marginTop: '6px', padding: '6px 8px', background: '#0d0d10', borderRadius: '4px', border: '1px solid #1e1e22' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', marginBottom: '4px' }}>
+        <span style={{ color: '#cc3333', fontFamily: 'monospace' }}>SL {fmtPrice(sl)}</span>
+        <span style={{ color: '#e0e0e0', fontSize: '11px', fontWeight: 700, fontFamily: 'monospace' }}>
+          {fmtPrice(currentPrice)}
+        </span>
+        <span style={{ color: '#33aa66', fontFamily: 'monospace' }}>TP1 {fmtPrice(tp)}</span>
+      </div>
+
+      {/* Progress track */}
+      <div style={{ position: 'relative', height: '8px', backgroundColor: '#1a1a1e', borderRadius: '4px' }}>
+        {/* Fill */}
+        <div style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0,
+          width: `${Math.min(clamped, 1) * 100}%`,
+          backgroundColor: barColor + '55',
+          borderRadius: '4px',
+          transition: 'width 0.4s ease',
+        }} />
+        {/* Entry zone marker (orange) */}
+        <div style={{
+          position: 'absolute', top: '1px', bottom: '1px',
+          left: `${entryPct}%`, width: '2px',
+          backgroundColor: '#f0a020cc',
+          borderRadius: '1px',
+        }} />
+        {/* Current price marker (white) */}
+        <div style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: `${Math.min(Math.max(clamped, 0.01), 0.99) * 100}%`,
+          width: '2px', transform: 'translateX(-50%)',
+          backgroundColor: '#ffffff',
+          borderRadius: '1px',
+          transition: 'left 0.4s ease',
+        }} />
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#555', marginTop: '3px' }}>
+        <span style={{ color: '#cc333388' }}>{distSL}% from SL</span>
+        <span style={{ color: '#55555588' }}>▪ entry</span>
+        <span style={{ color: '#33aa6688' }}>{distTP1}% to TP1</span>
+      </div>
+    </div>
+  );
+}
+
+function EntryCard({ entry, currentPrice, onDelete }: { entry: JournalEntry; currentPrice?: number; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const isLong    = entry.bias === 'long';
@@ -182,6 +247,11 @@ function EntryCard({ entry, onDelete }: { entry: JournalEntry; onDelete: () => v
         </span>
       </div>
 
+      {/* Live progress bar — always visible for pending trades when price available */}
+      {entry.outcome === 'pending' && currentPrice !== undefined && (
+        <TradeProgress entry={entry} currentPrice={currentPrice} />
+      )}
+
       {/* Expanded detail */}
       {expanded && (
         <div style={expandedStyle} onClick={e => e.stopPropagation()}>
@@ -233,11 +303,12 @@ function EntryCard({ entry, onDelete }: { entry: JournalEntry; onDelete: () => v
 }
 
 export default function JournalPanel() {
-  const [entries,   setEntries]   = useState<JournalEntry[]>([]);
-  const [filter,    setFilter]    = useState<Filter>('all');
-  const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState<string | null>(null);
-  const [lastFetch, setLastFetch] = useState(0);
+  const [entries,    setEntries]    = useState<JournalEntry[]>([]);
+  const [filter,     setFilter]     = useState<Filter>('all');
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState<string | null>(null);
+  const [lastFetch,  setLastFetch]  = useState(0);
+  const [openPrices, setOpenPrices] = useState<Record<string, number>>({});
 
   const load = async () => {
     try {
@@ -259,6 +330,31 @@ export default function JournalPanel() {
     const id = setInterval(load, 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Poll live prices for open (pending) trades every 10 s
+  useEffect(() => {
+    const openEntries = entries.filter((e) => e.outcome === 'pending');
+    if (openEntries.length === 0) { setOpenPrices({}); return; }
+    const symbols = [...new Set(openEntries.map((e) => e.symbol))];
+
+    const fetchPrices = () => {
+      Promise.all(
+        symbols.map((sym) =>
+          fetchLatestPrice(sym)
+            .then((d) => [sym, d.close] as [string, number])
+            .catch(() => null),
+        ),
+      ).then((results) => {
+        const map: Record<string, number> = {};
+        for (const r of results) if (r) map[r[0]] = r[1];
+        setOpenPrices(map);
+      });
+    };
+
+    fetchPrices();
+    const id = setInterval(fetchPrices, 10_000);
+    return () => clearInterval(id);
+  }, [entries]);
 
   const handleDelete = (id: number) => {
     setEntries(prev => prev.filter(e => e.id !== id));
@@ -337,7 +433,12 @@ export default function JournalPanel() {
                 </div>
               ) : (
                 applyFilter(entries, filter).map(e => (
-                  <EntryCard key={e.id} entry={e} onDelete={() => handleDelete(e.id)} />
+                  <EntryCard
+                    key={e.id}
+                    entry={e}
+                    currentPrice={openPrices[e.symbol]}
+                    onDelete={() => handleDelete(e.id)}
+                  />
                 ))
               )}
             </div>
