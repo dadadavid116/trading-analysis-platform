@@ -92,9 +92,10 @@ collector; and a **Settings/Customization phase (96)** was added.
 2. **"Market Intelligence Workspace" → "Context Desk / Factor Intelligence Desk"** — promoted to a
    concrete third workspace with a defined 5-layer structure (Regime Header, Crypto Factor Cards,
    Macro Factor Cards, Asset Signal Tower, Factor Scorecard, Narrative layer).
-3. **Macro/factor layer split into three phases** (crypto factors → macro factors → scoring engine)
-   instead of one vague "macro intelligence layer."
-4. **AI analysis cleanup became a formal phase (82)** with explicit flow renames, trader-profile
+3. **Macro/factor layer staged across four phases** instead of one vague "macro intelligence layer":
+   **Phase 79 Crypto Factor Collector Pack → Phase 80 Macro Source Decision Matrix → Phase 81 Macro
+   Factor Collector Pack → Phase 82 Factor Scoring Engine v1.**
+4. **AI analysis cleanup became a formal phase (Phase 84)** with explicit flow renames, trader-profile
    inputs, and an annotation lifecycle (expire/invalidate/supersede/manual-clear).
 5. **Signal/Risk/Account/Execution/Review** reframed as **named workspaces**, not just backend layers.
 6. **Telegram** gets concrete command renames to kill the `/analysis` duplication
@@ -119,7 +120,7 @@ collector; and a **Settings/Customization phase (96)** was added.
    `factor_scores`, `factor_weights`, `signals`, `signal_factors`, `signal_context_snapshots`,
    `signal_events`, `positions`, `orders`, `order_events`, `account_snapshots`, `equity_curve`,
    `trade_stats`.
-5. **Phase 89 Model Diagnostics & Factor Attribution** as a dedicated later research layer.
+5. **Phase 92 Model Diagnostics & Factor Attribution** as a dedicated later research layer.
 6. **New navigation model** (immediate 3 → later 6 workspaces) and an explicit **panel reassignment
    table** mapping every current panel to a new home.
 7. **Three guiding principles** codified: macro is context (not the product); refactor IA before
@@ -161,18 +162,24 @@ collector; and a **Settings/Customization phase (96)** was added.
    now requires a per-item decision (provider, cost, frequency, rate limits, reliability, fallback,
    caching, freshness) **before** any macro collector (Phase 81).
 
-### 8b. Still open — needs a reviewer decision
-1. **Actual macro providers.** The Phase 80 matrix defines *what to decide*; the concrete picks
-   (e.g. FRED vs paid API vs scraping for DXY/UST/CPI/VIX) are still undecided.
-2. **News/Catalyst standalone phase.** Deepening is currently absorbed into the Context Desk
-   narrative layer + scoring catalyst input. Confirm no standalone news-AI-tagging phase is needed.
-3. **OKX derivatives parity (Phase 77).** Some Binance-sourced metrics (funding/OI/long-short/
-   liquidations) may have no clean OKX equivalent. Confirm acceptable cross-venue fallbacks and how
-   source badges communicate them.
-4. **Asset Signal Tower non-crypto rows.** Phase 83 treats DXY/Gold/UST 10Y/SPX as **context-only**
-   (not the cross-asset trading vertical, which is Phase 94). Confirm that scope boundary.
-5. **Context Score v1 default weights + regime thresholds.** Confirm the initial fixed weights and the
-   numeric thresholds that map scores → regime labels (deterministic per Principle D).
+### 8b. Confirmed by reviewer
+1. **Actual macro providers — DEFERRED to Phase 80.** Concrete provider picks (FRED vs paid API vs
+   scraping for DXY/UST/CPI/VIX, etc.) are intentionally decided in the Macro Source Decision Matrix,
+   not before it.
+2. **No standalone News/Catalyst phase for now.** News/catalyst deepening stays inside the Context
+   Desk narrative layer + scoring (catalyst input) until a standalone phase is proven necessary.
+3. **OKX derivatives parity — handled in Phase 77.** Where a Binance-sourced metric (funding/OI/
+   long-short/liquidations) has no clean OKX equivalent, the unavoidable cross-venue fallback is kept
+   and made explicit via **source badges** on the panel.
+4. **Asset Signal Tower non-crypto rows are context-only.** DXY/Gold/UST 10Y/SPX appear as trading
+   *context*, not as a cross-asset trading vertical (which remains deferred to Phase 94).
+5. **Context Score v1 stays display-only / logged.** It does not gate signals; persisted signals
+   consume it later (Phase 85 via `signal_context_snapshots`).
+
+### 8c. Still open — needs a reviewer decision
+1. **Context Score v1 default weights + regime thresholds.** Confirm the initial fixed weights and the
+   numeric thresholds that map scores → regime labels (deterministic per Principle D). Land these in
+   Phase 79/82, not in the 73–75 slice.
 
 ---
 
@@ -186,10 +193,11 @@ collector; and a **Settings/Customization phase (96)** was added.
 
 **Then Phase 76 (schema hardening)** immediately after, before any new tables.
 
-**Questions for the reviewer:** (a) Confirm the 8b items above. (b) Confirm Phase 73–75 is the
-correct first slice and Phase 76 is the correct second step. With those confirmed, the roadmap is
-locked and Phase 73 can begin.
+**Reviewer status:** §8b decisions are confirmed. The only remaining open item (§8c — Context Score
+v1 default weights + regime thresholds) lands in Phase 79/82 and does **not** block the first slice.
+Phase 73–75 is confirmed as the first slice; Phase 76 (schema hardening) is the second step. The
+roadmap is locked and Phase 73 can begin.
 
 ---
 
-*Reply with confirmations/edits on §8b and §9 and we'll lock the roadmap and begin Phase 73.*
+*Remaining input needed only on §8c (Phase 79/82 timeframe). The 73–75 slice is cleared to start.*
