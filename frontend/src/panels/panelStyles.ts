@@ -1,11 +1,13 @@
 import React from 'react';
 
 /**
- * panelStyles — shared inline styles for all dashboard panels.
+ * panelStyles — shared inline styles for the original dashboard panels.
  *
- * These are intentionally kept as plain CSSProperties objects for the scaffold
- * phase so there are no additional build dependencies. Replace with CSS Modules,
- * Tailwind, or a component library [Later] once the design stabilises.
+ * NOTE (Phase 74): the canonical design system now lives in `src/theme/`
+ * (`tokens.ts` + `primitives.tsx`). New components should import tokens/primitives
+ * from `../theme` rather than adding ad-hoc inline styles here. These legacy
+ * panelStyles values intentionally match the theme palette and are kept as-is so
+ * existing panels render unchanged; migrate them onto the theme incrementally.
  */
 export const panelStyles: Record<string, React.CSSProperties> = {
   // ── Panel card container ─────────────────────────────────────────────────
