@@ -54,6 +54,10 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE IF EXISTS journal_entries "
             "ADD COLUMN IF NOT EXISTS notes TEXT"
         ))
+        await conn.execute(text(
+            "ALTER TABLE IF EXISTS journal_entries "
+            "ADD COLUMN IF NOT EXISTS notified_outcome VARCHAR(10)"
+        ))
         # Schema migration: unique index on (symbol, timestamp) so the collector
         # can upsert live candle data on every tick instead of only on close.
         # IF NOT EXISTS makes this safe to run on every startup.
@@ -76,13 +80,19 @@ async def lifespan(app: FastAPI):
     scanner_task = asyncio.create_task(run_scanner_worker())
     logger.info("Background scanner worker task started.")
 
+    # Start background journal outcome notifier worker
+    from app.workers.journal_worker import run_journal_worker
+    journal_task = asyncio.create_task(run_journal_worker())
+    logger.info("Background journal notifier worker task started.")
+
     yield
 
-    scanner_task.cancel()
-    try:
-        await scanner_task
-    except asyncio.CancelledError:
-        pass
+    for task in (scanner_task, journal_task):
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 # ── Create the FastAPI application ────────────────────────────────────────────
 app = FastAPI(

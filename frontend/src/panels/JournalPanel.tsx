@@ -1,6 +1,6 @@
 import { useState, useEffect, CSSProperties, type MouseEvent } from 'react';
-import { fetchJournal, fetchLatestPrice, deleteJournalEntry } from '../api';
-import type { JournalEntry, JournalOutcome } from '../api';
+import { fetchJournal, fetchLatestPrice, fetchJournalNotifierStatus, deleteJournalEntry } from '../api';
+import type { JournalEntry, JournalOutcome, JournalNotifierStatus } from '../api';
 
 type Filter = 'all' | 'open' | 'wins' | 'losses' | 'expired';
 
@@ -309,6 +309,7 @@ export default function JournalPanel() {
   const [error,      setError]      = useState<string | null>(null);
   const [lastFetch,  setLastFetch]  = useState(0);
   const [openPrices, setOpenPrices] = useState<Record<string, number>>({});
+  const [notifier,   setNotifier]   = useState<JournalNotifierStatus | null>(null);
 
   const load = async () => {
     try {
@@ -328,6 +329,14 @@ export default function JournalPanel() {
   // Refresh outcomes every 60s (outcomes can change as prices move)
   useEffect(() => {
     const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Poll the close-notifier worker status every 60 s
+  useEffect(() => {
+    const loadStatus = () => fetchJournalNotifierStatus().then(setNotifier).catch(() => {});
+    loadStatus();
+    const id = setInterval(loadStatus, 60_000);
     return () => clearInterval(id);
   }, []);
 
@@ -364,6 +373,21 @@ export default function JournalPanel() {
     <div style={containerStyle}>
       <div style={headerStyle}>
         <span style={titleStyle}>Trade Journal</span>
+        {notifier && (
+          <span
+            title={
+              notifier.telegram_enabled
+                ? `Close notifications active — ${notifier.notifications_sent} sent`
+                : 'Close notifier running (Telegram not configured — events only)'
+            }
+            style={{ fontSize: '10px', color: notifier.telegram_enabled ? '#66bb6a' : '#777', cursor: 'default' }}
+          >
+            {notifier.telegram_enabled ? '🔔' : '🔕'}
+            {notifier.notifications_sent > 0 && (
+              <span style={{ fontSize: '9px', color: '#888', marginLeft: '2px' }}>{notifier.notifications_sent}</span>
+            )}
+          </span>
+        )}
         <span style={{ fontSize: '9px', color: '#444', marginLeft: 'auto' }}>
           {lastFetch > 0 ? `Updated ${new Date(lastFetch).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}
         </span>

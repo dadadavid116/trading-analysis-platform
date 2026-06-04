@@ -666,6 +666,19 @@ export function fetchJournalStats(): Promise<JournalStats> {
   return apiFetch<JournalStats>('/journal/stats');
 }
 
+export interface JournalNotifierStatus {
+  last_check_at:          string | null;
+  notifications_sent:     number;
+  check_interval_seconds: number;
+  initialized:            boolean;
+  telegram_enabled:       boolean;
+}
+
+/** Fetch the background journal-close notifier worker status. */
+export function fetchJournalNotifierStatus(): Promise<JournalNotifierStatus> {
+  return apiFetch<JournalNotifierStatus>('/journal/notifier-status');
+}
+
 export interface JournalInsights {
   summary:     string;
   patterns:    string[];

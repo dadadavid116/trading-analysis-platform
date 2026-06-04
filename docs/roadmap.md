@@ -80,3 +80,4 @@
 | 69 | User chart annotations — click chart to mark price levels with custom label + color, stored per-symbol in localStorage, managed via inline list | ✅ Done |
 | 70 | Journal trade notes — optional notes textarea in Candidate panel before Save; stored in DB; shown in expanded journal card; included in CSV export | ✅ Done |
 | 71 | Open trade live monitor — SL→TP1 progress bar on every pending journal card; white price marker + orange entry marker; green/red fill; 10s price polling | ✅ Done |
+| 72 | Journal trade-close notifications — background worker detects SL/TP/expiry on pending setups, fires Telegram + `trade_closed` event once per trade; `notified_outcome` column + silent first-pass backfill; notifier status endpoint + bell badge | ✅ Done |

@@ -34,3 +34,6 @@ class JournalEntry(Base):
     key_risks    = Column(Text,        nullable=False)
     scanner_bias = Column(String(10))
     notes        = Column(Text,        nullable=True)
+    # Last closed outcome we've already sent a notification for (tp1/tp2/tp3/sl/expired).
+    # NULL means no close has been announced yet. Set by the journal notifier worker.
+    notified_outcome = Column(String(10), nullable=True)

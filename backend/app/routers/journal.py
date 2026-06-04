@@ -284,6 +284,19 @@ async def journal_performance_stats(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/notifier-status")
+async def journal_notifier_status():
+    """Report the background journal-close notifier worker's state."""
+    from app.workers import journal_worker as jw
+    return {
+        "last_check_at":          jw.last_check_at.isoformat() if jw.last_check_at else None,
+        "notifications_sent":     jw.notifications_sent,
+        "check_interval_seconds": jw.CHECK_INTERVAL,
+        "initialized":            jw._initialized,
+        "telegram_enabled":       bool(settings.telegram_bot_token and settings.telegram_chat_id),
+    }
+
+
 @router.post("/insights")
 async def journal_insights(db: AsyncSession = Depends(get_db)):
     """
