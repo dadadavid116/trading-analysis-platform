@@ -1,8 +1,14 @@
 # Current Platform — Full Context Handoff
 
 > **Purpose:** A single, accurate snapshot of the platform **as it exists in code today**
-> (through roadmap Phase 72). Written for an external design/product architect who has not
+> (through roadmap **Phase 75**). Written for a product architect / new Claude chat who has not
 > seen the repo. This describes what is actually implemented — not the idealized roadmap.
+>
+> **Recent change (Phases 73–75):** the UI moved from two pages to **three workspaces**
+> (Dashboard / Console / **Context Desk**); a **design-system foundation** (`src/theme/`) was added;
+> `AnalysisPanel` is no longer orphaned; the two "analysis" features were renamed. Sections below
+> reflect that. The **next phase is 76 (Schema & Data-Foundation Hardening)** — see
+> `docs/phase_status.md`.
 >
 > **Companion docs:**
 > - `docs/future_phases_unfinished_overview.md` — what is planned but not built
@@ -67,19 +73,22 @@ journal and a manually-entered portfolio; outcomes are computed by replaying pri
 (`#0f1117` background, blue/green/red accents).
 
 ### 2.1 Overall page structure
-There are **two top-level pages** selected by a header nav toggle (`App.tsx` → `Page = 'dashboard' | 'console'`):
+There are **three top-level workspaces** selected by a header nav (`App.tsx` →
+`Page = 'dashboard' | 'console' | 'context'`):
 
-- **Dashboard** — the market-watching workspace (chart + market panels + AI chat).
-- **Console** ("Operator Console", `pages/OperatorConsole.tsx`) — the find/evaluate/review
-  workspace (scanner, candidate, and a 7-tab right pane).
+- **Dashboard** ("Trading Desk") — the market-watching workspace (chart + market panels + AI chat).
+- **Console** ("Operator Console", `pages/OperatorConsole.tsx`) — find/evaluate setups
+  (scanner, candidate, and a 5-tab right pane).
+- **Context** ("Context Desk", `pages/ContextDesk.tsx` + `pages/contextdesk/*`) — *new in Phase 73/75*;
+  the trading-environment read (regime/score preview, factor cards, news, market map, summary).
 
 A `useIsMobile()` hook switches every page to a **single-panel + bottom-tab-bar** layout below
-the breakpoint. Desktop and mobile have separate render branches in `App.tsx` and
-`OperatorConsole.tsx`.
+the breakpoint. Desktop and mobile have separate render branches in `App.tsx`, `OperatorConsole.tsx`,
+and (via the shared `WorkspaceShell` primitive) `ContextDesk.tsx`.
 
 ### 2.2 Header / navigation (`components/Layout.tsx`)
 Desktop header (56px), left→right: `TAP` logo · "Trading Analysis Platform" title ·
-**Dashboard/Console** nav buttons · **PriceTicker** (BTC/ETH/SOL live price + 24h%, 5s poll) ·
+**Dashboard / Console / Context** nav buttons · **PriceTicker** (BTC/ETH/SOL live price + 24h%, 5s poll) ·
 **symbol selector** (BTC/ETH/SOL — dashboard only) · **RelativeStrength** widget · **ServiceHealth**
 dots (collector liveness, 30s poll) · **Chat ▶/◀** toggle (dashboard only). Mobile collapses this
 into two stacked rows; the symbol selector + ticker move to row 2.
@@ -137,13 +146,13 @@ Alert). Auto-growing textarea, Send, and a Strategy-validate button. **Receives 
 output automatically** when ✦ Analyze runs (lifted through `App.tsx` state). BTC-centric greeting.
 
 ### 2.9 Analysis behavior
-Two distinct AI analysis paths exist and are easy to confuse (a known naming issue):
-- **Scheduled market summary** — background worker writes 3–4 sentence BTC summaries to the DB;
-  shown in `AnalysisPanel.tsx` (last 5, expandable, model badge, copy). *Note: `AnalysisPanel`
-  is not currently mounted on either page's default layout — it exists but is orphaned.*
-- **On-demand chart "Analyze"** — `PricePanel` → `POST /api/analysis/chart` → Claude returns a
-  structured trade read (trend, direction, support/resistance, entry, SL, TP) that is drawn on
-  the chart and pushed into the ChatPanel as markdown.
+Two distinct AI analysis paths exist; Phase 73 renamed them to remove the old naming clash:
+- **"Scheduled Market Summary"** — background worker writes 3–4 sentence BTC summaries to the DB;
+  shown in `AnalysisPanel.tsx` (last 5, expandable, model badge, copy). **Phase 73 mounted this in the
+  Context Desk → "Market Summary" tab** (it was previously orphaned/unmounted).
+- **"Chart Trade Setup Analysis"** — `PricePanel` "✦ Analyze" → `POST /api/analysis/chart` → Claude
+  returns a structured trade read (trend, direction, support/resistance, entry, SL, TP) drawn on the
+  chart and pushed into the ChatPanel as markdown (output header renamed in Phase 73).
 
 ### 2.10 Account / trade / strategy UI that already exists
 - **Strategy validator** — `StrategyCard` in ChatPanel (OpenAI validates → Claude summarizes →
@@ -162,26 +171,55 @@ Two distinct AI analysis paths exist and are easy to confuse (a known naming iss
 
 ### 2.11 Console layout (`pages/OperatorConsole.tsx`)
 Desktop: a fixed **340px left column** (ScannerPanel over CandidatePanel) + a **right column with
-7 tabs**: Event Log · Journal · Performance · Heatmap · News · Portfolio · Signals.
-Mobile: a **9-item bottom tab bar** (Scanner/Setup/Stats/Journal/Events/Heat/News/Portfolio/Signals).
+5 tabs**: Event Log · Journal · Performance · Portfolio · Signals.
+Mobile: a **7-item bottom tab bar** (Scanner/Setup/Stats/Journal/Events/Portfolio/Signals).
+*(Phase 73 removed News + Heatmap from the Console — they now live in the Context Desk. Journal /
+Performance / Portfolio remain here temporarily until the Review & Research and Execution & Account
+workspaces are built in Phases 88/91.)*
 
-### 2.12 What feels temporary or crowded
-- The Console **right pane crams 7 unrelated panels into a tab strip**; mobile has **9 bottom tabs**.
-- The Dashboard is a **fixed 5-panel grid** with no user arrangement.
-- `AnalysisPanel` exists but isn't mounted anywhere by default (orphaned).
-- Two "analysis" concepts with overlapping names (summary vs chart-analyze).
-- Heatmap/News/Portfolio/Signals are "extra intelligence" panels parked in the Console tab strip
-  because there was no better home — they don't belong to the operator find→evaluate flow.
-- Everything is inline-styled; there is no design-token/theme system, no component library.
+### 2.12 Context Desk (`pages/ContextDesk.tsx` + `pages/contextdesk/*`, Phases 73/75)
+The third workspace, built on the `WorkspaceShell` primitive (desktop top tabs / mobile bottom nav).
+Six tabs, all using **existing endpoints only**:
+- **Overview** (`contextdesk/OverviewSection.tsx`) — regime header with a **Context Score (0–100)** and
+  regime label, **clearly badged `PREVIEW`** because it is a transparent heuristic (scanner composite +
+  Fear&Greed + 24h mcap), *not* the deterministic engine (which is Phase 82, per Principle D). Plus an
+  **Asset Signal Tower** (BTC/ETH/SOL from the live scanner: bias, composite, key driver, key risk).
+- **Crypto** (`contextdesk/CryptoFactorsSection.tsx`) — factor cards (Fear&Greed, total mcap 24h, BTC
+  dominance, BTC funding/OI/long-short) + 24h relative-strength strip. Directions are indicative previews.
+- **Macro** (`contextdesk/MacroFactorsSection.tsx`) — honest placeholder listing planned macro factors;
+  live data deferred to Phase 80 (source matrix) → 81 (collectors) → 82 (scoring).
+- **News** — `NewsPanel` (relocated from Console). **Market Map** — `HeatmapPanel` (relocated; includes
+  correlation + global stats). **Market Summary** — `AnalysisPanel` (un-orphaned).
 
-### 2.13 What is reusable for a future redesign
-- Every panel is a **self-contained component** that fetches its own data — they can be relocated
-  into new workspaces without rewrites.
+### 2.13 Design-system state (`src/theme/`, Phase 74)
+A token + primitive layer now exists and is the canonical home for new UI:
+- `theme/tokens.ts` — colors, spacing, typography, radius, shadow, density (values match the existing
+  palette, so adoption caused **no visual drift**).
+- `theme/primitives.tsx` — Card, Button, Badge, Tabs, SectionHeader, MetricCard, ScoreBar, FactorCard,
+  WorkspaceShell.
+- **Adoption is partial:** only the Context Desk uses the primitives so far. The ~17 older panels still
+  use legacy inline styles via `panels/panelStyles.ts` (now flagged legacy with a pointer to `theme/`).
+- **Important:** Phase 74 is *technical foundation only* — **not** the final visual identity, which is
+  deliberately deferred (see `decision_log.md` D14).
+
+### 2.14 What still feels temporary or crowded (after Phase 75)
+- The Dashboard is still a **fixed 5-panel grid** with no user arrangement (configurable layouts =
+  Phase 96).
+- The Console still **temporarily** holds Journal / Performance / Portfolio until the Review & Research
+  and Execution & Account workspaces exist.
+- **Two style systems coexist:** new `theme/` primitives (Context Desk only) vs legacy `panelStyles.ts`
+  (everything else). Migration is incremental.
+- Cross-venue + BTC-only data inconsistencies persist (see §5) — not yet surfaced as source badges
+  outside the Context Desk.
+
+### 2.15 What is reusable for a future redesign
+- Every panel is a **self-contained component** that fetches its own data — relocatable without rewrites
+  (Phases 73/75 proved this by moving News/Heatmap/AnalysisPanel cleanly).
+- The **`src/theme/` design system** is now the foundation for further UI work.
 - The **typed API client** (`src/api/index.ts`) is the single integration seam.
-- The **active-symbol-as-prop** pattern and `useIsMobile` branching are already in place.
-- The 5-chart sync engine, indicator math, and drawing/annotation logic in `PricePanel` are a
-  strong, isolated foundation for a "charting workspace".
-- `panelStyles.ts` is the obvious place to introduce design tokens.
+- The **active-symbol-as-prop** pattern, `useIsMobile` branching, and the shared `WorkspaceShell` are in place.
+- The 5-chart sync engine, indicator math, and drawing/annotation logic in `PricePanel` remain a strong,
+  isolated foundation for a future charting workspace.
 
 ---
 
@@ -403,6 +441,10 @@ literals in code, not config.
 - No persisted scanner signals (scanner is stateless).
 - No indexes beyond the price upsert unique index and PKs (no documented tuning for growth).
 
+> **This is exactly what Phase 76 (Schema & Data-Foundation Hardening, the NEXT phase) fixes** —
+> making Alembic the single source of truth and retiring the startup `create_all` + ad-hoc `ALTER`
+> path **before** the table-heavy phases (79+) land. See `docs/phase_status.md` / `docs/next_task.md`.
+
 ---
 
 ## 7. Current AI System
@@ -476,16 +518,26 @@ This is additive and does not require architectural change.
 
 ## 9. Current Design Problems (summary — full treatment in `ui_redesign_context.md`)
 
-- **Two pages carrying ~18 panels.** The Console right pane (7 tabs) and mobile bottom bars
-  (6 and 9 tabs) are overflow dumping grounds, not an information architecture.
-- **No workspace concept.** "Understand / find / act / review" are all mixed across two pages.
-- **Fixed, non-configurable layouts.** No panel arrangement, sizing, or presets.
-- **Orphaned/duplicated UI.** `AnalysisPanel` is unmounted; two "analysis" features share a name.
-- **Auxiliary intelligence (heatmap, news, global stats, F&G, signals, portfolio) has no home** —
-  it's parked in Console tabs.
-- **Cross-venue + BTC-only inconsistencies** leak into the UI (chart on OKX, derivatives on Binance,
-  AI on BTC only).
-- **Inline styles everywhere** — no token/theme system makes a coherent redesign harder.
+**Resolved (or improved) by Phases 73–75:**
+- **Workspace concept introduced** — three workspaces (Dashboard / Console / Context) replace the old
+  two-page jumble; the Console is no longer a catch-all (News/Heatmap moved to Context Desk).
+- **Orphan/naming fixed** — `AnalysisPanel` is mounted in the Context Desk; the two analyses were
+  renamed ("Scheduled Market Summary" vs "Chart Trade Setup Analysis").
+- **Auxiliary intelligence has a home** — news / heatmap / global stats / Fear&Greed / relative
+  strength now live in the Context Desk.
+- **Design-token foundation exists** — `src/theme/` (tokens + primitives) replaces "no design system,"
+  though adoption is still partial.
+
+**Still open after Phase 75:**
+- **Fixed, non-configurable layouts** — no panel arrangement/sizing/presets (Phase 96).
+- **Two style systems coexist** — `theme/` primitives (Context Desk) vs legacy `panelStyles.ts`
+  (all other panels); migration is incremental.
+- **No Execution & Account / Review & Research workspaces yet** — Journal/Performance/Portfolio sit
+  temporarily in the Console (Phases 85–91).
+- **Cross-venue + BTC-only inconsistencies** still leak (chart/orderbook OKX, derivatives/liquidations
+  Binance, AI BTC-only); source badges exist only on the Context Desk (Phases 77/78).
+- **Final premium visual identity is deliberately deferred** (Phase 74 delivered foundation only) —
+  see `decision_log.md` D14.
 
 ---
 

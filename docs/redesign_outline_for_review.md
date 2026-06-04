@@ -29,6 +29,10 @@ now precedes all new tables; the **Risk↔Account dependency loop is broken** by
 deterministic** (AI explains only); a **Macro Source Decision Matrix (80)** precedes any macro
 collector; and a **Settings/Customization phase (96)** was added.
 
+**Build status (current):** **Phases 73, 74, and 75 are COMPLETE** (Information Architecture Reset,
+Design System Foundation, Context Desk Shell). The **next implementation phase is Phase 76 — Schema
+& Data-Foundation Hardening.** Everything from Phase 76 onward is still planned/unbuilt.
+
 ---
 
 ## 2. Numbering change
@@ -56,10 +60,10 @@ collector; and a **Settings/Customization phase (96)** was added.
 
 | Old draft | New phase | Status |
 |---|---|---|
-| (was only a "next priority" note) | **Phase 73 — Information Architecture Reset** | NEW as a formal phase / FIRST |
-| (was only a "next priority" note) | **Phase 74 — Design System Foundation** | NEW as a formal phase |
-| F4 Market Intelligence Workspace | **Phase 75 — Context Desk Shell** | Redesigned + expanded (distinct 3rd workspace) |
-| F12 Schema/Data-Foundation Hardening | **Phase 76 — Schema & Data-Foundation Hardening** | **RESTORED by correction pass** — was dropped in the reframe; now precedes all new tables |
+| (was only a "next priority" note) | **Phase 73 — Information Architecture Reset** | ✅ DONE |
+| (was only a "next priority" note) | **Phase 74 — Design System Foundation** | ✅ DONE |
+| F4 Market Intelligence Workspace | **Phase 75 — Context Desk Shell** | ✅ DONE (distinct 3rd workspace) |
+| F12 Schema/Data-Foundation Hardening | **Phase 76 — Schema & Data-Foundation Hardening** | **NEXT** — restored by correction pass; precedes all new tables |
 | F1 OKX Perpetual Alignment | Phase 77 | Reordered (after schema hardening) |
 | F2 Symbol Registry SoT | Phase 78 | Reordered |
 | F3 (part) Crypto factors | Phase 79 — Crypto Factor Collector Pack | Split from the old macro layer |
@@ -193,11 +197,11 @@ collector; and a **Settings/Customization phase (96)** was added.
 
 **Then Phase 76 (schema hardening)** immediately after, before any new tables.
 
-**Reviewer status:** §8b decisions are confirmed. The only remaining open item (§8c — Context Score
-v1 default weights + regime thresholds) lands in Phase 79/82 and does **not** block the first slice.
-Phase 73–75 is confirmed as the first slice; Phase 76 (schema hardening) is the second step. The
-roadmap is locked and Phase 73 can begin.
+**Reviewer status:** §8b decisions are confirmed. The first slice (**Phase 73–75) is now COMPLETE**.
+The only remaining open item (§8c — Context Score v1 default weights + regime thresholds) lands in
+Phase 79/82 and does **not** block Phase 76. The roadmap is locked; the next implementation phase is
+**Phase 76 — Schema & Data-Foundation Hardening** (do not start until the user approves the plan).
 
 ---
 
-*Remaining input needed only on §8c (Phase 79/82 timeframe). The 73–75 slice is cleared to start.*
+*Remaining input needed only on §8c (Phase 79/82 timeframe). Phases 73–75 are done; Phase 76 is next.*

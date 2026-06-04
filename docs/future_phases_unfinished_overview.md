@@ -12,6 +12,11 @@
 > any macro collector, and (6) added a later Settings/Customization phase. Phases are renumbered
 > cleanly (73 → 97); no fractional numbers.
 >
+> **Progress:** **Phases 73, 74, and 75 are COMPLETE** (Information Architecture Reset, Design System
+> Foundation, Context Desk Shell — see `docs/roadmap.md` and `docs/phase_status.md`). The **next
+> implementation phase is Phase 76 (Schema & Data-Foundation Hardening)**, which must complete before
+> any phase that creates new tables.
+>
 > **Direction:** crypto-first self-trading platform → information-architecture reset → Context Desk
 > shell → **schema hardening** → consistent data (OKX alignment + symbol registry) → crypto factors →
 > **macro source decision** → macro factors → factor scoring (display-only) → Context Desk v1 →
@@ -400,20 +405,17 @@ introducing the Context Desk and ending the Console-as-dumping-ground pattern.
 
 ---
 
-## 5. What to build first (Claude-ready) — unchanged in spirit
+## 5. Build status & what's next
 
-The **next** task is **not** macro collectors. It is **Phase 73 + 74 + 75**:
-information-architecture reset, design-system foundation, and the Context Desk shell using existing
-data only. **Phase 76 (schema hardening) follows immediately after the first slice and before any
-new data tables.**
+**Completed first slice (✅ done):** **Phase 73** (Information Architecture Reset — 3 workspaces),
+**Phase 74** (Design System Foundation — `src/theme/` tokens + primitives), **Phase 75** (Context Desk
+Shell — 6-tab workspace from existing data only). The first-slice guardrails (no new data providers,
+no new strategy logic, no backend collector refactors) were honored.
 
-**First implementation prompt should instruct:**
-> Do not add new data providers yet. Do not add new strategy logic yet. Do not refactor backend
-> collectors yet.
-> First: (1) add the new workspace navigation model; (2) create Context Desk as the third main
-> workspace; (3) relocate existing auxiliary panels into Context Desk; (4) mount AnalysisPanel
-> properly; (5) rename duplicated analysis concepts; (6) extract minimal design tokens and shared UI
-> primitives; (7) preserve current functionality; (8) keep the crypto trading workflow central.
+**Next: Phase 76 — Schema & Data-Foundation Hardening** (make Alembic the single source of truth;
+retire startup `create_all` + ad-hoc `ALTER`; add index/retention/backfill discipline) — **before any
+phase that creates new tables.** Do not begin until the user approves the plan; see
+`docs/next_task.md` for the execution brief.
 
 **Framing:** not "Dashboard + Console + one more panel," but **Trading workflow + Setup workflow +
 Context intelligence workflow** — the Context Desk is a real workspace, not another giant panel:

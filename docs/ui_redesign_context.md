@@ -9,7 +9,44 @@
 
 ---
 
-## Part A — Current Design Problems (honest + specific)
+## Status update — after Phases 73–75 (read first)
+
+This document's original critique (Part A) and recommendation (Part B) were written at the **Phase 72**
+state. **Phases 73–75 have since shipped** and implemented the first, structural part of the redesign.
+Read Parts A/B as the *rationale*; this banner is the *current reality*.
+
+**What Phases 73–75 improved:**
+- **Workspace model introduced** — the app now has **three workspaces** (Dashboard/Trading Desk ·
+  Operator Console · **Context Desk**), with a 6-workspace target later. This directly addresses the
+  old "no workspace concept" and "two pages carrying ~18 panels" problems (A2, A1, A6).
+- **Context Desk exists as a real third workspace** (not just another panel) — it now homes the
+  auxiliary intelligence (news, heatmap, global stats, Fear&Greed, relative strength, market summary)
+  that used to be dumped in the Console tab strip (A4 partial, the "no home" problem).
+- **Orphan/naming fixed** — `AnalysisPanel` is mounted; the two analyses were renamed (A4).
+- **Design-system foundation built (Phase 74)** — `src/theme/` tokens + primitives replace "no design
+  system" (A8). **Important: Phase 74 is technical/shared foundation only — NOT the final visual
+  identity.**
+
+**What still remains (open design problems):**
+- **Fixed, non-configurable layouts** (A7) — deferred to Phase 96 (Settings/Customization).
+- **Two style systems coexist** — new `theme/` primitives (Context Desk) vs legacy `panelStyles.ts`
+  (all other panels); migration is incremental.
+- **Execution & Account / Review & Research workspaces don't exist yet** — Journal/Performance/Portfolio
+  sit temporarily in the Console (Phases 85–91).
+- **Cross-venue + BTC-only inconsistencies** (A5) — Phases 77/78.
+- **Symbol model still half-global** (A9).
+
+**Deferred by decision:** the **final premium visual design / layout exploration is postponed** until
+the future phases / product architecture are locked and the user explicitly reopens it (see
+`decision_log.md` D14). Do not start a visual-identity redesign before then.
+
+> **Note on naming:** Part B below proposed a "Market Intelligence" workspace; the implemented
+> direction instead uses **Context Desk** (and Trading Desk / Operator Console). The authoritative,
+> current workspace model + roadmap is `docs/future_phases_unfinished_overview.md`.
+
+---
+
+## Part A — Current Design Problems (honest + specific) — *as of Phase 72; see status banner above*
 
 ### A1. Panels were added incrementally and now overflow their containers
 There are ~18 panels spread across **only two pages**:
