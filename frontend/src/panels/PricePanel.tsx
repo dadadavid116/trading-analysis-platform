@@ -1168,7 +1168,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       const fmt = (n: number) => `$${n.toLocaleString()}`;
       const baseAsset  = symbol.replace('USDT', '');
       const msg =
-        `## Chart Analysis — ${baseAsset}/USDT (${result.timeframe.toUpperCase()})\n\n` +
+        `## Chart Trade Setup Analysis — ${baseAsset}/USDT (${result.timeframe.toUpperCase()})\n\n` +
         `**Trend:** ${trendEmoji} ${result.trend.charAt(0).toUpperCase() + result.trend.slice(1)} · **Setup:** ${dirEmoji}\n\n` +
         `**Support:** ${result.support_levels.map(fmt).join(' · ')}\n` +
         `**Resistance:** ${result.resistance_levels.map(fmt).join(' · ')}\n\n` +

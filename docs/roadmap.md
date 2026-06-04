@@ -81,3 +81,4 @@
 | 70 | Journal trade notes — optional notes textarea in Candidate panel before Save; stored in DB; shown in expanded journal card; included in CSV export | ✅ Done |
 | 71 | Open trade live monitor — SL→TP1 progress bar on every pending journal card; white price marker + orange entry marker; green/red fill; 10s price polling | ✅ Done |
 | 72 | Journal trade-close notifications — background worker detects SL/TP/expiry on pending setups, fires Telegram + `trade_closed` event once per trade; `notified_outcome` column + silent first-pass backfill; notifier status endpoint + bell badge | ✅ Done |
+| 73 | Information Architecture Reset — third workspace "Context Desk" (Market Summary / News / Market Map); relocated News + Heatmap out of Operator Console tabs; mounted orphaned AnalysisPanel; renamed analyses → "Scheduled Market Summary" + "Chart Trade Setup Analysis"; 3-page nav (Dashboard / Console / Context) | ✅ Done |

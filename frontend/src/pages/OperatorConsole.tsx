@@ -6,14 +6,13 @@ import ScannerPanel from '../panels/ScannerPanel';
 import CandidatePanel from '../panels/CandidatePanel';
 import JournalPanel from '../panels/JournalPanel';
 import PerformancePanel from '../panels/PerformancePanel';
-import HeatmapPanel from '../panels/HeatmapPanel';
-import NewsPanel from '../panels/NewsPanel';
 import PortfolioPanel from '../panels/PortfolioPanel';
 import SignalMatrixPanel from '../panels/SignalMatrixPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-type RightTab    = 'events' | 'journal' | 'performance' | 'heatmap' | 'news' | 'portfolio' | 'signals';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'heatmap' | 'news' | 'portfolio' | 'signals';
+// Note: News + Market Map (Heatmap) moved to the Context Desk workspace in Phase 73.
+type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner'   },
@@ -21,8 +20,6 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'performance', label: 'Stats'     },
   { id: 'journal',     label: 'Journal'   },
   { id: 'events',      label: 'Events'    },
-  { id: 'heatmap',     label: 'Heat'      },
-  { id: 'news',        label: 'News'      },
   { id: 'portfolio',   label: 'Portfolio' },
   { id: 'signals',     label: 'Signals'   },
 ];
@@ -59,8 +56,6 @@ export default function OperatorConsole() {
         case 'performance': return <PerformancePanel />;
         case 'journal':     return <JournalPanel />;
         case 'events':      return <EventLogPanel />;
-        case 'heatmap':     return <HeatmapPanel />;
-        case 'news':        return <NewsPanel />;
         case 'portfolio':   return <PortfolioPanel />;
         case 'signals':     return <SignalMatrixPanel />;
       }
@@ -115,12 +110,6 @@ export default function OperatorConsole() {
           <button style={tabBtnStyle(rightTab === 'performance')} onClick={() => setRightTab('performance')}>
             Performance
           </button>
-          <button style={tabBtnStyle(rightTab === 'heatmap')} onClick={() => setRightTab('heatmap')}>
-            Heatmap
-          </button>
-          <button style={tabBtnStyle(rightTab === 'news')} onClick={() => setRightTab('news')}>
-            News
-          </button>
           <button style={tabBtnStyle(rightTab === 'portfolio')} onClick={() => setRightTab('portfolio')}>
             Portfolio
           </button>
@@ -132,8 +121,6 @@ export default function OperatorConsole() {
           {rightTab === 'events'      && <EventLogPanel />}
           {rightTab === 'journal'     && <JournalPanel />}
           {rightTab === 'performance' && <PerformancePanel />}
-          {rightTab === 'heatmap'     && <HeatmapPanel />}
-          {rightTab === 'news'        && <NewsPanel />}
           {rightTab === 'portfolio'   && <PortfolioPanel />}
           {rightTab === 'signals'     && <SignalMatrixPanel />}
         </div>

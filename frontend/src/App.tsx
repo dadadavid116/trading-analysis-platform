@@ -7,9 +7,10 @@ import AlertsPanel from './panels/AlertsPanel';
 import DerivativesPanel from './panels/DerivativesPanel';
 import ChatPanel from './panels/ChatPanel';
 import OperatorConsole from './pages/OperatorConsole';
+import ContextDesk from './pages/ContextDesk';
 import { useIsMobile } from './hooks/useIsMobile';
 
-type Page          = 'dashboard' | 'console';
+type Page          = 'dashboard' | 'console' | 'context';
 type MobileDashTab = 'chart' | 'liq' | 'ob' | 'deriv' | 'alerts' | 'chat';
 
 const MOBILE_DASH_TABS: { id: MobileDashTab; label: string }[] = [
@@ -114,9 +115,9 @@ export default function App() {
     );
   }
 
-  // ── Mobile console: OperatorConsole handles its own mobile layout ──────────
+  // ── Mobile console / context: each page handles its own mobile layout ──────
 
-  if (isMobile && activePage === 'console') {
+  if (isMobile && activePage !== 'dashboard') {
     return (
       <Layout
         chatPanel={<></>}
@@ -127,7 +128,7 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
       >
-        <OperatorConsole />
+        {activePage === 'console' ? <OperatorConsole /> : <ContextDesk />}
       </Layout>
     );
   }
@@ -162,8 +163,10 @@ export default function App() {
             <div style={cell(2)}><AlertsPanel /></div>
           </div>
         </>
-      ) : (
+      ) : activePage === 'console' ? (
         <OperatorConsole />
+      ) : (
+        <ContextDesk />
       )}
     </Layout>
   );

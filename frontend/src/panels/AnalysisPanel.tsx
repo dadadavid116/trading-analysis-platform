@@ -55,7 +55,7 @@ function AnalysisPanel() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #2a2a2e', paddingBottom: '8px' }}>
         <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
-          AI Analysis — BTC/USDT
+          Scheduled Market Summary
         </h2>
         <button
           onClick={load}
