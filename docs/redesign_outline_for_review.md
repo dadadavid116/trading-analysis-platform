@@ -5,7 +5,7 @@
 > before implementation begins. It states clearly **what was redesigned**, **what is brand new**, and
 > **what open questions / gaps still need a decision.**
 >
-> **Source of truth for detail:** `docs/future_phases_unfinished_overview.md` (Phase 73–93).
+> **Source of truth for detail:** `docs/future_phases_unfinished_overview.md` (Phase 73–97).
 > **Current-state reference:** `docs/current_platform_full_context.md`.
 > **UI critique:** `docs/ui_redesign_context.md`.
 
@@ -14,20 +14,30 @@
 ## 1. One-paragraph summary
 
 The forward roadmap was reframed from a flat "finish the self-trading OS" list (previously drafted as
-`F1–F17`) into a **workspace-first plan numbered Phase 73–93**, continuing from the real build log
-(which ended at Phase 72). The biggest change: a **third main workspace — the Context Desk / Factor
-Intelligence Desk** — is introduced as a first-class part of the product, and the roadmap now insists
-that **information-architecture and design-system work (Phase 73–75) happen before any new data,
-scoring, or execution logic.** Macro/factor intelligence is explicitly **supporting context**, not
-the headline product.
+`F1–F17`) into a **workspace-first plan**, continuing from the real build log (which ended at Phase
+72). The biggest change: a **third main workspace — the Context Desk / Factor Intelligence Desk** —
+is introduced as a first-class part of the product, and the roadmap now insists that
+**information-architecture and design-system work (Phase 73–75) happen before any new data, scoring,
+or execution logic.** Macro/factor intelligence is explicitly **supporting context**, not the
+headline product.
+
+**A roadmap correction pass has since been applied** (this revision). It renumbered the plan cleanly
+to **Phase 73 → 97** and resolved five structural issues: a dedicated **schema-hardening phase (76)**
+now precedes all new tables; the **Risk↔Account dependency loop is broken** by splitting out an
+**Account State Foundation (86)** before the Risk Engine (87) and the Execution & Account UI (88);
+**Factor Scoring v1 (82) is display-only/logged** and does not gate signals; **regime labels are
+deterministic** (AI explains only); a **Macro Source Decision Matrix (80)** precedes any macro
+collector; and a **Settings/Customization phase (96)** was added.
 
 ---
 
 ## 2. Numbering change
 
 - **Before:** future work was an unordered `F1–F17` set inside the future-phases doc.
-- **Now:** a sequential **Phase 73 → Phase 93** roadmap, continuing the real `roadmap.md` history
-  (Phases 1–72 are done). The `F#` items still exist conceptually but are re-expressed and re-ordered.
+- **After ChatGPT reframe:** a sequential `Phase 73 → 93` roadmap.
+- **After correction pass (current):** a clean **Phase 73 → 97** roadmap — four phases inserted
+  (76 Schema Hardening, 80 Macro Source Matrix, 86 Account State Foundation, 96 Settings) and the
+  tail renumbered. No fractional numbers. The `F#` items still map through (table below).
 
 ---
 
@@ -46,25 +56,31 @@ the headline product.
 
 | Old draft | New phase | Status |
 |---|---|---|
-| (was only a "next priority" note) | **Phase 73 — Information Architecture Reset** | **NEW as a formal phase / now FIRST** |
-| (was only a "next priority" note) | **Phase 74 — Design System Foundation** | **NEW as a formal phase** |
-| F4 Market Intelligence Workspace | **Phase 75 — Context Desk Shell** | **Redesigned + expanded** (distinct 3rd workspace) |
-| F1 OKX Perpetual Alignment | Phase 76 | Reordered (now after IA reset) |
-| F2 Symbol Registry SoT | Phase 77 | Reordered |
-| F3 Macro/Factor Intelligence Layer | **Phase 78 Crypto Factor Pack + Phase 79 Macro Factor Pack + Phase 80 Factor Scoring Engine** | **Redesigned — split into 3 much more detailed phases** |
-| (none) | **Phase 81 — Context Desk v1 Complete** | **NEW** |
-| (scattered bits across F-notes) | **Phase 82 — AI Analysis Separation & Upgrade** | **Redesigned into a formal phase** (renames + trader profile + annotation lifecycle) |
-| F5 Signal Engine | Phase 83 — Persisted Signal Engine | Same intent, fuller lifecycle/tables |
-| F6 Risk Engine | Phase 84 | Same intent |
-| F7 Positions/Account | Phase 85 — Execution & Account Workspace | Same intent, workspace-framed |
-| F8 Paper Execution | Phase 86 | Same intent |
-| F9 Backtesting/Replay | Phase 87 | Same intent |
-| F10 Journal/Review deepen | Phase 88 — Review & Research Workspace | Same intent, workspace-framed |
-| (none) | **Phase 89 — Model Diagnostics & Factor Attribution** | **NEW** (SHAP/IC/regime, from Gold Monitor) |
-| F15 Telegram/Mobile | Phase 90 — Telegram UX Upgrade | Same intent, with command renames |
-| F13 Cross-Asset Adapter | Phase 91 | Same intent |
-| F14 Professional Auth | Phase 92 | Same intent |
-| F17 Live Execution Gate | Phase 93 | Same intent (still last) |
+| (was only a "next priority" note) | **Phase 73 — Information Architecture Reset** | NEW as a formal phase / FIRST |
+| (was only a "next priority" note) | **Phase 74 — Design System Foundation** | NEW as a formal phase |
+| F4 Market Intelligence Workspace | **Phase 75 — Context Desk Shell** | Redesigned + expanded (distinct 3rd workspace) |
+| F12 Schema/Data-Foundation Hardening | **Phase 76 — Schema & Data-Foundation Hardening** | **RESTORED by correction pass** — was dropped in the reframe; now precedes all new tables |
+| F1 OKX Perpetual Alignment | Phase 77 | Reordered (after schema hardening) |
+| F2 Symbol Registry SoT | Phase 78 | Reordered |
+| F3 (part) Crypto factors | Phase 79 — Crypto Factor Collector Pack | Split from the old macro layer |
+| (none) | **Phase 80 — Macro Source Decision Matrix** | **NEW (correction pass)** — sourcing decided before any macro collector |
+| F3 (part) Macro factors | Phase 81 — Macro Factor Collector Pack | Split; now depends on the matrix |
+| F3 (part) Scoring | Phase 82 — Factor Scoring Engine v1 | **Clarified: display-only / logged, not signal-gating** |
+| (none) | Phase 83 — Context Desk v1 Complete | From reframe |
+| (scattered bits) | Phase 84 — AI Analysis Separation & Upgrade | Redesigned into a formal phase |
+| F5 Signal Engine | Phase 85 — Persisted Signal Engine | First consumer of Context Score (via `signal_context_snapshots`) |
+| (none) | **Phase 86 — Account State Foundation** | **NEW (correction pass)** — splits account state out *before* Risk to break the loop |
+| F6 Risk Engine | Phase 87 — Risk Engine v1 | Now depends on 86 (account state), **not** the workspace UI |
+| F7 Positions/Account | Phase 88 — Execution & Account Workspace (UI) | Now depends on 86 + 87 |
+| F8 Paper Execution | Phase 89 | Same intent |
+| F9 Backtesting/Replay | Phase 90 | Same intent |
+| F10 Journal/Review deepen | Phase 91 — Review & Research Workspace | Same intent |
+| (none) | Phase 92 — Model Diagnostics & Factor Attribution | From reframe (SHAP/IC/regime) |
+| F15 Telegram/Mobile | Phase 93 — Telegram UX Upgrade | Same intent |
+| F13 Cross-Asset Adapter | Phase 94 | Same intent |
+| F14 Professional Auth | Phase 95 | Same intent |
+| F16 Ultimate Settings | **Phase 96 — Settings / Customization** | **RESTORED by correction pass** — was missing; layout presets, model prefs, notification routing, factor weights, per-user after auth |
+| F17 Live Execution Gate | Phase 97 | Same intent (still last) |
 
 ---
 
@@ -122,48 +138,58 @@ the headline product.
 
 ---
 
-## 8. Open questions / gaps to confirm before building
+## 8. Open questions — what the correction pass RESOLVED vs what REMAINS
 
-These are points the new plan **does not fully resolve** — flagging for the reviewer:
+### 8a. Resolved by the correction pass
+1. **Schema-management hardening — RESOLVED.** Now **Phase 76 — Schema & Data-Foundation Hardening**,
+   placed after the 73–75 UI slice and **before any new tables** (factors/signals/account/orders).
+   Makes Alembic the single source of truth, retires startup `create_all` + ad-hoc `ALTER`, and adds
+   index/retention/backfill discipline.
+2. **Settings had no phase — RESOLVED.** Now **Phase 96 — Settings / Customization** (layout presets,
+   model preferences, notification routing, user-editable factor weights; per-user persistence after
+   auth, `localStorage` fallback before).
+3. **Risk ↔ Account dependency loop — RESOLVED.** Split into **Phase 86 Account State Foundation**
+   (account snapshots, simulated capital/equity base, open-exposure base) → **Phase 87 Risk Engine**
+   (depends on 86, *not* the UI) → **Phase 88 Execution & Account Workspace UI** (depends on 86 + 87).
+4. **Factor Scoring v1 gating behavior — RESOLVED.** **Phase 82 is display-only + logged to
+   snapshots**; it does not gate scanner decisions or change signals. Integration happens later at
+   **Phase 85** via persisted signals + `signal_context_snapshots`.
+5. **Regime taxonomy authority — RESOLVED.** Codified as **Principle D**: regime labels and
+   decision-gating stances are **deterministic rule/scoring outputs**; AI explains but never assigns
+   them. (Concrete threshold values still to be defined in Phase 79/82 — see 8b.5.)
+6. **Macro sourcing process — RESOLVED as a process.** **Phase 80 — Macro Source Decision Matrix**
+   now requires a per-item decision (provider, cost, frequency, rate limits, reliability, fallback,
+   caching, freshness) **before** any macro collector (Phase 81).
 
-1. **Schema-management hardening dropped.** The earlier draft had an explicit "make Alembic the
-   single source of truth, retire startup `create_all` + ad-hoc `ALTER`" phase. The new Phase 73–93
-   plan introduces ~14 new tables but **has no dedicated schema/migration-hardening phase.** Recommend
-   inserting one before Phase 78 (first new tables) or folding it into Phase 76/77. **Decision needed.**
-2. **Settings workspace has no phase.** "Settings" appears in the later 6-workspace nav, but no phase
-   builds it (the earlier "Ultimate Settings / configurable layouts" item). Where does configurable
-   layout + unified settings land — a Phase 94, or folded into Phase 92 (auth/per-user settings)?
-3. **News/Catalyst deepening** (earlier F11) is now absorbed into Context Desk (narrative layer) +
-   scoring (catalyst input). Confirm there's no need for a standalone news-AI-tagging phase.
-4. **Macro data sourcing not specified.** Phase 79 lists DXY/UST/Gold/SPX/VIX/CPI/FOMC but not the
-   provider (FRED? a paid macro API? scraping?). Free, reliable macro feeds are a real constraint —
-   needs a data-source decision (and rate-limit/caching plan) before Phase 79.
-5. **Context Score weighting** starts fixed, user-customizable later — confirm the v1 default weights
-   and whether the score should *feed* the scanner composite immediately (Phase 80) or stay display-only
-   until Phase 83.
-6. **Regime taxonomy** (Risk-On / Neutral / Fragile / Crowded Long / Liquidity Trap) needs concrete,
-   deterministic definitions so it isn't purely AI-narrative. Who defines the thresholds — rules, the
-   scoring engine, or AI? (Per principle: enforcement/labels that gate decisions should be deterministic.)
-7. **Asset Signal Tower for non-crypto assets** (DXY, Gold, UST 10Y, SPX) implies pulling/scoring
-   non-crypto instruments early (Phase 79/81) — confirm this is "context only," not the start of the
-   cross-asset/stocks vertical (which is deferred to Phase 91).
-8. **OKX derivatives parity.** Phase 76 says "evaluate OKX replacements for liquidations/funding/OI/
-   long-short." Some metrics may have no clean OKX equivalent; confirm the acceptable cross-venue
-   fallbacks and how source badges communicate them.
+### 8b. Still open — needs a reviewer decision
+1. **Actual macro providers.** The Phase 80 matrix defines *what to decide*; the concrete picks
+   (e.g. FRED vs paid API vs scraping for DXY/UST/CPI/VIX) are still undecided.
+2. **News/Catalyst standalone phase.** Deepening is currently absorbed into the Context Desk
+   narrative layer + scoring catalyst input. Confirm no standalone news-AI-tagging phase is needed.
+3. **OKX derivatives parity (Phase 77).** Some Binance-sourced metrics (funding/OI/long-short/
+   liquidations) may have no clean OKX equivalent. Confirm acceptable cross-venue fallbacks and how
+   source badges communicate them.
+4. **Asset Signal Tower non-crypto rows.** Phase 83 treats DXY/Gold/UST 10Y/SPX as **context-only**
+   (not the cross-asset trading vertical, which is Phase 94). Confirm that scope boundary.
+5. **Context Score v1 default weights + regime thresholds.** Confirm the initial fixed weights and the
+   numeric thresholds that map scores → regime labels (deterministic per Principle D).
 
 ---
 
 ## 9. Recommended first implementation slice (for sign-off)
 
-**Phase 73 + 74 + 75 only**, with the explicit guardrails:
+**Phase 73 + 74 + 75 only** (unchanged in spirit), with explicit guardrails:
 - No new data providers, no new strategy logic, no backend collector refactors.
 - Deliver: workspace nav model; Context Desk as the 3rd workspace (existing data only); relocate
   auxiliary panels; mount AnalysisPanel; rename the two analyses; extract minimal design tokens +
   shared primitives; preserve all current functionality; keep the crypto trading workflow central.
 
-**Question for the reviewer:** Do you agree the schema-hardening gap (§8.1) should be slotted in
-*before* Phase 78, and that Phase 73–75 is the correct, low-risk first slice?
+**Then Phase 76 (schema hardening)** immediately after, before any new tables.
+
+**Questions for the reviewer:** (a) Confirm the 8b items above. (b) Confirm Phase 73–75 is the
+correct first slice and Phase 76 is the correct second step. With those confirmed, the roadmap is
+locked and Phase 73 can begin.
 
 ---
 
-*Reply with confirmations/edits on §8 and §9 and we'll lock the roadmap and begin Phase 73.*
+*Reply with confirmations/edits on §8b and §9 and we'll lock the roadmap and begin Phase 73.*
