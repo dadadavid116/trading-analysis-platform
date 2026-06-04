@@ -2,40 +2,49 @@ import { useState } from 'react';
 import AnalysisPanel from '../panels/AnalysisPanel';
 import NewsPanel from '../panels/NewsPanel';
 import HeatmapPanel from '../panels/HeatmapPanel';
+import OverviewSection from './contextdesk/OverviewSection';
+import CryptoFactorsSection from './contextdesk/CryptoFactorsSection';
+import MacroFactorsSection from './contextdesk/MacroFactorsSection';
 import { WorkspaceShell } from '../theme';
 
 /**
  * ContextDesk — the third main workspace: "what environment am I trading inside."
  *
- * Phase 73 introduced this as the home for the auxiliary market-context panels that
- * were previously buried in the Operator Console tab strip:
- *   - Market Summary  — the scheduled AI market summary (AnalysisPanel, previously orphaned)
- *   - News            — crypto news feed
- *   - Market Map      — heatmap + correlation + global market stats
+ * Phase 73 introduced the workspace + relocated News/Heatmap/AnalysisPanel here.
+ * Phase 74 moved the tab/nav chrome onto the shared WorkspaceShell primitive.
+ * Phase 75 (this) builds the shell sections from EXISTING data only:
+ *   - Overview  — regime header + context score (PREVIEW heuristic) + asset signal tower
+ *   - Crypto    — crypto factor cards (Fear&Greed, dominance, funding/OI/LS, rel-strength)
+ *   - Macro     — placeholder listing planned macro factors (live data: Phase 80–81)
+ *   - News      — crypto news feed
+ *   - Market Map— heatmap + correlation + global stats
+ *   - Summary   — scheduled AI market summary
  *
- * Phase 74 refactored the tab/nav chrome onto the shared `WorkspaceShell` primitive
- * (desktop top tabs / mobile bottom nav) so this page no longer carries its own layout CSS.
- *
- * The richer factor/regime/scorecard layers arrive in later phases (75 shell sections,
- * 79–83 factors + scoring). Uses existing data/endpoints only.
+ * No new collectors/endpoints. Real factor collection + deterministic scoring land in 79–82.
  */
 
-type Tab = 'summary' | 'news' | 'map';
+type Tab = 'overview' | 'crypto' | 'macro' | 'news' | 'map' | 'summary';
 
 const TABS = [
-  { id: 'summary', label: 'Market Summary' },
-  { id: 'news',    label: 'News'           },
-  { id: 'map',     label: 'Market Map'     },
+  { id: 'overview', label: 'Overview'       },
+  { id: 'crypto',   label: 'Crypto'         },
+  { id: 'macro',    label: 'Macro'          },
+  { id: 'news',     label: 'News'           },
+  { id: 'map',      label: 'Market Map'     },
+  { id: 'summary',  label: 'Market Summary' },
 ];
 
 export default function ContextDesk() {
-  const [tab, setTab] = useState<Tab>('summary');
+  const [tab, setTab] = useState<Tab>('overview');
 
   const panel = (() => {
     switch (tab) {
-      case 'summary': return <AnalysisPanel />;
-      case 'news':    return <NewsPanel />;
-      case 'map':     return <HeatmapPanel />;
+      case 'overview': return <OverviewSection />;
+      case 'crypto':   return <CryptoFactorsSection />;
+      case 'macro':    return <MacroFactorsSection />;
+      case 'news':     return <NewsPanel />;
+      case 'map':      return <HeatmapPanel />;
+      case 'summary':  return <AnalysisPanel />;
     }
   })();
 
