@@ -26,10 +26,9 @@ from app.database import get_db
 from app.models.price import PriceCandle
 from app.models.liquidation import Liquidation
 from app.models.derivatives import FundingRate, OpenInterest, LSRatio
+from app.services.symbol_registry import load_active_canonical
 
 router = APIRouter(prefix="/scanner", tags=["scanner"])
-
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
 _SEVERITY_WEIGHT = {"info": 1, "warning": 2, "alert": 3}
 
@@ -497,11 +496,12 @@ async def scanner_worker_status():
 @router.get("/signals")
 async def get_scanner_signals(db: AsyncSession = Depends(get_db)):
     """
-    Run signal checks for BTC, ETH, and SOL, then return results ranked by
-    signal count descending (most active symbol first).
+    Run signal checks for all active symbols (from tracked_symbols), then return
+    results ranked by signal count descending (most active symbol first).
     """
+    symbols = await load_active_canonical()
     results = []
-    for sym in SYMBOLS:
+    for sym in symbols:
         try:
             results.append(await _scan_symbol(sym, db))
         except Exception as exc:

@@ -68,6 +68,7 @@ export default function App() {
     <ChatPanel
       analysisMessage={analysisMessage}
       onAnalysisConsumed={handleAnalysisConsumed}
+      activeSymbol={activeSymbol}
     />
   );
 
@@ -128,7 +129,7 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
       >
-        {activePage === 'console' ? <OperatorConsole /> : <ContextDesk />}
+        {activePage === 'console' ? <OperatorConsole activeSymbol={activeSymbol} /> : <ContextDesk activeSymbol={activeSymbol} />}
       </Layout>
     );
   }
@@ -164,9 +165,9 @@ export default function App() {
           </div>
         </>
       ) : activePage === 'console' ? (
-        <OperatorConsole />
+        <OperatorConsole activeSymbol={activeSymbol} />
       ) : (
-        <ContextDesk />
+        <ContextDesk activeSymbol={activeSymbol} />
       )}
     </Layout>
   );

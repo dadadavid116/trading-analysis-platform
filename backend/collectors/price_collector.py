@@ -19,16 +19,11 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.database import AsyncSessionLocal
 from app.models.price import PriceCandle
+from app.services.symbol_registry import load_okx_symbol_map
 
 logger = logging.getLogger(__name__)
 
 OKX_CANDLES_URL = "https://www.okx.com/api/v5/market/candles"
-
-INSTRUMENTS: dict[str, str] = {
-    "BTC-USDT-SWAP": "BTCUSDT",
-    "ETH-USDT-SWAP": "ETHUSDT",
-    "SOL-USDT-SWAP": "SOLUSDT",
-}
 
 POLL_INTERVAL = 10  # seconds between polls
 
@@ -78,17 +73,18 @@ async def _poll_one(client: httpx.AsyncClient, inst_id: str, canonical: str) -> 
 
 
 async def run() -> None:
+    instruments = await load_okx_symbol_map()
     logger.info(
         "Price collector starting (OKX REST polling every %d s, symbols=%s)...",
         POLL_INTERVAL,
-        list(INSTRUMENTS.values()),
+        list(instruments.values()),
     )
     while True:
         try:
             async with httpx.AsyncClient() as client:
                 await asyncio.gather(*[
                     _poll_one(client, inst_id, canonical)
-                    for inst_id, canonical in INSTRUMENTS.items()
+                    for inst_id, canonical in instruments.items()
                 ])
         except Exception as exc:
             logger.error("Price collector outer error: %s", exc)

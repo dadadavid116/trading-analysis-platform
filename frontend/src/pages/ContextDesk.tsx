@@ -34,7 +34,11 @@ const TABS = [
   { id: 'summary',  label: 'Market Summary' },
 ];
 
-export default function ContextDesk() {
+interface ContextDeskProps {
+  activeSymbol?: string;
+}
+
+export default function ContextDesk({ activeSymbol: _activeSymbol = 'BTCUSDT' }: ContextDeskProps) {
   const [tab, setTab] = useState<Tab>('overview');
 
   const panel = (() => {

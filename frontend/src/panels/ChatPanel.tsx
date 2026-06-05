@@ -166,9 +166,10 @@ function renderMarkdown(text: string): React.ReactNode {
 interface ChatPanelProps {
   analysisMessage?: string | null;
   onAnalysisConsumed?: () => void;
+  activeSymbol?: string;
 }
 
-function ChatPanel({ analysisMessage, onAnalysisConsumed }: ChatPanelProps) {
+function ChatPanel({ analysisMessage, onAnalysisConsumed, activeSymbol = 'BTCUSDT' }: ChatPanelProps) {
   const [model, setModel]       = useState('claude');
   const [input, setInput]       = useState('');
   const [messages, setMessages] = useState<DisplayMessage[]>([GREETING]);
@@ -238,7 +239,7 @@ function ChatPanel({ analysisMessage, onAnalysisConsumed }: ChatPanelProps) {
     setLoading(true);
     setLoadingType('chat');
     try {
-      const res = await sendChatMessage(text, buildHistory(), model, sessionIdRef.current ?? undefined);
+      const res = await sendChatMessage(text, buildHistory(), model, sessionIdRef.current ?? undefined, activeSymbol);
       sessionIdRef.current = res.session_id;
       setMessages((prev) => [...prev, { role: 'assistant', content: res.reply }]);
     } catch (err: unknown) {

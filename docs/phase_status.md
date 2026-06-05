@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 77**.
+> Last updated: end of **Phase 78**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 77** (OKX Perpetual Alignment Completion).
+- **Current completed implementation phase:** **Phase 78** (Symbol Registry as Single Source of Truth).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -23,14 +23,11 @@
 | 75 | Context Desk Shell | 6-tab Context Desk from existing data only; Context Score PREVIEW badge; Asset Signal Tower. |
 | 76 | Schema & Data-Foundation Hardening | Alembic is now the single source of truth. Revisions 0005 (`alerts.webhook_url`) + 0006 (`journal_entries` table + missing indexes on `liquidations` and `journal_entries`). Startup `create_all` + all ad-hoc `ALTER` removed from `main.py`. `deploy.sh` now runs `alembic upgrade head` automatically. |
 | 77 | OKX Perpetual Alignment Completion | Chart "✦ Analyze" now fetches from **OKX perp** (was Binance spot BTCUSDT). `analyze_chart` is now symbol-aware — passes the active symbol through from `PricePanel` → API → service. Source badges added: **BINANCE FUTURES** on Derivatives + Liquidation panels; **OKX PERP** on Order Book panel. |
+| 78 | Symbol Registry as Single Source of Truth | All collectors (`price`, `orderbook`, `liquidation`, `derivatives`) + `scanner` + `scanner_worker` now load active symbols from `tracked_symbols` via `services/symbol_registry.py` (retry + hardcoded fallback). `chat.py` accepts `symbol` field and builds market context + tool calls for the active symbol. Symbol selector in Layout is no longer Dashboard-only — shows on all pages. `ChatPanel`, `OperatorConsole`, `ContextDesk` receive `activeSymbol` prop from App.tsx. |
 
 ## Next implementation phase
 
-**Phase 78 — Symbol Registry as Single Source of Truth.**
-
-### Immediate scope for Phase 78
-- Make `tracked_symbols` the global registry: collectors, routers, scanner, and AI context builder read active symbols from DB instead of hardcoded lists.
-- Global symbol selector drives all workspaces; AI chat and chart analysis are already symbol-aware (Phase 77); Telegram commands should accept a symbol argument.
+**Phase 79 — Crypto Factor Collector Pack.**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

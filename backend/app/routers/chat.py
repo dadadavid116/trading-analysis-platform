@@ -55,6 +55,7 @@ class ChatRequest(BaseModel):
     history: List[ChatMessage] = []
     model: str = "claude"        # "claude" | "openai"
     session_id: Optional[int] = None   # omit on first message; backend creates a session
+    symbol: str = "BTCUSDT"      # active symbol from the symbol selector
 
 
 class ChatResponse(BaseModel):
@@ -200,11 +201,11 @@ OPENAI_TOOLS = [
 
 # ── Market context helper ──────────────────────────────────────────────────────
 
-async def _get_market_context(db: AsyncSession) -> str:
+async def _get_market_context(db: AsyncSession, symbol: str = "BTCUSDT") -> str:
     """Build a short market context string to include in the system prompt."""
     r = await db.execute(
         select(PriceCandle)
-        .where(PriceCandle.symbol == "BTCUSDT")
+        .where(PriceCandle.symbol == symbol)
         .order_by(desc(PriceCandle.timestamp))
         .limit(1)
     )
@@ -212,13 +213,14 @@ async def _get_market_context(db: AsyncSession) -> str:
 
     r = await db.execute(
         select(Liquidation)
-        .where(Liquidation.symbol == "BTCUSDT")
+        .where(Liquidation.symbol == symbol)
         .order_by(desc(Liquidation.timestamp))
         .limit(3)
     )
     liquidations = list(r.scalars().all())
 
-    lines = ["Current BTC/USDT market snapshot:"]
+    base = symbol.replace("USDT", "")
+    lines = [f"Current {base}/USDT market snapshot:"]
     if candle:
         lines.append(
             f"  Price: ${candle.close:,.2f}  |  Open: ${candle.open:,.2f}  "
@@ -241,23 +243,26 @@ async def _get_market_context(db: AsyncSession) -> str:
 
 # ── Tool execution (shared by both models) ────────────────────────────────────
 
-async def _execute_tool(tool_name: str, tool_input: dict, db: AsyncSession) -> str:
+async def _execute_tool(
+    tool_name: str, tool_input: dict, db: AsyncSession, symbol: str = "BTCUSDT"
+) -> str:
     """Execute a tool call and return the result as a string."""
+    base = symbol.replace("USDT", "")
 
     if tool_name == "get_current_price":
         r = await db.execute(
             select(PriceCandle)
-            .where(PriceCandle.symbol == "BTCUSDT")
+            .where(PriceCandle.symbol == symbol)
             .order_by(desc(PriceCandle.timestamp))
             .limit(1)
         )
         candle = r.scalar_one_or_none()
         if candle is None:
-            return "No price data available yet."
+            return f"No price data available yet for {symbol}."
         return (
-            f"BTC/USDT latest price: ${candle.close:,.2f}  "
+            f"{base}/USDT latest price: ${candle.close:,.2f}  "
             f"(open=${candle.open:,.2f}, high=${candle.high:,.2f}, "
-            f"low=${candle.low:,.2f}, volume={candle.volume:.4f} BTC, "
+            f"low=${candle.low:,.2f}, volume={candle.volume:.4f} {base}, "
             f"candle time={candle.timestamp.strftime('%Y-%m-%d %H:%M UTC')})"
         )
 
@@ -276,7 +281,7 @@ async def _execute_tool(tool_name: str, tool_input: dict, db: AsyncSession) -> s
 
         alert = Alert(
             name=name,
-            symbol="BTCUSDT",
+            symbol=symbol,
             condition_type=condition_type,
             threshold=threshold,
             trigger_mode=trigger_mode,
@@ -327,6 +332,7 @@ async def _reply_via_claude(
     history: List[ChatMessage],
     system_prompt: str,
     db: AsyncSession,
+    symbol: str = "BTCUSDT",
 ) -> str:
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
@@ -355,7 +361,7 @@ async def _reply_via_claude(
             tool_results = []
             for block in response.content:
                 if block.type == "tool_use":
-                    result = await _execute_tool(block.name, block.input, db)
+                    result = await _execute_tool(block.name, block.input, db, symbol)
                     logger.info("Claude tool %s → %s", block.name, result)
                     tool_results.append({
                         "type": "tool_result",
@@ -378,6 +384,7 @@ async def _reply_via_openai(
     history: List[ChatMessage],
     system_prompt: str,
     db: AsyncSession,
+    symbol: str = "BTCUSDT",
 ) -> str:
     client = openai_lib.AsyncOpenAI(api_key=settings.openai_api_key)
 
@@ -426,7 +433,7 @@ async def _reply_via_openai(
             # Execute each tool and append its result.
             for tc in tool_calls:
                 args = json.loads(tc.function.arguments)
-                result = await _execute_tool(tc.function.name, args, db)
+                result = await _execute_tool(tc.function.name, args, db, symbol)
                 logger.info("OpenAI tool %s → %s", tc.function.name, result)
                 messages.append({
                     "role": "tool",
@@ -450,9 +457,11 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
     Routes to the appropriate model based on body.model ("claude" | "openai").
     Both models share market context and tool implementations.
     """
-    market_context = await _get_market_context(db)
+    sym  = body.symbol.upper()
+    base = sym.replace("USDT", "")
+    market_context = await _get_market_context(db, sym)
     system_prompt = (
-        "You are a helpful AI assistant for a BTC/USDT trading dashboard. "
+        f"You are a helpful AI assistant for a {base}/USDT crypto trading dashboard. "
         "You have access to live market data and can manage price alerts on behalf of the user. "
         "Be concise, friendly, and accurate. When creating or managing alerts, always confirm "
         "the details back to the user after the tool executes.\n\n"
@@ -468,7 +477,7 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
                 status_code=503,
                 detail="OPENAI_API_KEY is not configured. Add it to your .env file.",
             )
-        reply = await _reply_via_openai(body.message, body.history, system_prompt, db)
+        reply = await _reply_via_openai(body.message, body.history, system_prompt, db, sym)
     else:
         # Default to Claude for any unrecognised model value.
         if not settings.anthropic_api_key:
@@ -476,7 +485,7 @@ async def chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
                 status_code=503,
                 detail="ANTHROPIC_API_KEY is not configured. Add it to your .env file.",
             )
-        reply = await _reply_via_claude(body.message, body.history, system_prompt, db)
+        reply = await _reply_via_claude(body.message, body.history, system_prompt, db, sym)
 
     # Persist the exchange to the chat history DB.
     session = await get_or_create_session(

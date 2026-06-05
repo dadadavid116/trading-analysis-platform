@@ -19,21 +19,19 @@ import httpx
 
 from app.database import AsyncSessionLocal
 from app.models.derivatives import FundingRate, OpenInterest, LSRatio
+from app.services.symbol_registry import load_active_canonical
 
 logger = logging.getLogger(__name__)
 
 FAPI_BASE = "https://fapi.binance.com"
 
-# Canonical symbol → Binance Futures symbol (same for all three here)
-SYMBOLS = ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
 
-
-async def funding_rate_loop() -> None:
-    logger.info("Funding rate collector starting (symbols=%s)...", SYMBOLS)
+async def funding_rate_loop(symbols: list[str]) -> None:
+    logger.info("Funding rate collector starting (symbols=%s)...", symbols)
     while True:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                for symbol in SYMBOLS:
+                for symbol in symbols:
                     try:
                         resp = await client.get(
                             f"{FAPI_BASE}/fapi/v1/premiumIndex",
@@ -69,12 +67,12 @@ async def funding_rate_loop() -> None:
             await asyncio.sleep(60)
 
 
-async def open_interest_loop() -> None:
-    logger.info("Open interest collector starting (symbols=%s)...", SYMBOLS)
+async def open_interest_loop(symbols: list[str]) -> None:
+    logger.info("Open interest collector starting (symbols=%s)...", symbols)
     while True:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                for symbol in SYMBOLS:
+                for symbol in symbols:
                     try:
                         resp = await client.get(
                             f"{FAPI_BASE}/fapi/v1/openInterest",
@@ -105,12 +103,12 @@ async def open_interest_loop() -> None:
             await asyncio.sleep(30)
 
 
-async def ls_ratio_loop() -> None:
-    logger.info("L/S ratio collector starting (symbols=%s)...", SYMBOLS)
+async def ls_ratio_loop(symbols: list[str]) -> None:
+    logger.info("L/S ratio collector starting (symbols=%s)...", symbols)
     while True:
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                for symbol in SYMBOLS:
+                for symbol in symbols:
                     try:
                         top_resp = await client.get(
                             f"{FAPI_BASE}/futures/data/topLongShortAccountRatio",
@@ -157,8 +155,9 @@ async def ls_ratio_loop() -> None:
 
 async def run() -> None:
     """Run all three derivatives collectors concurrently."""
+    symbols = await load_active_canonical()
     await asyncio.gather(
-        funding_rate_loop(),
-        open_interest_loop(),
-        ls_ratio_loop(),
+        funding_rate_loop(symbols),
+        open_interest_loop(symbols),
+        ls_ratio_loop(symbols),
     )

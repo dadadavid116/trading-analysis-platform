@@ -55,19 +55,17 @@ export default function Layout({
             </div>
             <ServiceHealth />
           </div>
-          {/* Row 2 (dashboard only): symbol selector + relative strength */}
-          {isDash && (
-            <div style={mobileRow2Style}>
-              <div style={symbolBarStyle}>
-                {SYMBOLS.map((sym) => (
-                  <button key={sym} style={symbolBtnStyle(sym === activeSymbol)} onClick={() => onSymbolChange(sym)}>
-                    {SYMBOL_LABELS[sym]}
-                  </button>
-                ))}
-              </div>
-              <PriceTicker />
+          {/* Row 2: symbol selector + price ticker (all pages) */}
+          <div style={mobileRow2Style}>
+            <div style={symbolBarStyle}>
+              {SYMBOLS.map((sym) => (
+                <button key={sym} style={symbolBtnStyle(sym === activeSymbol)} onClick={() => onSymbolChange(sym)}>
+                  {SYMBOL_LABELS[sym]}
+                </button>
+              ))}
             </div>
-          )}
+            <PriceTicker />
+          </div>
         </header>
       ) : (
         <header style={desktopHeaderStyle}>
@@ -84,15 +82,13 @@ export default function Layout({
 
           <PriceTicker />
 
-          {isDash && (
-            <div style={symbolBarStyle}>
-              {SYMBOLS.map((sym) => (
-                <button key={sym} style={symbolBtnStyle(sym === activeSymbol)} onClick={() => onSymbolChange(sym)}>
-                  {SYMBOL_LABELS[sym]}
-                </button>
-              ))}
-            </div>
-          )}
+          <div style={symbolBarStyle}>
+            {SYMBOLS.map((sym) => (
+              <button key={sym} style={symbolBtnStyle(sym === activeSymbol)} onClick={() => onSymbolChange(sym)}>
+                {SYMBOL_LABELS[sym]}
+              </button>
+            ))}
+          </div>
 
           {isDash && <RelativeStrength />}
           <ServiceHealth />

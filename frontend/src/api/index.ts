@@ -304,11 +304,12 @@ export async function sendChatMessage(
   history: ChatMessage[],
   model = 'claude',
   sessionId?: number,
+  symbol = 'BTCUSDT',
 ): Promise<ChatResponse> {
   const response = await fetch(`${BASE_URL}/chat/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, history, model, session_id: sessionId ?? null }),
+    body: JSON.stringify({ message, history, model, session_id: sessionId ?? null, symbol }),
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));

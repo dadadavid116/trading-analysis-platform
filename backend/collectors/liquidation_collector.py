@@ -36,16 +36,11 @@ import websockets
 
 from app.database import AsyncSessionLocal
 from app.models.liquidation import Liquidation
+from app.services.symbol_registry import load_okx_symbol_map
 
 logger = logging.getLogger(__name__)
 
 OKX_WS_URL = "wss://ws.okx.com:8443/ws/v5/public"
-
-SYMBOL_MAP: dict[str, str] = {
-    "BTC-USDT-SWAP": "BTCUSDT",
-    "ETH-USDT-SWAP": "ETHUSDT",
-    "SOL-USDT-SWAP": "SOLUSDT",
-}
 
 _SUBSCRIBE = json.dumps({
     "op":   "subscribe",
@@ -53,8 +48,8 @@ _SUBSCRIBE = json.dumps({
 })
 
 
-async def _store(inst_id: str, detail: dict, ts_ms: int) -> None:
-    canonical = SYMBOL_MAP.get(inst_id)
+async def _store(inst_id: str, detail: dict, ts_ms: int, symbol_map: dict[str, str]) -> None:
+    canonical = symbol_map.get(inst_id)
     if not canonical:
         return
 
@@ -84,7 +79,9 @@ async def _store(inst_id: str, detail: dict, ts_ms: int) -> None:
 
 
 async def run() -> None:
-    logger.info("Liquidation collector starting (OKX liquidation-orders WebSocket)...")
+    symbol_map = await load_okx_symbol_map()
+    logger.info("Liquidation collector starting (OKX liquidation-orders WebSocket, symbols=%s)...",
+                list(symbol_map.values()))
     while True:
         try:
             async with websockets.connect(OKX_WS_URL) as ws:
@@ -113,12 +110,12 @@ async def run() -> None:
 
                     for item in msg.get("data", []):
                         inst_id = item.get("instId", "")
-                        if inst_id not in SYMBOL_MAP:
+                        if inst_id not in symbol_map:
                             continue
                         ts_ms = int(item.get("ts") or 0)
                         for detail in item.get("details", []):
                             try:
-                                await _store(inst_id, detail, ts_ms)
+                                await _store(inst_id, detail, ts_ms, symbol_map)
                             except Exception as exc:
                                 logger.error("Error storing liquidation: %s", exc)
 

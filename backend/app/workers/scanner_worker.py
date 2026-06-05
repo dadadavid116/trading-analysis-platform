@@ -17,8 +17,9 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.routers.scanner import _scan_symbol, SYMBOLS
+from app.routers.scanner import _scan_symbol
 from app.services.event_logger import log_event
+from app.services.symbol_registry import load_active_canonical
 
 logger = logging.getLogger(__name__)
 
@@ -77,8 +78,9 @@ async def _run_once() -> None:
     chat_id = settings.telegram_chat_id
     telegram_ok = bool(token and chat_id)
 
+    symbols = await load_active_canonical()
     async with AsyncSessionLocal() as db:
-        for symbol in SYMBOLS:
+        for symbol in symbols:
             try:
                 result = await _scan_symbol(symbol, db)
             except Exception as exc:

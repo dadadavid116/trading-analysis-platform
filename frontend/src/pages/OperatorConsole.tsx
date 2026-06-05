@@ -27,7 +27,11 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
 const dividerV: CSSProperties = { width: '1px',  flexShrink: 0, backgroundColor: '#1e1e22' };
 
-export default function OperatorConsole() {
+interface OperatorConsoleProps {
+  activeSymbol?: string;
+}
+
+export default function OperatorConsole({ activeSymbol = 'BTCUSDT' }: OperatorConsoleProps) {
   const isMobile = useIsMobile();
 
   const [scanner,    setScanner]    = useState<ScannerResponse | null>(null);

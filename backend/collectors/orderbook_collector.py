@@ -24,35 +24,32 @@ from sqlalchemy import delete
 
 from app.database import AsyncSessionLocal
 from app.models.orderbook import OrderBookSnapshot
+from app.services.symbol_registry import load_okx_symbol_map
 
 logger = logging.getLogger(__name__)
 
-OKX_WS_URL   = "wss://ws.okx.com:8443/ws/v5/public"
-INSTRUMENTS  = ["BTC-USDT-SWAP", "ETH-USDT-SWAP", "SOL-USDT-SWAP"]
-SYMBOL_MAP   = {
-    "BTC-USDT-SWAP": "BTCUSDT",
-    "ETH-USDT-SWAP": "ETHUSDT",
-    "SOL-USDT-SWAP": "SOLUSDT",
-}
-
-_SUBSCRIBE = json.dumps({
-    "op": "subscribe",
-    "args": [{"channel": "books5", "instId": inst} for inst in INSTRUMENTS],
-})
+OKX_WS_URL = "wss://ws.okx.com:8443/ws/v5/public"
 
 WRITE_INTERVAL   = 5.0   # minimum seconds between stored snapshots per symbol
 PRUNE_KEEP_HOURS = 24
 
 
 async def run() -> None:
-    logger.info("Order book collector starting (OKX multi-symbol mode)...")
+    symbol_map = await load_okx_symbol_map()
+    subscribe_msg = json.dumps({
+        "op": "subscribe",
+        "args": [{"channel": "books5", "instId": inst} for inst in symbol_map],
+    })
+
+    logger.info("Order book collector starting (OKX multi-symbol mode, symbols=%s)...",
+                list(symbol_map.values()))
     # Per-symbol throttle timestamps
-    last_write: dict[str, float] = {sym: 0.0 for sym in SYMBOL_MAP.values()}
+    last_write: dict[str, float] = {sym: 0.0 for sym in symbol_map.values()}
 
     while True:
         try:
             async with websockets.connect(OKX_WS_URL) as ws:
-                await ws.send(_SUBSCRIBE)
+                await ws.send(subscribe_msg)
                 logger.info("Order book collector: subscribed to OKX books5.")
 
                 async for raw in ws:
@@ -65,7 +62,7 @@ async def run() -> None:
                         continue
 
                     inst_id   = msg.get("arg", {}).get("instId", "")
-                    canonical = SYMBOL_MAP.get(inst_id)
+                    canonical = symbol_map.get(inst_id)
                     data      = msg.get("data", [])
                     if not canonical or not data:
                         continue
