@@ -58,6 +58,26 @@
   premium visual/layout exploration is deferred until the future phases / product architecture are
   locked and the user **explicitly reopens** it.
 
+## Macro data sourcing (Phase 80)
+
+- **D15 — Yahoo Finance (`yfinance`) for market-traded macro prices.** DXY, Gold, SPX, NDX, VIX
+  all collected via `yfinance>=0.2`. No API key required. Unofficial API — graceful degradation
+  (confidence = 0) if it breaks. Fallback tickers documented in `macro_config.py`.
+- **D16 — FRED API for yields and economic series.** All rate/yield/inflation/labor data
+  (UST 2Y/10Y/30Y, TIPS, breakeven, CPI, PCE, NFP, HY spread) comes from FRED. Free API key
+  required (`FRED_API_KEY` env var). Authoritative, well-documented, 120 req/min limit.
+- **D17 — MOVE index omitted.** Not freely available via any no-cost API. HY credit spread
+  (`BAMLH0A0HYM2` from FRED) used as partial credit/vol proxy instead.
+- **D18 — FOMC calendar is a hardcoded list.** Maintained in `macro_config.py`. Refresh manually
+  once per year (Fed publishes next year's dates in Nov/Dec). No external API needed.
+- **D19 — Risk-on/off is a derived composite.** Computed in Phase 82 factor scoring from collected
+  data (VIX, HY spread, DXY, SPX momentum). Not a separate data feed.
+- **D20 — No Twelve Data, Alpha Vantage, or Bloomberg.** yfinance + FRED cover all needed items
+  for free. Third-party paid/limited-tier sources excluded for this personal platform.
+- **D21 — Macro caching rules.** Market prices: 5–15 min cache, stale at 1H. Daily rates: 4H
+  cache, stale at 48H. Monthly econ: 24H cache, stale at 48H after next release. Stale factors:
+  include with `confidence × 0.3` penalty. Older than 7 days: omit from scoring entirely.
+
 ---
 
 ## Notes for future chats
