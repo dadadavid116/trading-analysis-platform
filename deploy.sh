@@ -23,4 +23,10 @@ else
   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 fi
 
+# Apply any pending Alembic migrations.
+# Alembic is now the single source of truth for schema changes.
+# This is a no-op when the database is already at head.
+echo "Running database migrations..."
+docker compose -f docker-compose.yml -f docker-compose.prod.yml exec -T api alembic upgrade head
+
 echo "Deploy complete."

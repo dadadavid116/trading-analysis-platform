@@ -12,22 +12,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
 
 from app.auth import require_api_key
 from app.config import settings
-from app.database import engine, Base
-# Import models so SQLAlchemy registers them with Base before create_all runs.
-import app.models.price        # noqa: F401
-import app.models.liquidation  # noqa: F401
-import app.models.orderbook    # noqa: F401
-import app.models.analysis     # noqa: F401
-import app.models.alert        # noqa: F401
-import app.models.chat         # noqa: F401
-import app.models.derivatives  # noqa: F401
-import app.models.symbol       # noqa: F401
-import app.models.event_log    # noqa: F401
-import app.models.journal      # noqa: F401
 from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news
 
 logger = logging.getLogger(__name__)
@@ -35,36 +22,8 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create any tables that don't already exist.
-    # In Docker this is a no-op because init_db.sql already created them.
-    # Outside Docker (running uvicorn directly) this creates the tables automatically.
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        # Schema migration: add trigger_mode to any alerts table that was created
-        # before Phase 9. Safe to run on new tables too (PostgreSQL IF NOT EXISTS).
-        await conn.execute(text(
-            "ALTER TABLE IF EXISTS alerts "
-            "ADD COLUMN IF NOT EXISTS trigger_mode VARCHAR(10) NOT NULL DEFAULT 'once'"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE IF EXISTS alerts "
-            "ADD COLUMN IF NOT EXISTS webhook_url VARCHAR(500)"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE IF EXISTS journal_entries "
-            "ADD COLUMN IF NOT EXISTS notes TEXT"
-        ))
-        await conn.execute(text(
-            "ALTER TABLE IF EXISTS journal_entries "
-            "ADD COLUMN IF NOT EXISTS notified_outcome VARCHAR(10)"
-        ))
-        # Schema migration: unique index on (symbol, timestamp) so the collector
-        # can upsert live candle data on every tick instead of only on close.
-        # IF NOT EXISTS makes this safe to run on every startup.
-        await conn.execute(text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_price_candles_symbol_ts "
-            "ON price_candles(symbol, timestamp)"
-        ))
+    # Schema is managed exclusively by Alembic migrations.
+    # Run `alembic upgrade head` (via deploy.sh) before starting the API.
 
     # Log secondary API key status. Primary access control is Caddy Basic Auth.
     if settings.dashboard_api_key.strip():
