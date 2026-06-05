@@ -753,3 +753,32 @@ export interface NewsItem {
 export function fetchNewsFeed(limit = 40): Promise<NewsItem[]> {
   return apiFetch<NewsItem[]>(`/news/feed?limit=${limit}`);
 }
+
+// ── Factor Scoring (Phase 79) ─────────────────────────────────────────────────
+
+export interface FactorObservation {
+  factor_name:      string;
+  symbol:           string | null;
+  raw_value:        number | null;
+  normalized_score: number;   // -1.0 to +1.0 (positive = bullish)
+  direction:        'bullish' | 'bearish' | 'neutral';
+  confidence:       number;   // 0.0 to 1.0
+  source:           string;
+}
+
+export interface FactorSnapshot {
+  symbol:                string;
+  computed_at:           string;
+  crypto_score:          number;   // -100 to +100
+  regime:                string;   // "risk_on"|"neutral"|"fragile"|"risk_off"|"crowded_long"|"crowded_short"
+  trade_environment:     string;   // "Favorable"|"Caution"|"Avoid"
+  primary_driver:        string;   // "Derivatives"|"Liquidity"|"Sentiment"|"Momentum"
+  derivatives_pressure:  number;   // -1.0 to +1.0
+  liquidity_pressure:    number;   // -1.0 to +1.0
+  factors:               FactorObservation[];
+}
+
+/** Compute and return the latest crypto factor snapshot for a symbol. */
+export function fetchFactorSnapshot(symbol = 'BTCUSDT'): Promise<FactorSnapshot> {
+  return apiFetch<FactorSnapshot>(`/factors/snapshot?symbol=${symbol}`);
+}

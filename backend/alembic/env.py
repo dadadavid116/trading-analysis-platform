@@ -33,6 +33,7 @@ import app.models.derivatives  # noqa: F401
 import app.models.symbol       # noqa: F401
 import app.models.event_log    # noqa: F401
 import app.models.journal      # noqa: F401
+import app.models.factor       # noqa: F401
 
 config = context.config
 

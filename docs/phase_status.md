@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 78**.
+> Last updated: end of **Phase 79**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 78** (Symbol Registry as Single Source of Truth).
+- **Current completed implementation phase:** **Phase 79** (Crypto Factor Collector Pack).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -24,10 +24,11 @@
 | 76 | Schema & Data-Foundation Hardening | Alembic is now the single source of truth. Revisions 0005 (`alerts.webhook_url`) + 0006 (`journal_entries` table + missing indexes on `liquidations` and `journal_entries`). Startup `create_all` + all ad-hoc `ALTER` removed from `main.py`. `deploy.sh` now runs `alembic upgrade head` automatically. |
 | 77 | OKX Perpetual Alignment Completion | Chart "✦ Analyze" now fetches from **OKX perp** (was Binance spot BTCUSDT). `analyze_chart` is now symbol-aware — passes the active symbol through from `PricePanel` → API → service. Source badges added: **BINANCE FUTURES** on Derivatives + Liquidation panels; **OKX PERP** on Order Book panel. |
 | 78 | Symbol Registry as Single Source of Truth | All collectors (`price`, `orderbook`, `liquidation`, `derivatives`) + `scanner` + `scanner_worker` now load active symbols from `tracked_symbols` via `services/symbol_registry.py` (retry + hardcoded fallback). `chat.py` accepts `symbol` field and builds market context + tool calls for the active symbol. Symbol selector in Layout is no longer Dashboard-only — shows on all pages. `ChatPanel`, `OperatorConsole`, `ContextDesk` receive `activeSymbol` prop from App.tsx. |
+| 79 | Crypto Factor Collector Pack | `factor_observations` + `regime_snapshots` tables (Alembic). 7 normalized factors: funding_rate, oi_delta, ls_ratio, liq_pressure, ob_imbalance, fear_greed, total_mcap_24h. Deterministic regime classification (risk_on/neutral/fragile/risk_off/crowded_long/crowded_short). Derivatives Pressure Score + Liquidity Pressure Score sub-scores. `GET /api/factors/snapshot` endpoint. Context Desk Crypto tab + Overview regime header now use live scored data (replaced Phase 75 heuristic). |
 
 ## Next implementation phase
 
-**Phase 79 — Crypto Factor Collector Pack.**
+**Phase 80 — Macro Source Decision Matrix.**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

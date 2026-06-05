@@ -1,122 +1,205 @@
 import { useState, useEffect, CSSProperties } from 'react';
-import {
-  fetchFearGreed, fetchMarketGlobal, fetchFundingRate, fetchOpenInterest,
-  fetchLSRatio, fetchRelativeStrength,
-} from '../../api';
-import type {
-  FearGreedData, MarketGlobalData, FundingRateData, OpenInterestData,
-  LSRatioData, RelativeStrengthEntry,
-} from '../../api';
+import { fetchFactorSnapshot } from '../../api';
+import type { FactorSnapshot, FactorObservation } from '../../api';
 import { FactorCard, SectionHeader, Card, colors, space, font } from '../../theme';
 
 /**
- * CryptoFactorsSection — Context Desk "Crypto" tab (Phase 75 shell).
+ * CryptoFactorsSection — Context Desk "Crypto" tab (Phase 79).
  *
- * A grid of crypto-native factor cards built from existing endpoints, using BTC as the
- * market bellwether for derivatives factors. No new collectors — that is Phase 79.
- * Directions shown are indicative previews, not the Phase 82 scored stance.
+ * Upgraded from Phase 75 placeholder to live normalized factor scores.
+ * All directions are now deterministic (computed from live DB data + external APIs).
+ * Macro factors add in Phase 81.
  */
 
-const DISPLAY: Record<string, string> = { BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL' };
+type FcDir = 'long' | 'short' | 'neutral';
 
-type Direction = 'long' | 'short' | 'neutral';
+function toDir(d: string): FcDir {
+  if (d === 'bullish') return 'long';
+  if (d === 'bearish') return 'short';
+  return 'neutral';
+}
 
-function fmtUsd(n: number): string {
-  if (n >= 1e12) return `$${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9)  return `$${(n / 1e9).toFixed(2)}B`;
-  return `$${n.toLocaleString()}`;
+function toBarScore(normalizedScore: number): number {
+  return Math.round(50 + normalizedScore * 50);
+}
+
+function findFactor(factors: FactorObservation[], name: string): FactorObservation | undefined {
+  return factors.find((f) => f.factor_name === name);
+}
+
+function fmtPct(v: number | null | undefined, decimals = 4): string {
+  if (v == null) return '—';
+  return `${(v * 100).toFixed(decimals)}%`;
+}
+
+function fmtRaw(v: number | null | undefined, decimals = 3): string {
+  if (v == null) return '—';
+  return v.toFixed(decimals);
+}
+
+function SubScore({
+  label, score, description,
+}: {
+  label: string; score: number; description: string;
+}) {
+  const dir: FcDir = score > 0.1 ? 'long' : score < -0.1 ? 'short' : 'neutral';
+  const color = dir === 'long' ? colors.bull : dir === 'short' ? colors.bear : colors.textMuted;
+  return (
+    <Card padding={space.md} style={{ display: 'flex', flexDirection: 'column', gap: space.sm }}>
+      <span style={{ fontSize: font.size.md, color: colors.textMuted }}>{label}</span>
+      <span style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, fontFamily: font.mono, color }}>
+        {score >= 0 ? '+' : ''}{score.toFixed(2)}
+      </span>
+      <span style={{ fontSize: font.size.sm, color: colors.textFaint }}>{description}</span>
+    </Card>
+  );
 }
 
 export default function CryptoFactorsSection() {
-  const [fng, setFng]       = useState<FearGreedData | null>(null);
-  const [global, setGlobal] = useState<MarketGlobalData | null>(null);
-  const [funding, setFund]  = useState<FundingRateData | null>(null);
-  const [oi, setOi]         = useState<OpenInterestData | null>(null);
-  const [ls, setLs]         = useState<LSRatioData | null>(null);
-  const [rs, setRs]         = useState<RelativeStrengthEntry[]>([]);
+  const [snapshot, setSnapshot] = useState<FactorSnapshot | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
 
   useEffect(() => {
-    const load = () => {
-      fetchFearGreed().then(setFng).catch(() => {});
-      fetchMarketGlobal().then(setGlobal).catch(() => {});
-      fetchFundingRate('BTCUSDT').then(setFund).catch(() => {});
-      fetchOpenInterest('BTCUSDT').then(setOi).catch(() => {});
-      fetchLSRatio('BTCUSDT').then(setLs).catch(() => {});
-      fetchRelativeStrength().then(setRs).catch(() => {});
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await fetchFactorSnapshot('BTCUSDT');
+        if (!cancelled) { setSnapshot(data); setError(null); }
+      } catch (e) {
+        if (!cancelled) setError((e as Error).message);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
     load();
-    const id = setInterval(load, 30_000);
-    return () => clearInterval(id);
+    const id = setInterval(load, 3 * 60 * 1000);  // refresh every 3 min
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
-  const fngDir: Direction   = fng ? (fng.value > 55 ? 'long' : fng.value < 45 ? 'short' : 'neutral') : 'neutral';
-  const mcap24              = global?.market_cap_change_24h ?? 0;
-  const mcapDir: Direction  = mcap24 > 0.2 ? 'long' : mcap24 < -0.2 ? 'short' : 'neutral';
-  const fundDir: Direction  = funding ? (funding.sentiment === 'bullish' ? 'long' : funding.sentiment === 'bearish' ? 'short' : 'neutral') : 'neutral';
-  const lsGlobal            = ls?.global_account ?? ls?.top_account ?? null;
+  const factors = snapshot?.factors ?? [];
+
+  const fundingF  = findFactor(factors, 'funding_rate');
+  const oiF       = findFactor(factors, 'oi_delta');
+  const lsF       = findFactor(factors, 'ls_ratio');
+  const liqF      = findFactor(factors, 'liq_pressure');
+  const obF       = findFactor(factors, 'ob_imbalance');
+  const fngF      = findFactor(factors, 'fear_greed');
+  const mcapF     = findFactor(factors, 'total_mcap_24h');
+
+  const deriv = snapshot?.derivatives_pressure ?? 0;
+  const liqP  = snapshot?.liquidity_pressure  ?? 0;
+
+  const ts = snapshot?.computed_at
+    ? new Date(snapshot.computed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '—';
 
   return (
     <div style={scrollWrap}>
-      <SectionHeader title="Crypto Factors" right={<span style={{ fontSize: font.size.sm, color: colors.textFaint }}>BTC bellwether · live</span>} />
+      <SectionHeader
+        title="Crypto Factors"
+        right={
+          <span style={{ fontSize: font.size.sm, color: colors.textFaint }}>
+            {loading ? 'computing…' : error ? 'error' : `updated ${ts}`}
+          </span>
+        }
+      />
 
-      <div style={grid}>
-        <FactorCard
-          label="Fear & Greed"
-          value={fng ? `${fng.value} · ${fng.label}` : '—'}
-          direction={fngDir}
-          score={fng?.value}
+      {error && (
+        <Card padding={space.md} style={{ borderColor: '#5f2a2a', backgroundColor: '#1a0a0a' }}>
+          <span style={{ color: '#f44336', fontSize: font.size.md }}>{error}</span>
+        </Card>
+      )}
+
+      {/* Sub-score summary row */}
+      <div style={subScoreGrid}>
+        <SubScore
+          label="Derivatives Pressure"
+          score={deriv}
+          description="Funding · L/S ratio · OI delta"
         />
-        <FactorCard
-          label="Total Mkt Cap 24h"
-          value={`${mcap24 >= 0 ? '+' : ''}${mcap24.toFixed(2)}%`}
-          direction={mcapDir}
-          sub={global ? fmtUsd(global.total_market_cap_usd) : undefined}
-        />
-        <FactorCard
-          label="BTC Dominance"
-          value={global ? `${global.btc_dominance.toFixed(1)}%` : '—'}
-          direction="neutral"
-          sub={global ? `ETH ${global.eth_dominance.toFixed(1)}%` : undefined}
-        />
-        <FactorCard
-          label="BTC Funding"
-          value={funding ? `${(funding.funding_rate * 100).toFixed(4)}%` : '—'}
-          direction={fundDir}
-          sub={funding?.sentiment}
-        />
-        <FactorCard
-          label="BTC Open Interest"
-          value={oi ? oi.oi_value.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}
-          direction="neutral"
-          sub={oi?.trend}
-        />
-        <FactorCard
-          label="BTC Long/Short"
-          value={lsGlobal ? `${lsGlobal.long_pct.toFixed(0)}% / ${lsGlobal.short_pct.toFixed(0)}%` : '—'}
-          direction="neutral"
-          sub={lsGlobal ? 'long / short accounts' : undefined}
+        <SubScore
+          label="Liquidity Pressure"
+          score={liqP}
+          description="Liq flow · Order book depth"
         />
       </div>
 
-      {/* Relative strength strip */}
-      <SectionHeader title="Relative Strength (24h)" />
-      <Card padding={space.md} style={{ display: 'flex', gap: space.xl, flexWrap: 'wrap' }}>
-        {rs.length === 0 && <span style={{ fontSize: font.size.md, color: colors.textFaint, fontStyle: 'italic' }}>Loading…</span>}
-        {rs.map((e) => {
-          const up = e.change_pct_24h >= 0;
-          return (
-            <div key={e.symbol} style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
-              <span style={{ fontSize: font.size.md, color: colors.textMuted }}>{DISPLAY[e.symbol] ?? e.display_name}</span>
-              <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, fontFamily: font.mono, color: up ? colors.bull : colors.bear }}>
-                {up ? '+' : ''}{e.change_pct_24h.toFixed(2)}%
-              </span>
-            </div>
-          );
-        })}
-      </Card>
+      {/* Individual factor cards */}
+      <SectionHeader title="Factor Details" />
+      <div style={grid}>
+        {fundingF && (
+          <FactorCard
+            label="BTC Funding Rate"
+            value={fmtPct(fundingF.raw_value)}
+            direction={toDir(fundingF.direction)}
+            score={toBarScore(fundingF.normalized_score)}
+            sub={`confidence ${(fundingF.confidence * 100).toFixed(0)}% · binance`}
+          />
+        )}
+        {lsF && (
+          <FactorCard
+            label="BTC Long / Short"
+            value={`${((lsF.raw_value ?? 0) * 100).toFixed(1)}% long`}
+            direction={toDir(lsF.direction)}
+            score={toBarScore(lsF.normalized_score)}
+            sub={`confidence ${(lsF.confidence * 100).toFixed(0)}% · binance`}
+          />
+        )}
+        {oiF && (
+          <FactorCard
+            label="OI Delta (1H)"
+            value={`${(oiF.raw_value ?? 0) >= 0 ? '+' : ''}${fmtRaw(oiF.raw_value, 2)}%`}
+            direction={toDir(oiF.direction)}
+            score={toBarScore(oiF.normalized_score)}
+            sub={`confidence ${(oiF.confidence * 100).toFixed(0)}% · binance`}
+          />
+        )}
+        {liqF && (
+          <FactorCard
+            label="Liq Pressure (1H)"
+            value={`${((liqF.raw_value ?? 0) * 100).toFixed(1)}% sell-side`}
+            direction={toDir(liqF.direction)}
+            score={toBarScore(liqF.normalized_score)}
+            sub={`confidence ${(liqF.confidence * 100).toFixed(0)}% · okx`}
+          />
+        )}
+        {obF && (
+          <FactorCard
+            label="OB Imbalance"
+            value={`${((obF.raw_value ?? 0) * 100).toFixed(1)}% bid-side`}
+            direction={toDir(obF.direction)}
+            score={toBarScore(obF.normalized_score)}
+            sub={`confidence ${(obF.confidence * 100).toFixed(0)}% · okx`}
+          />
+        )}
+        {fngF && (
+          <FactorCard
+            label="Fear & Greed"
+            value={`${fngF.raw_value?.toFixed(0) ?? '—'} · ${fngF.direction}`}
+            direction={toDir(fngF.direction)}
+            score={toBarScore(fngF.normalized_score)}
+            sub="contrarian · alternative.me"
+          />
+        )}
+        {mcapF && (
+          <FactorCard
+            label="Total MCap 24H"
+            value={`${(mcapF.raw_value ?? 0) >= 0 ? '+' : ''}${fmtRaw(mcapF.raw_value, 2)}%`}
+            direction={toDir(mcapF.direction)}
+            score={toBarScore(mcapF.normalized_score)}
+            sub="market momentum · coingecko"
+          />
+        )}
+        {!loading && factors.length === 0 && (
+          <span style={{ fontSize: font.size.md, color: colors.textFaint, fontStyle: 'italic', gridColumn: '1 / -1' }}>
+            No factor data — collectors may still be warming up.
+          </span>
+        )}
+      </div>
 
       <span style={{ fontSize: font.size.sm, color: colors.textFaint, fontStyle: 'italic' }}>
-        Directions are indicative previews. Normalized factor scoring + weights arrive in Phases 79/82.
+        Crypto factors only — macro layer (DXY · yields · SPX · VIX) adds in Phase 81.
       </span>
     </div>
   );
@@ -137,5 +220,11 @@ const scrollWrap: CSSProperties = {
 const grid: CSSProperties = {
   display:             'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+  gap:                 space.md,
+};
+
+const subScoreGrid: CSSProperties = {
+  display:             'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
   gap:                 space.md,
 };

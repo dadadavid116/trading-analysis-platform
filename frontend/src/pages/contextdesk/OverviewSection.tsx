@@ -1,78 +1,87 @@
 import { useState, useEffect, CSSProperties } from 'react';
-import { fetchScannerSignals, fetchFearGreed, fetchMarketGlobal } from '../../api';
-import type { ScannerResponse, SymbolScanResult, FearGreedData, MarketGlobalData } from '../../api';
+import { fetchScannerSignals, fetchFactorSnapshot } from '../../api';
+import type { ScannerResponse, SymbolScanResult, FactorSnapshot } from '../../api';
 import { Card, Badge, ScoreBar, SectionHeader, colors, space, font, Tone } from '../../theme';
 
 /**
- * OverviewSection — Context Desk landing view (Phase 75 shell).
+ * OverviewSection — Context Desk landing view (Phase 79 upgrade).
  *
- * Shows a regime header + context score + asset signal tower built ENTIRELY from
- * existing endpoints (scanner signals, Fear & Greed, CoinGecko global stats).
+ * Regime, score, and trade environment are now computed from live crypto factor
+ * data (Phase 79 factor_scorer). The PREVIEW heuristic has been replaced by the
+ * deterministic scoring engine. Macro factors add in Phase 81.
  *
- * IMPORTANT: the score + regime here are a transparent PREVIEW heuristic, not the
- * deterministic scoring engine. That lands in Phase 82 (and macro inputs in 79–81).
- * The preview is clearly badged so it is never mistaken for authoritative output.
+ * Asset Signal Tower continues to use scanner signals (live, no change).
  */
 
 const DISPLAY: Record<string, string> = { BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL' };
 
-function regimeFromScore(score: number): { regime: string; env: string; tone: Tone } {
-  if (score >= 66) return { regime: 'Risk-On',  env: 'Favorable', tone: 'bull' };
-  if (score >= 45) return { regime: 'Neutral',  env: 'Caution',   tone: 'neutral' };
-  if (score >= 30) return { regime: 'Fragile',  env: 'Caution',   tone: 'warn' };
-  return { regime: 'Risk-Off', env: 'Avoid', tone: 'bear' };
+const REGIME_LABELS: Record<string, string> = {
+  risk_on:       'Risk-On',
+  neutral:       'Neutral',
+  fragile:       'Fragile',
+  risk_off:      'Risk-Off',
+  crowded_long:  'Crowded Long',
+  crowded_short: 'Crowded Short',
+};
+
+function regimeTone(regime: string): Tone {
+  if (regime === 'risk_on')       return 'bull';
+  if (regime === 'risk_off')      return 'bear';
+  if (regime === 'crowded_long' || regime === 'crowded_short') return 'warn';
+  return 'neutral';
+}
+
+function envTone(env: string): Tone {
+  if (env === 'Favorable') return 'bull';
+  if (env === 'Avoid')     return 'bear';
+  return 'warn';
 }
 
 function biasToTone(bias: string): Tone {
   return bias === 'bullish' ? 'bull' : bias === 'bearish' ? 'bear' : 'neutral';
 }
+
 function biasToDirection(bias: string): string {
   return bias === 'bullish' ? '▲ Long' : bias === 'bearish' ? '▼ Short' : '─ Neutral';
 }
 
 export default function OverviewSection() {
-  const [scanner, setScanner] = useState<ScannerResponse | null>(null);
-  const [fng, setFng]         = useState<FearGreedData | null>(null);
-  const [global, setGlobal]   = useState<MarketGlobalData | null>(null);
+  const [scanner,  setScanner]  = useState<ScannerResponse | null>(null);
+  const [snapshot, setSnapshot] = useState<FactorSnapshot | null>(null);
 
   useEffect(() => {
-    const load = () => {
+    const loadScanner = () =>
       fetchScannerSignals().then(setScanner).catch(() => {});
-      fetchFearGreed().then(setFng).catch(() => {});
-      fetchMarketGlobal().then(setGlobal).catch(() => {});
-    };
-    load();
-    const id = setInterval(load, 30_000);
-    return () => clearInterval(id);
+    const loadFactor = () =>
+      fetchFactorSnapshot('BTCUSDT').then(setSnapshot).catch(() => {});
+
+    loadScanner();
+    loadFactor();
+
+    const scanId   = setInterval(loadScanner, 30_000);
+    const factorId = setInterval(loadFactor, 3 * 60 * 1000);
+    return () => { clearInterval(scanId); clearInterval(factorId); };
   }, []);
 
-  const symbols      = scanner?.symbols ?? [];
-  const composites   = symbols.map((s) => s.composite);
-  const avgComposite = composites.length ? composites.reduce((a, b) => a + b, 0) / composites.length : 0;
-  const fngVal       = fng?.value ?? 50;
-  const mcap24       = global?.market_cap_change_24h ?? 0;
+  const symbols  = scanner?.symbols ?? [];
+  const regime   = snapshot?.regime ?? 'neutral';
+  const env      = snapshot?.trade_environment ?? '—';
+  const driver   = snapshot?.primary_driver ?? '—';
+  const rawScore = snapshot?.crypto_score ?? 0;    // -100 to +100
+  const barScore = Math.max(0, Math.min(100, 50 + rawScore / 2));  // map to 0–100
 
-  // ── PREVIEW heuristic (NOT the Phase 82 engine) ───────────────────────────
-  const score = Math.max(0, Math.min(100, 50 + 0.3 * (fngVal - 50) + 25 * avgComposite + 2 * mcap24));
-  const { regime, env, tone } = regimeFromScore(score);
+  const fngFactor = snapshot?.factors.find((f) => f.factor_name === 'fear_greed');
 
-  // Primary driver = most extreme normalized input
-  const drivers: { label: string; weight: number }[] = [
-    { label: 'Sentiment', weight: Math.abs(fngVal - 50) / 50 },
-    { label: 'Momentum',  weight: Math.abs(avgComposite) },
-    { label: 'Macro',     weight: Math.min(Math.abs(mcap24) / 5, 1) },
-  ];
-  const primaryDriver = drivers.sort((a, b) => b.weight - a.weight)[0]?.label ?? '—';
+  const tone = regimeTone(regime);
 
   return (
     <div style={scrollWrap}>
-      {/* Preview / education banner */}
-      <Card padding={space.md} style={{ borderColor: colors.warn + '55', backgroundColor: colors.warnTint, display: 'flex', gap: space.md, alignItems: 'flex-start' }}>
-        <span style={{ fontSize: font.size.lg }}>⚠</span>
+      {/* Info banner */}
+      <Card padding={space.md} style={{ borderColor: colors.borderSubtle, backgroundColor: '#12131a', display: 'flex', gap: space.md, alignItems: 'flex-start' }}>
+        <span style={{ fontSize: font.size.lg }}>ℹ</span>
         <span style={{ fontSize: font.size.md, color: colors.textSecondary, lineHeight: font.lineHeight.normal }}>
-          <strong style={{ color: colors.warn }}>Preview.</strong> This Context Desk reads the trading
-          environment from existing crypto data. The score and regime below are a transparent heuristic —
-          the deterministic scoring engine arrives in Phase 82 and macro factors in Phases 79–81.
+          <strong style={{ color: colors.text }}>Crypto factors only.</strong> Regime and score are computed from live
+          derivatives, liquidity, and sentiment data. Macro factors (DXY · yields · SPX · VIX) add in Phase 81.
         </span>
       </Card>
 
@@ -83,21 +92,25 @@ export default function OverviewSection() {
             <span style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: colors.textSecondary }}>
               Crypto Regime
             </span>
-            <Badge tone={tone}>{regime}</Badge>
-            <Badge tone="neutral">PREVIEW</Badge>
+            <Badge tone={tone}>{REGIME_LABELS[regime] ?? regime}</Badge>
+            <Badge tone="neutral">CRYPTO ONLY</Badge>
           </div>
           <span style={{ fontSize: font.size.xxl, fontWeight: font.weight.bold, color: colors.text, fontFamily: font.mono }}>
-            {Math.round(score)}<span style={{ fontSize: font.size.md, color: colors.textFaint }}> / 100</span>
+            {rawScore >= 0 ? '+' : ''}{rawScore.toFixed(1)}
+            <span style={{ fontSize: font.size.md, color: colors.textFaint }}> / 100</span>
           </span>
         </div>
 
-        <ScoreBar value={score} tone={tone} showValue={false} />
+        <ScoreBar value={barScore} tone={tone} showValue={false} />
 
         <div style={metaRow}>
-          <Meta label="Trade Environment" value={env} tone={tone} />
-          <Meta label="Primary Driver"    value={primaryDriver} />
+          <Meta label="Trade Environment" value={env}    tone={envTone(env)} />
+          <Meta label="Primary Driver"    value={driver} />
           <Meta label="Next Major Event"  value="—" sub="macro calendar: Phase 81" />
-          <Meta label="Fear & Greed"      value={fng ? `${fng.value} ${fng.label}` : '—'} />
+          <Meta
+            label="Fear & Greed"
+            value={fngFactor ? `${fngFactor.raw_value?.toFixed(0)} · ${fngFactor.direction}` : snapshot ? '—' : '…'}
+          />
         </div>
       </Card>
 
@@ -108,7 +121,6 @@ export default function OverviewSection() {
           <span style={{ fontSize: font.size.md, color: colors.textFaint, fontStyle: 'italic' }}>Loading scanner…</span>
         )}
         {symbols.map((s) => <SignalRow key={s.symbol} s={s} />)}
-        {/* Non-crypto rows (DXY/Gold/UST/SPX) are context-only and arrive with macro factors. */}
         <span style={{ fontSize: font.size.sm, color: colors.textFaint, fontStyle: 'italic', paddingTop: space.xs }}>
           Macro rows (DXY · Gold · UST 10Y · SPX) are added in Phase 81 — context only, not cross-asset trading.
         </span>
@@ -175,9 +187,9 @@ const scrollWrap: CSSProperties = {
 };
 
 const metaRow: CSSProperties = {
-  display:  'flex',
-  flexWrap: 'wrap',
-  gap:      space.xl,
-  borderTop: `1px solid ${colors.borderSubtle}`,
+  display:    'flex',
+  flexWrap:   'wrap',
+  gap:        space.xl,
+  borderTop:  `1px solid ${colors.borderSubtle}`,
   paddingTop: space.md,
 };
