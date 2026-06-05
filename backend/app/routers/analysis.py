@@ -57,13 +57,14 @@ class ChartAnalysisRequest(BaseModel):
     timeframe:         str       = "1h"
     user_bias:         str       = ""
     active_indicators: List[str] = ["rsi", "macd", "ema", "price_levels"]
+    symbol:            str       = "BTCUSDT"
 
 
 @router.post("/chart")
 async def chart_analysis(body: ChartAnalysisRequest):
     """
-    Fetch the last 50 BTC candles, compute the requested technical indicators,
-    and ask Claude to produce a direction-aware trade setup.
+    Fetch the last 50 candles from OKX for the given symbol, compute the requested
+    technical indicators, and ask Claude to produce a direction-aware trade setup.
 
     active_indicators controls which computed values are injected into the prompt.
     Supported values: rsi, macd, ema, bollinger, price_levels
@@ -71,16 +72,20 @@ async def chart_analysis(body: ChartAnalysisRequest):
     try:
         from app.services.chart_analysis import analyze_chart
         from app.services.event_logger import log_event
-        result = await analyze_chart(body.timeframe, body.user_bias, body.active_indicators)
+        result = await analyze_chart(
+            body.timeframe, body.user_bias, body.active_indicators, body.symbol
+        )
+        sym = body.symbol
         await log_event(
             service    = "analysis",
             event_type = "chart_analysis",
             message    = (
-                f"Chart analysis: BTCUSDT {body.timeframe.upper()} — "
+                f"Chart analysis: {sym} {body.timeframe.upper()} — "
                 f"{result.get('trend', '?')} {result.get('direction', '?')}"
             ),
-            symbol = "BTCUSDT",
+            symbol = sym,
             detail = {
+                "symbol":     sym,
                 "timeframe":  body.timeframe,
                 "trend":      result.get("trend"),
                 "direction":  result.get("direction"),

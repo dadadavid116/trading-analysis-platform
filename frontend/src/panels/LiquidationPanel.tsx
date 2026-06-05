@@ -64,9 +64,10 @@ function LiquidationPanel({ symbol = 'BTCUSDT' }: LiquidationPanelProps) {
 
       {/* ── Header ── */}
       <div style={headerStyle}>
-        <span style={titleStyle}>
-          Liq Heatmap — {baseAsset}/USDT
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={titleStyle}>Liq Heatmap — {baseAsset}/USDT</span>
+          <span style={sourceBadgeStyle}>BINANCE FUTURES</span>
+        </div>
 
         <div style={{ display: 'flex', gap: '3px', marginLeft: 'auto', alignItems: 'center' }}>
           {/* Time range */}
@@ -171,6 +172,18 @@ const titleStyle: CSSProperties = {
   fontWeight: 600,
   color:      '#bbb',
   whiteSpace: 'nowrap',
+};
+
+const sourceBadgeStyle: CSSProperties = {
+  fontSize:        '7px',
+  fontWeight:      700,
+  letterSpacing:   '0.06em',
+  color:           '#f59e0b',
+  backgroundColor: '#f59e0b14',
+  border:          '1px solid #f59e0b33',
+  borderRadius:    '3px',
+  padding:         '1px 4px',
+  whiteSpace:      'nowrap',
 };
 
 const chipStyle = (active: boolean): CSSProperties => ({

@@ -65,7 +65,10 @@ function OrderBookPanel({ symbol = 'BTCUSDT' }: OrderBookPanelProps) {
 
   return (
     <div style={panelStyles.card}>
-      <h2 style={panelStyles.title}>{title}</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #1e1e22', paddingBottom: '8px', marginBottom: '4px' }}>
+        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>{title}</h2>
+        <span style={sourceBadgeStyle}>OKX PERP</span>
+      </div>
 
       <div style={{ flex: 1, overflowY: 'auto', minHeight: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
 
@@ -147,6 +150,18 @@ function OrderBookPanel({ symbol = 'BTCUSDT' }: OrderBookPanelProps) {
 export default OrderBookPanel;
 
 // ── Styles ────────────────────────────────────────────────────────────────────
+
+const sourceBadgeStyle: CSSProperties = {
+  fontSize:        '7px',
+  fontWeight:      700,
+  letterSpacing:   '0.06em',
+  color:           '#60a5fa',
+  backgroundColor: '#60a5fa14',
+  border:          '1px solid #60a5fa33',
+  borderRadius:    '3px',
+  padding:         '1px 4px',
+  whiteSpace:      'nowrap',
+};
 
 const imbalRowStyle: CSSProperties = {
   display: 'flex',

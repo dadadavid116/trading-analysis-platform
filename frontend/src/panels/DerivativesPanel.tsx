@@ -146,9 +146,12 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
   return (
     <div style={panelStyles.card}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #2a2a2e', paddingBottom: '8px' }}>
-        <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
-          Derivatives — {symbol.replace('USDT', '')}/USDT
-        </h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <h2 style={{ ...panelStyles.title, border: 'none', paddingBottom: 0, margin: 0 }}>
+            Derivatives — {symbol.replace('USDT', '')}/USDT
+          </h2>
+          <span style={sourceBadgeStyle}>BINANCE FUTURES</span>
+        </div>
         {updatedAt && (
           <span style={{ fontSize: '9px', color: '#444' }}>
             {updatedAt.toLocaleTimeString()}
@@ -302,6 +305,18 @@ function DerivativesPanel({ symbol = 'BTCUSDT' }: DerivativesPanelProps) {
 export default DerivativesPanel;
 
 // ── Styles ────────────────────────────────────────────────────────────────────
+
+const sourceBadgeStyle: CSSProperties = {
+  fontSize:        '7px',
+  fontWeight:      700,
+  letterSpacing:   '0.06em',
+  color:           '#f59e0b',
+  backgroundColor: '#f59e0b14',
+  border:          '1px solid #f59e0b33',
+  borderRadius:    '3px',
+  padding:         '1px 4px',
+  whiteSpace:      'nowrap',
+};
 
 const gridStyle: CSSProperties = {
   display: 'flex',

@@ -1135,7 +1135,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
 
     try {
       const userBias = bias === 'auto' ? '' : bias === 'long' ? 'bullish — looking for a long setup' : 'bearish — looking for a short setup';
-      const result = await requestChartAnalysis(timeframe, userBias, activeIndicators);
+      const result = await requestChartAnalysis(timeframe, userBias, activeIndicators, symbol);
       const series = seriesRef.current;
 
       // Clear previous analysis lines

@@ -4,30 +4,35 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 75**.
+> Last updated: end of **Phase 77**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 75** (Context Desk Shell).
+- **Current completed implementation phase:** **Phase 77** (OKX Perpetual Alignment Completion).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
-- **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done.
+- **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
-## Completed recent slice (the "first implementation slice")
+## Completed recent slice
 
 | Phase | Name | What it delivered |
 |---|---|---|
-| 73 | Information Architecture Reset | Third workspace **Context Desk**; 3-page nav (Dashboard / Console / Context); relocated News + Heatmap out of the Operator Console tab strip; mounted the previously-orphaned `AnalysisPanel`; renamed the two analyses → **"Scheduled Market Summary"** and **"Chart Trade Setup Analysis"**. |
-| 74 | Design System Foundation | `src/theme/` — design **tokens** (colors/space/typography/radius/shadow/density) + reusable **primitives** (Card, Button, Badge, Tabs, SectionHeader, MetricCard, ScoreBar, FactorCard, WorkspaceShell). Context Desk refactored onto `WorkspaceShell`. `panelStyles.ts` flagged legacy. **No visual change to existing panels.** This is technical foundation only — **not** the final visual identity. |
-| 75 | Context Desk Shell | Context Desk built into a 6-tab workspace (Overview / Crypto / Macro / News / Market Map / Market Summary) using **existing data only**: regime header + **Context Score (PREVIEW heuristic, clearly badged)** + Asset Signal Tower (live scanner), crypto factor cards, macro placeholder for Phase 80–81. |
+| 73 | Information Architecture Reset | Third workspace **Context Desk**; 3-page nav; relocated News + Heatmap; mounted `AnalysisPanel`; renamed analyses. |
+| 74 | Design System Foundation | `src/theme/` tokens + primitives. Technical foundation only — not final visual identity. |
+| 75 | Context Desk Shell | 6-tab Context Desk from existing data only; Context Score PREVIEW badge; Asset Signal Tower. |
+| 76 | Schema & Data-Foundation Hardening | Alembic is now the single source of truth. Revisions 0005 (`alerts.webhook_url`) + 0006 (`journal_entries` table + missing indexes on `liquidations` and `journal_entries`). Startup `create_all` + all ad-hoc `ALTER` removed from `main.py`. `deploy.sh` now runs `alembic upgrade head` automatically. |
+| 77 | OKX Perpetual Alignment Completion | Chart "✦ Analyze" now fetches from **OKX perp** (was Binance spot BTCUSDT). `analyze_chart` is now symbol-aware — passes the active symbol through from `PricePanel` → API → service. Source badges added: **BINANCE FUTURES** on Derivatives + Liquidation panels; **OKX PERP** on Order Book panel. |
 
 ## Next implementation phase
 
-**Phase 76 — Schema & Data-Foundation Hardening.**
+**Phase 78 — Symbol Registry as Single Source of Truth.**
 
-### Immediate scope for Phase 76
-- Make **Alembic / schema migrations the single source of truth.**
+### Immediate scope for Phase 78
+- Make `tracked_symbols` the global registry: collectors, routers, scanner, and AI context builder read active symbols from DB instead of hardcoded lists.
+- Global symbol selector drives all workspaces; AI chat and chart analysis are already symbol-aware (Phase 77); Telegram commands should accept a symbol argument.
+
+## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in
   `backend/app/main.py` where appropriate.
 - **Align Alembic state with the current live schema** (backfill revisions for columns added via

@@ -1,9 +1,10 @@
 """
 services/chart_analysis.py — Claude-powered chart analysis with indicator context.
 
-Fetches the last 50 candles from Binance, computes the requested technical
-indicators from that price data, then sends everything to Claude and returns
-a structured trade setup (support, resistance, entry, stop, take-profit).
+Fetches the last 50 candles from OKX (perpetual swap, matching the live chart),
+computes the requested technical indicators from that price data, then sends
+everything to Claude and returns a structured trade setup (support, resistance,
+entry, stop, take-profit).
 
 Supported indicators (computed locally — no extra API calls):
   rsi          RSI(14) — momentum oscillator
@@ -18,29 +19,52 @@ import httpx
 import anthropic
 from app.config import settings
 
-BINANCE_KLINES_URL = "https://api.binance.com/api/v3/klines"
+OKX_CANDLES_URL = "https://www.okx.com/api/v5/market/candles"
+
+SYMBOL_TO_OKX: dict[str, str] = {
+    "BTCUSDT": "BTC-USDT-SWAP",
+    "ETHUSDT": "ETH-USDT-SWAP",
+    "SOLUSDT": "SOL-USDT-SWAP",
+}
+
+# Map Binance-style intervals to OKX bar names
+INTERVAL_TO_OKX: dict[str, str] = {
+    "3m":  "3m",
+    "5m":  "5m",
+    "15m": "15m",
+    "1h":  "1H",
+    "4h":  "4H",
+    "1d":  "1D",
+    "1M":  "1M",
+}
 
 
 # ── Candle fetcher ─────────────────────────────────────────────────────────────
 
-async def fetch_klines(interval: str, limit: int = 50) -> list[dict]:
-    async with httpx.AsyncClient() as client:
+async def fetch_klines(interval: str, limit: int = 50, symbol: str = "BTCUSDT") -> list[dict]:
+    inst_id = SYMBOL_TO_OKX.get(symbol, "BTC-USDT-SWAP")
+    okx_bar = INTERVAL_TO_OKX.get(interval, "1H")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
-            BINANCE_KLINES_URL,
-            params={"symbol": "BTCUSDT", "interval": interval, "limit": limit},
-            timeout=10,
+            OKX_CANDLES_URL,
+            params={"instId": inst_id, "bar": okx_bar, "limit": limit},
         )
         resp.raise_for_status()
+
+    # OKX returns [ts_ms, open, high, low, close, vol, volCcy, volCcyQuote, confirm]
+    # Ordered newest-first — reverse to oldest-first for indicator math.
+    raw = resp.json().get("data", [])
     return [
         {
-            "time":   r[0] // 1000,
-            "open":   float(r[1]),
-            "high":   float(r[2]),
-            "low":    float(r[3]),
-            "close":  float(r[4]),
-            "volume": float(r[5]),
+            "time":   int(row[0]) // 1000,
+            "open":   float(row[1]),
+            "high":   float(row[2]),
+            "low":    float(row[3]),
+            "close":  float(row[4]),
+            "volume": float(row[5]),
         }
-        for r in resp.json()
+        for row in reversed(raw)
     ]
 
 
@@ -157,9 +181,9 @@ def build_indicator_context(candles: list[dict], active: list[str], price: float
     return "\nACTIVE INDICATORS:\n" + "\n".join(lines)
 
 
-# ── Derivatives context (Phase 27) ───────────────────────────────────────────
+# ── Derivatives context ───────────────────────────────────────────────────────
 
-async def fetch_derivatives_context(active: list[str]) -> str:
+async def fetch_derivatives_context(active: list[str], symbol: str = "BTCUSDT") -> str:
     """Fetch latest derivatives data from DB and return a formatted context block."""
     needs = {"oi", "funding_rate", "ls_ratio"}
     if not any(k in active for k in needs):
@@ -175,7 +199,7 @@ async def fetch_derivatives_context(active: list[str]) -> str:
         if "funding_rate" in active:
             res = await session.execute(
                 select(FundingRate)
-                .where(FundingRate.symbol == "BTCUSDT")
+                .where(FundingRate.symbol == symbol)
                 .order_by(desc(FundingRate.timestamp))
                 .limit(1)
             )
@@ -191,14 +215,15 @@ async def fetch_derivatives_context(active: list[str]) -> str:
         if "oi" in active:
             res = await session.execute(
                 select(OpenInterest)
-                .where(OpenInterest.symbol == "BTCUSDT")
+                .where(OpenInterest.symbol == symbol)
                 .order_by(desc(OpenInterest.timestamp))
                 .limit(13)
             )
             oi_rows = res.scalars().all()
             if oi_rows:
                 latest_oi = float(oi_rows[0].oi_value)
-                lines.append(f"  Open Interest: {latest_oi:,.0f} BTC")
+                base = symbol.replace("USDT", "")
+                lines.append(f"  Open Interest: {latest_oi:,.0f} {base}")
                 if len(oi_rows) >= 2:
                     prev_oi = float(oi_rows[-1].oi_value)
                     delta   = (latest_oi - prev_oi) / prev_oi * 100 if prev_oi else 0
@@ -208,7 +233,7 @@ async def fetch_derivatives_context(active: list[str]) -> str:
         if "ls_ratio" in active:
             res = await session.execute(
                 select(LSRatio)
-                .where(LSRatio.symbol == "BTCUSDT", LSRatio.ratio_type == "top_account")
+                .where(LSRatio.symbol == symbol, LSRatio.ratio_type == "top_account")
                 .order_by(desc(LSRatio.timestamp))
                 .limit(1)
             )
@@ -221,7 +246,7 @@ async def fetch_derivatives_context(active: list[str]) -> str:
 
     if not lines:
         return ""
-    return "\nDERIVATIVES CONTEXT (from DB — Phase 27 collectors):\n" + "\n".join(lines)
+    return "\nDERIVATIVES CONTEXT (Binance Futures):\n" + "\n".join(lines)
 
 
 # ── Main analysis function ────────────────────────────────────────────────────
@@ -230,30 +255,32 @@ async def analyze_chart(
     interval: str = "1h",
     user_bias: str = "",
     active_indicators: list[str] | None = None,
+    symbol: str = "BTCUSDT",
 ) -> dict:
-    """Return Claude's structured trade setup for the current BTC chart."""
+    """Return Claude's structured trade setup for the given symbol's OKX perp chart."""
     if active_indicators is None:
         active_indicators = ["rsi", "macd", "ema", "price_levels"]
 
-    candles = await fetch_klines(interval, limit=50)
+    candles = await fetch_klines(interval, limit=50, symbol=symbol)
     if not candles:
-        raise ValueError("No candle data returned from Binance.")
+        raise ValueError(f"No candle data returned from OKX for {symbol}.")
 
     current_price = candles[-1]["close"]
+    base_asset    = symbol.replace("USDT", "")
 
     candle_text = "\n".join(
         f"  O:{c['open']:.0f} H:{c['high']:.0f} L:{c['low']:.0f} C:{c['close']:.0f}"
         for c in candles[-30:]
     )
 
-    indicator_context    = build_indicator_context(candles, active_indicators, current_price)
-    derivatives_context  = await fetch_derivatives_context(active_indicators)
+    indicator_context   = build_indicator_context(candles, active_indicators, current_price)
+    derivatives_context = await fetch_derivatives_context(active_indicators, symbol)
     bias_line = (
         f"\nUser's market view: {user_bias}\nWeight this perspective in your analysis."
         if user_bias else ""
     )
 
-    prompt = f"""You are a professional crypto technical analyst. Analyze the BTC/USDT chart below.
+    prompt = f"""You are a professional crypto technical analyst. Analyze the {base_asset}/USDT perpetual swap chart below (OKX).
 
 Timeframe: {interval}
 Current price: ${current_price:,.0f}
@@ -311,4 +338,5 @@ Constraints:
     data = json.loads(raw)
     data["timeframe"]     = interval
     data["current_price"] = current_price
+    data["symbol"]        = symbol
     return data
