@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, CSSProperties } from 'react';
+import { useState, useEffect, useRef, useCallback, CSSProperties } from 'react';
 import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineStyle, IPriceLine, LineData, SeriesMarker } from 'lightweight-charts';
 import { fetchKlines, fetchAlerts, createAlert, requestChartAnalysis, fetchPriceLevels, PriceCandle, KlineCandle, Alert } from '../api';
 import { panelStyles } from './panelStyles';
@@ -430,6 +430,56 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const lastHACandleRef         = useRef<{ open: number; close: number } | null>(null);
   const rawCandlesRef           = useRef<KlineCandle[]>([]);
 
+  // ── Price-scale width synchronization ─────────────────────────────────────
+  // After each data load or container resize, reads the actual rendered width
+  // of the right price-scale column in every chart container, then applies the
+  // maximum as minimumWidth to all instances — so their time axes stay aligned
+  // regardless of the current price range (BTC at $1k or $1M).
+  //
+  // To add a future subplot: append its containerRef to `containers` and its
+  // chartRef to `charts` inside syncPriceScaleWidths — no other changes needed.
+  const scaleSyncRafRef = useRef<number>(0);
+  const syncPriceScaleWidths = useCallback(() => {
+    cancelAnimationFrame(scaleSyncRafRef.current);
+    scaleSyncRafRef.current = requestAnimationFrame(() => {
+      const containers = [
+        chartContainerRef.current, rsiContainerRef.current,
+        macdContainerRef.current,  stochContainerRef.current, cvdContainerRef.current,
+      ];
+      const charts = [
+        chartRef.current, rsiChartRef.current, macdChartRef.current,
+        stochChartRef.current,  cvdChartRef.current,
+      ];
+      // lightweight-charts renders a <table>; the right price scale is the last
+      // <td> in the first <tr>. This structure has been stable across v3 and v4.
+      let maxW = 0;
+      for (const el of containers) {
+        if (!el) continue;
+        const td = el.querySelector<HTMLElement>('tr:first-child > td:last-child');
+        if (td) maxW = Math.max(maxW, td.offsetWidth);
+      }
+      if (maxW === 0) return;
+      for (const c of charts) {
+        c?.applyOptions({ rightPriceScale: { minimumWidth: maxW } });
+      }
+    });
+  }, []); // stable — all values read via stable refs at call time
+
+  // Set up window-resize listener and two initial-sync timers.
+  // Container-resize sync is handled by adding syncPriceScaleWidths() to the
+  // existing ResizeObserver inside the chart-creation effect below.
+  useEffect(() => {
+    const t1 = setTimeout(syncPriceScaleWidths, 150);
+    const t2 = setTimeout(syncPriceScaleWidths, 700);
+    window.addEventListener('resize', syncPriceScaleWidths);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      cancelAnimationFrame(scaleSyncRafRef.current);
+      window.removeEventListener('resize', syncPriceScaleWidths);
+    };
+  }, [syncPriceScaleWidths]);
+
   function toggleOverlay(key: string) {
     setOverlays((prev) => {
       const next = new Set(prev);
@@ -587,7 +637,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
         horzLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
       },
-      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65 },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 70 },
       timeScale: { borderColor: '#2a2a2e', timeVisible: true, secondsVisible: false },
       width:  chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight || 320,
@@ -675,7 +725,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const rsiChart = createChart(rsiContainerRef.current!, {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 70, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -703,7 +753,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const macdChartOpts = {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 70, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -728,7 +778,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const stochChart = createChart(stochContainerRef.current!, {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 70, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -752,7 +802,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     const cvdChart = createChart(cvdContainerRef.current!, {
       layout: { background: { color: '#1a1a1f' }, textColor: '#666' },
       grid: { vertLines: { color: '#1c1c20' }, horzLines: { color: '#222226' } },
-      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 65, scaleMargins: { top: 0.1, bottom: 0.1 } },
+      rightPriceScale: { borderColor: '#2a2a2e', minimumWidth: 70, scaleMargins: { top: 0.1, bottom: 0.1 } },
       timeScale: { borderColor: '#2a2a2e', visible: false },
       crosshair: {
         vertLine: { color: '#3a3a4e', labelBackgroundColor: '#1e3a5f' },
@@ -799,6 +849,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         stochChart.applyOptions({ width: stochContainerRef.current.clientWidth, height: stochContainerRef.current.clientHeight });
       if (cvdContainerRef.current)
         cvdChart.applyOptions({ width: cvdContainerRef.current.clientWidth, height: cvdContainerRef.current.clientHeight });
+      syncPriceScaleWidths();
     });
     ro.observe(chartContainerRef.current);
     if (rsiContainerRef.current)   ro.observe(rsiContainerRef.current);
@@ -1075,12 +1126,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         );
 
         setChartLoading(false);
+        syncPriceScaleWidths();
       })
       .catch((err: Error) => {
         setChartError(err.message);
         setChartLoading(false);
       });
-  }, [timeframe, symbol, showHA]);
+  }, [timeframe, symbol, showHA, syncPriceScaleWidths]);
 
   // ── Annotation helpers ────────────────────────────────────────────────────
   function addAnnotation() {
