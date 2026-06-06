@@ -29,6 +29,9 @@ python-telegram-bot>=21.0,<22.0
 # Database migrations
 alembic>=1.13.0
 
+# Macro market data — yfinance for DXY/Gold/SPX/NDX/VIX (Phase 81)
+yfinance>=0.2.50
+
 # Testing
 pytest==8.3.3
 pytest-asyncio==0.24.0

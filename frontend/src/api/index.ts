@@ -782,3 +782,30 @@ export interface FactorSnapshot {
 export function fetchFactorSnapshot(symbol = 'BTCUSDT'): Promise<FactorSnapshot> {
   return apiFetch<FactorSnapshot>(`/factors/snapshot?symbol=${symbol}`);
 }
+
+// ── Macro Factor Scoring (Phase 81) ──────────────────────────────────────────
+
+export interface MacroFactor {
+  factor_name:      string;
+  raw_value:        number | null;
+  normalized_score: number;   // -1.0 to +1.0
+  direction:        'bullish' | 'bearish' | 'neutral';
+  confidence:       number;
+  source:           string;
+  as_of:            string | null;
+}
+
+export interface MacroSnapshot {
+  computed_at:       string;
+  macro_score:       number;  // -100 to +100
+  macro_regime:      string;  // macro_bullish|macro_neutral|macro_cautious|macro_bearish
+  trade_environment: string;  // Favorable|Caution|Avoid
+  primary_driver:    string;
+  fomc_days:         number | null;
+  factors:           MacroFactor[];
+}
+
+/** Compute (or return cached) macro factor snapshot. First call may take ~5s. */
+export function fetchMacroSnapshot(): Promise<MacroSnapshot> {
+  return apiFetch<MacroSnapshot>('/macro/snapshot');
+}

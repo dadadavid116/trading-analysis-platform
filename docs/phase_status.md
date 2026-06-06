@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 80**.
+> Last updated: end of **Phase 81**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 80** (Macro Source Decision Matrix).
+- **Current completed implementation phase:** **Phase 81** (Macro Factor Collector Pack).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -26,10 +26,11 @@
 | 78 | Symbol Registry as Single Source of Truth | All collectors (`price`, `orderbook`, `liquidation`, `derivatives`) + `scanner` + `scanner_worker` now load active symbols from `tracked_symbols` via `services/symbol_registry.py` (retry + hardcoded fallback). `chat.py` accepts `symbol` field and builds market context + tool calls for the active symbol. Symbol selector in Layout is no longer Dashboard-only — shows on all pages. `ChatPanel`, `OperatorConsole`, `ContextDesk` receive `activeSymbol` prop from App.tsx. |
 | 79 | Crypto Factor Collector Pack | `factor_observations` + `regime_snapshots` tables (Alembic). 7 normalized factors: funding_rate, oi_delta, ls_ratio, liq_pressure, ob_imbalance, fear_greed, total_mcap_24h. Deterministic regime classification (risk_on/neutral/fragile/risk_off/crowded_long/crowded_short). Derivatives Pressure Score + Liquidity Pressure Score sub-scores. `GET /api/factors/snapshot` endpoint. Context Desk Crypto tab + Overview regime header now use live scored data (replaced Phase 75 heuristic). |
 | 80 | Macro Source Decision Matrix | Authoritative sourcing spec for all macro data items. Two vendors decided: **yfinance** (DXY, Gold, SPX, NDX, VIX — free, no key) + **FRED API** (yields, real rates, breakeven, HY spread, CPI, PCE, NFP — free API key). MOVE index omitted (not free); HY spread used as proxy. FOMC dates hardcoded in `macro_config.py`. Risk-on/off derived in Phase 82 scoring. `FRED_API_KEY` added to `.env.example`. Decisions D15–D21 logged in `decision_log.md`. |
+| 81 | Macro Factor Collector Pack | `macro_observations` table (Alembic 0008). 7 macro factors: DXY, SPX, VIX, Gold (yfinance), UST 10Y, HY credit spread, CPI YoY (FRED API). 15-min DB cache, on-demand. `GET /api/macro/snapshot` with FOMC countdown. `MacroFactorsSection.tsx` upgraded from placeholder to live regime header + 7 factor cards. FRED factors gracefully absent if `FRED_API_KEY` not set. |
 
 ## Next implementation phase
 
-**Phase 81 — Macro Factor Collector Pack.**
+**Phase 82 — Factor Scoring Engine v1.**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in
