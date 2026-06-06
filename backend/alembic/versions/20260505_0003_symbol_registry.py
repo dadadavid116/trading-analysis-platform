@@ -5,7 +5,6 @@ Revises: 20260505_0002
 """
 
 from alembic import op
-import sqlalchemy as sa
 
 revision = "20260505_0003"
 down_revision = "20260505_0002"
@@ -14,17 +13,21 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        "tracked_symbols",
-        sa.Column("id",                sa.Integer,     primary_key=True),
-        sa.Column("symbol",            sa.String(20),  nullable=False, unique=True),
-        sa.Column("okx_instrument_id", sa.String(30)),
-        sa.Column("binance_symbol",    sa.String(20)),
-        sa.Column("display_name",      sa.String(10),  nullable=False),
-        sa.Column("is_active",         sa.Boolean,     nullable=False, server_default="true"),
-        sa.Column("sort_order",        sa.Integer,     nullable=False, server_default="0"),
-    )
+    # IF NOT EXISTS — safe on the live VPS where this table was created before
+    # Alembic took over as the schema authority.
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS tracked_symbols (
+            id                SERIAL       PRIMARY KEY,
+            symbol            VARCHAR(20)  NOT NULL UNIQUE,
+            okx_instrument_id VARCHAR(30),
+            binance_symbol    VARCHAR(20),
+            display_name      VARCHAR(10)  NOT NULL,
+            is_active         BOOLEAN      NOT NULL DEFAULT TRUE,
+            sort_order        INTEGER      NOT NULL DEFAULT 0
+        )
+    """)
 
+    # ON CONFLICT DO NOTHING — idempotent if seed rows already exist.
     op.execute("""
         INSERT INTO tracked_symbols
             (symbol, okx_instrument_id, binance_symbol, display_name, sort_order)
@@ -32,8 +35,9 @@ def upgrade() -> None:
             ('BTCUSDT', 'BTC-USDT-SWAP', 'BTCUSDT', 'BTC', 0),
             ('ETHUSDT', 'ETH-USDT-SWAP', 'ETHUSDT', 'ETH', 1),
             ('SOLUSDT', 'SOL-USDT-SWAP', 'SOLUSDT', 'SOL', 2)
+        ON CONFLICT (symbol) DO NOTHING
     """)
 
 
 def downgrade() -> None:
-    op.drop_table("tracked_symbols")
+    op.execute("DROP TABLE IF EXISTS tracked_symbols CASCADE")
