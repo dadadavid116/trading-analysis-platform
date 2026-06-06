@@ -31,7 +31,7 @@ interface OperatorConsoleProps {
   activeSymbol?: string;
 }
 
-export default function OperatorConsole({ activeSymbol = 'BTCUSDT' }: OperatorConsoleProps) {
+export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT' }: OperatorConsoleProps) {
   const isMobile = useIsMobile();
 
   const [scanner,    setScanner]    = useState<ScannerResponse | null>(null);
