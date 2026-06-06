@@ -13,8 +13,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # IF NOT EXISTS — safe on the live VPS where this table was created before
-    # Alembic took over as the schema authority.
+    # IF NOT EXISTS — safe on the live VPS where this table was created by
+    # create_all before Alembic took over as the schema authority.
     op.execute("""
         CREATE TABLE IF NOT EXISTS tracked_symbols (
             id                SERIAL       PRIMARY KEY,
@@ -27,14 +27,27 @@ def upgrade() -> None:
         )
     """)
 
-    # ON CONFLICT DO NOTHING — idempotent if seed rows already exist.
+    # Ensure is_active has a column-level DEFAULT in the existing table.
+    # If the table was created by create_all it may be NOT NULL without a
+    # default, which causes INSERT to fail before ON CONFLICT can suppress it.
+    op.execute("""
+        ALTER TABLE tracked_symbols
+        ALTER COLUMN is_active SET DEFAULT TRUE
+    """)
+    op.execute("""
+        ALTER TABLE tracked_symbols
+        ALTER COLUMN sort_order SET DEFAULT 0
+    """)
+
+    # is_active included explicitly so existing rows without a column default
+    # don't hit a NOT NULL violation before ON CONFLICT can suppress the row.
     op.execute("""
         INSERT INTO tracked_symbols
-            (symbol, okx_instrument_id, binance_symbol, display_name, sort_order)
+            (symbol, okx_instrument_id, binance_symbol, display_name, is_active, sort_order)
         VALUES
-            ('BTCUSDT', 'BTC-USDT-SWAP', 'BTCUSDT', 'BTC', 0),
-            ('ETHUSDT', 'ETH-USDT-SWAP', 'ETHUSDT', 'ETH', 1),
-            ('SOLUSDT', 'SOL-USDT-SWAP', 'SOLUSDT', 'SOL', 2)
+            ('BTCUSDT', 'BTC-USDT-SWAP', 'BTCUSDT', 'BTC', TRUE, 0),
+            ('ETHUSDT', 'ETH-USDT-SWAP', 'ETHUSDT', 'ETH', TRUE, 1),
+            ('SOLUSDT', 'SOL-USDT-SWAP', 'SOLUSDT', 'SOL', TRUE, 2)
         ON CONFLICT (symbol) DO NOTHING
     """)
 
