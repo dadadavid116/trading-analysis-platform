@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 93**.
+> Last updated: end of **Phase 94**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 93** (Telegram UX Upgrade).
+- **Current completed implementation phase:** **Phase 94** (Cross-Asset Adapter Refactor).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -39,10 +39,11 @@
 | 91 | Review & Research Workspace | No new migration. `review_service.py`: `daily_review()` (today's closed trades, net PnL, win rate, AI coaching note via Haiku with 30-min cache), `regime_stats()` (closed trades grouped by signal regime), `rule_adherence()` (5-rule risk compliance score), `setup_type_stats()` (by timeframe + direction). `GET /api/review/daily|regime-stats|rule-adherence|setup-stats`. `ResearchWorkspace.tsx`: 5th nav-page "Review" with 7 tabs — Daily Review (AI coaching, trade list), By Regime (bar chart), Rules (score bar + per-rule pass/fail), By Setup (table), Journal (reused panel), Performance (reused panel), Backtest (reused panel). Layout.tsx + App.tsx updated with "Review" nav. OperatorConsole: journal/performance/backtest tabs removed (consolidated here). |
 | 92 | Model Diagnostics and Factor Attribution | No new migration. `diagnostics_service.py`: `factor_ic()` (Pearson + Spearman rank IC for context/crypto/macro scores vs realized PnL; context tercile win rate analysis), `regime_heatmap()` (closed trades grouped by regime × month, color-coded win-rate grid), `score_quartile_stats()` (4 equal quartiles by context_score → win rate + avg PnL), `trade_attribution()` (recent closed trades with score breakdown from signal time). `GET /api/diagnostics/factor-ic|regime-heatmap|score-quartiles|trade-attribution`. `DiagnosticsPanel.tsx`: 4 internal tabs — Factor IC (correlation table + tercile cards), Regime Heatmap (2D color grid), Score Quartiles (bar chart), Attribution (table with score bars per trade). Added as "Diagnostics" tab in ResearchWorkspace. |
 | 93 | Telegram UX Upgrade | No new migration. `telegram_bot/bot.py` fully rewritten: BotFather command menu via `set_my_commands()` in `post_init` (15 commands). Persistent `ReplyKeyboardMarkup` (3 rows: Price/Signals/Risk/Positions, Market/Context/Alerts/History, BTC/ETH/SOL) sent with every response. Symbol switching: `/symbol BTC|ETH|SOL` + keyboard buttons update `chat_data["symbol"]`; all data commands use active symbol. New commands: `/signals` (candidate+active signal list), `/risk` (equity/exposure/kill-switch with inline toggle button), `/positions` (open paper positions), `/context` (factor score + regime from factor_scores), `/market` (AI commentary, replaces `/analysis`; alias kept), `/history` (recent closed trades). Kill switch inline button (`ks:on`/`ks:off`) writes directly to `account_config`. Keyboard button text routed to handlers in `handle_message`. AI chat now symbol-aware. |
+| 94 | Cross-Asset Adapter Refactor | No new migration. `backend/app/adapters/` package: `base.py` — abstract base classes (`MarketDataAdapter`, `DerivativesAdapter`, `NewsAdapter`, `ExecutionAdapter`) + DTOs (`PriceTick`, `OHLCVBar`, `FundingInfo`, `LiquidationEvent`, `AssetClass`, `AdapterNotImplemented`). `crypto_okx.py` — `OKXCryptoMarketDataAdapter` reads from `price_candles` DB table. `crypto_binance.py` — `BinanceCryptoDerivativesAdapter` reads from `funding_rates` + `open_interest` + `liquidations` tables. `stub_equities.py` — `StubEquityMarketDataAdapter`, `StubEquityDerivativesAdapter`, `StubPaperExecutionAdapter` (raises `AdapterNotImplemented` for equity/live calls; paper execution stub satisfies the interface). `registry.py` — `AdapterRegistry` singleton (`adapter_registry`) routes symbols to correct adapters; `status()` method for introspection. `GET /api/adapters/status`, `GET /api/adapters/ping`. Core services unchanged — adapters provide the seam for adding stocks/options without touching platform logic. |
 
 ## Next implementation phase
 
-**Phase 94 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 95 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in
