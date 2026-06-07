@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 92**.
+> Last updated: end of **Phase 93**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 92** (Model Diagnostics and Factor Attribution).
+- **Current completed implementation phase:** **Phase 93** (Telegram UX Upgrade).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -38,10 +38,11 @@
 | 90 | Backtesting and Replay | No new migration. `backtest_service.py`: per-signal outcome simulation — walks 1-min price_candles from created_at → expires_at; detects SL/TP1/TP2/TP3 hits per direction; computes R-multiple; simulates compounding equity (risk_pct% per trade); bucket R-distribution (9 buckets); returns win_rate, profit_factor, expectancy_r, max_drawdown, total_return_pct, equity curve, trade list. `POST /api/backtest/run`, `GET /api/backtest/replay`. `BacktestPanel.tsx`: param form (symbol/direction/date range/risk%/start equity), Run button; stat grid; equity curve SVG with dashed baseline; R-distribution bar chart; toggle-able trade log table (dir/symbol/entry/outcome/R/PnL/regime). "Backtest" tab in OperatorConsole desktop + mobile. |
 | 91 | Review & Research Workspace | No new migration. `review_service.py`: `daily_review()` (today's closed trades, net PnL, win rate, AI coaching note via Haiku with 30-min cache), `regime_stats()` (closed trades grouped by signal regime), `rule_adherence()` (5-rule risk compliance score), `setup_type_stats()` (by timeframe + direction). `GET /api/review/daily|regime-stats|rule-adherence|setup-stats`. `ResearchWorkspace.tsx`: 5th nav-page "Review" with 7 tabs — Daily Review (AI coaching, trade list), By Regime (bar chart), Rules (score bar + per-rule pass/fail), By Setup (table), Journal (reused panel), Performance (reused panel), Backtest (reused panel). Layout.tsx + App.tsx updated with "Review" nav. OperatorConsole: journal/performance/backtest tabs removed (consolidated here). |
 | 92 | Model Diagnostics and Factor Attribution | No new migration. `diagnostics_service.py`: `factor_ic()` (Pearson + Spearman rank IC for context/crypto/macro scores vs realized PnL; context tercile win rate analysis), `regime_heatmap()` (closed trades grouped by regime × month, color-coded win-rate grid), `score_quartile_stats()` (4 equal quartiles by context_score → win rate + avg PnL), `trade_attribution()` (recent closed trades with score breakdown from signal time). `GET /api/diagnostics/factor-ic|regime-heatmap|score-quartiles|trade-attribution`. `DiagnosticsPanel.tsx`: 4 internal tabs — Factor IC (correlation table + tercile cards), Regime Heatmap (2D color grid), Score Quartiles (bar chart), Attribution (table with score bars per trade). Added as "Diagnostics" tab in ResearchWorkspace. |
+| 93 | Telegram UX Upgrade | No new migration. `telegram_bot/bot.py` fully rewritten: BotFather command menu via `set_my_commands()` in `post_init` (15 commands). Persistent `ReplyKeyboardMarkup` (3 rows: Price/Signals/Risk/Positions, Market/Context/Alerts/History, BTC/ETH/SOL) sent with every response. Symbol switching: `/symbol BTC|ETH|SOL` + keyboard buttons update `chat_data["symbol"]`; all data commands use active symbol. New commands: `/signals` (candidate+active signal list), `/risk` (equity/exposure/kill-switch with inline toggle button), `/positions` (open paper positions), `/context` (factor score + regime from factor_scores), `/market` (AI commentary, replaces `/analysis`; alias kept), `/history` (recent closed trades). Kill switch inline button (`ks:on`/`ks:off`) writes directly to `account_config`. Keyboard button text routed to handlers in `handle_message`. AI chat now symbol-aware. |
 
 ## Next implementation phase
 
-**Phase 93 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 94 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in
