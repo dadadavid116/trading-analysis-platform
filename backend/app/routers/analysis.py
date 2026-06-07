@@ -58,6 +58,9 @@ class ChartAnalysisRequest(BaseModel):
     user_bias:         str       = ""
     active_indicators: List[str] = ["rsi", "macd", "ema", "price_levels"]
     symbol:            str       = "BTCUSDT"
+    trader_style:      str       = "swing"   # scalp | swing | position
+    risk_per_trade:    float     = 1.0       # % of account
+    target_rr:         float     = 2.0       # minimum R:R
 
 
 @router.post("/chart")
@@ -68,12 +71,14 @@ async def chart_analysis(body: ChartAnalysisRequest):
 
     active_indicators controls which computed values are injected into the prompt.
     Supported values: rsi, macd, ema, bollinger, price_levels
+    Trader profile (style/risk/rr) is injected into the prompt to shape setup sizing.
     """
     try:
         from app.services.chart_analysis import analyze_chart
         from app.services.event_logger import log_event
         result = await analyze_chart(
-            body.timeframe, body.user_bias, body.active_indicators, body.symbol
+            body.timeframe, body.user_bias, body.active_indicators, body.symbol,
+            body.trader_style, body.risk_per_trade, body.target_rr,
         )
         sym = body.symbol
         await log_event(

@@ -50,6 +50,29 @@ function saveIndicators(keys: string[]): void {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(keys)); } catch { /* ignore */ }
 }
 
+// ── Trader preferences ─────────────────────────────────────────────────────────
+
+interface TraderPrefs {
+  style:       'scalp' | 'swing' | 'position';
+  riskPct:     number;   // % of account per trade
+  targetRR:    number;   // minimum R:R
+}
+
+const TRADER_PREFS_KEY = 'tap_trader_prefs';
+const DEFAULT_TRADER_PREFS: TraderPrefs = { style: 'swing', riskPct: 1.0, targetRR: 2.0 };
+
+function loadTraderPrefs(): TraderPrefs {
+  try {
+    const s = localStorage.getItem(TRADER_PREFS_KEY);
+    if (s) return { ...DEFAULT_TRADER_PREFS, ...JSON.parse(s) as Partial<TraderPrefs> };
+  } catch { /* ignore */ }
+  return DEFAULT_TRADER_PREFS;
+}
+
+function saveTraderPrefs(p: TraderPrefs): void {
+  try { localStorage.setItem(TRADER_PREFS_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+}
+
 // ── Time-period definitions ────────────────────────────────────────────────────
 
 const INTERVALS = [
@@ -375,13 +398,34 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const seriesRef         = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const alertLinesRef     = useRef<Map<number, IPriceLine>>(new Map());
 
-  // ── Chart analysis (Phase 23/26) ─────────────────────────────────────────
+  // ── Chart analysis (Phase 23/26/84) ──────────────────────────────────────
   const [analyzing, setAnalyzing]           = useState(false);
   const [analyzeError, setAnalyzeError]     = useState<string | null>(null);
   const [bias, setBias]                     = useState<'auto' | 'long' | 'short'>('auto');
   const [activeIndicators, setActiveIndicators] = useState<string[]>(loadIndicators);
   const [showIndicatorModal, setShowIndicatorModal] = useState(false);
+  const [traderPrefs, setTraderPrefs]       = useState<TraderPrefs>(loadTraderPrefs);
+  const [analysisAt, setAnalysisAt]         = useState<string | null>(null);
   const analysisLinesRef = useRef<IPriceLine[]>([]);
+
+  function updateTraderPrefs(partial: Partial<TraderPrefs>) {
+    setTraderPrefs((prev) => {
+      const next = { ...prev, ...partial };
+      saveTraderPrefs(next);
+      return next;
+    });
+  }
+
+  function handleClearAnalysis() {
+    const series = seriesRef.current;
+    if (!series) return;
+    for (const line of analysisLinesRef.current) {
+      try { series.removePriceLine(line); } catch { /* already removed */ }
+    }
+    analysisLinesRef.current = [];
+    setAnalysisAt(null);
+    setAnalyzeError(null);
+  }
   const levelsLinesRef   = useRef<IPriceLine[]>([]);
   const pivotLinesRef    = useRef<IPriceLine[]>([]);
 
@@ -1245,7 +1289,10 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
 
     try {
       const userBias = bias === 'auto' ? '' : bias === 'long' ? 'bullish — looking for a long setup' : 'bearish — looking for a short setup';
-      const result = await requestChartAnalysis(timeframe, userBias, activeIndicators, symbol);
+      const result = await requestChartAnalysis(
+        timeframe, userBias, activeIndicators, symbol,
+        traderPrefs.style, traderPrefs.riskPct, traderPrefs.targetRR,
+      );
       const series = seriesRef.current;
 
       // Clear previous analysis lines
@@ -1289,6 +1336,7 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         `*Lines on chart — green: support, red: resistance, blue: entry zone, orange: stop loss.*`;
 
       onAnalysis(msg);
+      setAnalysisAt(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       // Analysis lines may have wide axis labels (e.g. "Short entry high") —
       // re-sync all price-scale widths so subcharts stay aligned.
       syncPriceScaleWidths();
@@ -1364,12 +1412,36 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
               transition: 'all 0.15s',
             }}
           >
-            {analyzing ? 'Analyzing…' : '✦ Analyze'}
+            {analyzing ? 'Analyzing…' : '✦ Trade Setup'}
           </button>
-          {/* Indicator preferences gear */}
+          {analysisAt && (
+            <span style={{ fontSize: '10px', color: '#555', whiteSpace: 'nowrap' as const }}>
+              {analysisAt}
+            </span>
+          )}
+          {analysisLinesRef.current.length > 0 && (
+            <button
+              onClick={handleClearAnalysis}
+              title="Clear analysis lines from chart"
+              style={{
+                background: 'none',
+                border: '1px solid #3a2a2a',
+                borderRadius: '4px',
+                color: '#7a4a4a',
+                cursor: 'pointer',
+                fontSize: '10px',
+                padding: '3px 7px',
+                whiteSpace: 'nowrap' as const,
+                transition: 'all 0.15s',
+              }}
+            >
+              Clear
+            </button>
+          )}
+          {/* Trade setup preferences gear */}
           <button
             onClick={() => setShowIndicatorModal((v) => !v)}
-            title="Analysis indicator preferences"
+            title="Trade setup preferences"
             style={{
               background: showIndicatorModal ? '#1e2a3a' : 'none',
               border: `1px solid ${showIndicatorModal ? '#3a5a7a' : '#2a2a2e'}`,
@@ -1430,9 +1502,55 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       {showIndicatorModal && (
         <div style={indicatorModalStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '11px', fontWeight: 600, color: '#d0d0d0' }}>Analysis Indicators</span>
+            <span style={{ fontSize: '11px', fontWeight: 600, color: '#d0d0d0' }}>Trade Setup Preferences</span>
             <button onClick={() => setShowIndicatorModal(false)} style={modalCloseBtnStyle}>×</button>
           </div>
+
+          {/* Trader Profile */}
+          <div style={{ marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid #222' }}>
+            <span style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Trader Profile</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <label style={prefLabelStyle}>
+                <span style={prefLabelTextStyle}>Style</span>
+                <select
+                  value={traderPrefs.style}
+                  onChange={(e) => updateTraderPrefs({ style: e.target.value as TraderPrefs['style'] })}
+                  style={prefSelectStyle}
+                >
+                  <option value="scalp">Scalp</option>
+                  <option value="swing">Swing</option>
+                  <option value="position">Position</option>
+                </select>
+              </label>
+              <label style={prefLabelStyle}>
+                <span style={prefLabelTextStyle}>Risk / trade</span>
+                <select
+                  value={String(traderPrefs.riskPct)}
+                  onChange={(e) => updateTraderPrefs({ riskPct: parseFloat(e.target.value) })}
+                  style={prefSelectStyle}
+                >
+                  {[0.5, 1.0, 1.5, 2.0, 2.5, 3.0].map((v) => (
+                    <option key={v} value={String(v)}>{v}%</option>
+                  ))}
+                </select>
+              </label>
+              <label style={prefLabelStyle}>
+                <span style={prefLabelTextStyle}>Min R:R</span>
+                <select
+                  value={String(traderPrefs.targetRR)}
+                  onChange={(e) => updateTraderPrefs({ targetRR: parseFloat(e.target.value) })}
+                  style={prefSelectStyle}
+                >
+                  {[1.5, 2.0, 2.5, 3.0, 4.0, 5.0].map((v) => (
+                    <option key={v} value={String(v)}>1:{v}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          {/* Indicators */}
+          <span style={{ fontSize: '10px', color: '#888', display: 'block', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Analysis Indicators</span>
           <p style={{ fontSize: '10px', color: '#666', marginBottom: '8px', lineHeight: 1.4 }}>
             Selected indicators are computed from chart data and included in the AI analysis prompt.
           </p>
@@ -1758,7 +1876,34 @@ const indicatorModalStyle: CSSProperties = {
   borderRadius: '7px',
   padding: '10px 12px',
   width: '240px',
+  maxHeight: '500px',
+  overflowY: 'auto',
   boxShadow: '0 6px 24px rgba(0,0,0,0.6)',
+};
+
+const prefLabelStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '8px',
+};
+
+const prefLabelTextStyle: CSSProperties = {
+  fontSize: '10px',
+  color: '#aaa',
+  flexShrink: 0,
+};
+
+const prefSelectStyle: CSSProperties = {
+  background: '#1c1c22',
+  border: '1px solid #333',
+  borderRadius: '3px',
+  color: '#d0d0d0',
+  cursor: 'pointer',
+  fontSize: '10px',
+  padding: '2px 4px',
+  flex: 1,
+  maxWidth: '120px',
 };
 
 const modalCloseBtnStyle: CSSProperties = {

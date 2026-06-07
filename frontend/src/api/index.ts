@@ -216,11 +216,17 @@ export async function requestChartAnalysis(
   userBias = '',
   activeIndicators: string[] = ['rsi', 'macd', 'ema', 'price_levels'],
   symbol = 'BTCUSDT',
+  traderStyle = 'swing',
+  riskPerTrade = 1.0,
+  targetRR = 2.0,
 ): Promise<ChartAnalysis> {
   const response = await fetch(`${BASE_URL}/analysis/chart`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ timeframe, user_bias: userBias, active_indicators: activeIndicators, symbol }),
+    body: JSON.stringify({
+      timeframe, user_bias: userBias, active_indicators: activeIndicators, symbol,
+      trader_style: traderStyle, risk_per_trade: riskPerTrade, target_rr: targetRR,
+    }),
   });
   if (!response.ok) {
     const detail = await response.json().catch(() => ({}));

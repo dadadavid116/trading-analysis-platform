@@ -256,6 +256,9 @@ async def analyze_chart(
     user_bias: str = "",
     active_indicators: list[str] | None = None,
     symbol: str = "BTCUSDT",
+    trader_style: str = "swing",
+    risk_per_trade: float = 1.0,
+    target_rr: float = 2.0,
 ) -> dict:
     """Return Claude's structured trade setup for the given symbol's OKX perp chart."""
     if active_indicators is None:
@@ -280,6 +283,19 @@ async def analyze_chart(
         if user_bias else ""
     )
 
+    style_hint = {
+        "scalp":    "tight entries/exits, very short holding period (minutes to ~1 hour), small price targets",
+        "swing":    "entries near key S/R, holding period hours to a few days, moderate targets",
+        "position": "high-conviction entries, holding days to weeks, wider stops, larger targets",
+    }.get(trader_style, "swing trader approach")
+
+    trader_profile = f"""
+TRADER PROFILE:
+  Style: {trader_style} ({style_hint})
+  Risk per trade: {risk_per_trade:.1f}% of account
+  Minimum target R:R: 1:{target_rr:.1f}
+"""
+
     prompt = f"""You are a professional crypto technical analyst. Analyze the {base_asset}/USDT perpetual swap chart below (OKX).
 
 Timeframe: {interval}
@@ -289,8 +305,9 @@ Last 30 candles (Open / High / Low / Close):
 {indicator_context}
 {derivatives_context}
 {bias_line}
+{trader_profile}
 Determine the trend from price structure, momentum, and the indicator readings above.
-Then build a trade setup that matches the trend direction:
+Then build a trade setup that matches the trend direction AND the trader profile above:
 
 - BULLISH → LONG setup:
     entry_zone: tight range near the nearest support below price
@@ -321,7 +338,9 @@ Constraints:
 - resistance_levels: 2 prices strictly ABOVE ${current_price:,.0f}
 - All prices must be round numbers near actual chart structure
 - direction MUST match the trade setup (long entry below price, short entry above price)
-- reasoning must reference any active indicator readings that influenced the decision"""
+- reasoning must reference any active indicator readings that influenced the decision
+- Ensure stop_loss placement achieves at least 1:{target_rr:.1f} R:R with at least one take_profit level
+- Tailor entry precision and target spacing to the {trader_style} trading style"""
 
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
     message = await client.messages.create(
