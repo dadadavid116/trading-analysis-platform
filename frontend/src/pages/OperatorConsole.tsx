@@ -11,11 +11,12 @@ import SignalMatrixPanel from '../panels/SignalMatrixPanel';
 import SignalQueuePanel from '../panels/SignalQueuePanel';
 import AccountStatePanel from '../panels/AccountStatePanel';
 import RiskEnginePanel from '../panels/RiskEnginePanel';
+import BacktestPanel from '../panels/BacktestPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 // Note: News + Market Map (Heatmap) moved to the Context Desk workspace in Phase 73.
-type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk';
+type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk' | 'backtest';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk' | 'backtest';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner'   },
@@ -28,6 +29,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'portfolio',   label: 'Portfolio' },
   { id: 'signals',     label: 'Signals'   },
   { id: 'risk',        label: 'Risk'      },
+  { id: 'backtest',    label: 'Backtest'  },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -71,6 +73,7 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
         case 'portfolio':   return <PortfolioPanel />;
         case 'signals':     return <SignalMatrixPanel />;
         case 'risk':        return <RiskEnginePanel />;
+        case 'backtest':    return <BacktestPanel />;
       }
     })();
 
@@ -138,6 +141,9 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
           <button style={tabBtnStyle(rightTab === 'risk')} onClick={() => setRightTab('risk')}>
             Risk
           </button>
+          <button style={tabBtnStyle(rightTab === 'backtest')} onClick={() => setRightTab('backtest')}>
+            Backtest
+          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {rightTab === 'events'      && <EventLogPanel />}
@@ -148,6 +154,7 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
           {rightTab === 'account'     && <AccountStatePanel />}
           {rightTab === 'signals'     && <SignalMatrixPanel />}
           {rightTab === 'risk'        && <RiskEnginePanel />}
+          {rightTab === 'backtest'    && <BacktestPanel />}
         </div>
       </div>
     </div>

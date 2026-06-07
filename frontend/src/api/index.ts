@@ -1310,3 +1310,62 @@ export async function runSlTpCheck(): Promise<{ checked: boolean; triggered: unk
   }
   return response.json();
 }
+
+// ── Backtest (Phase 90) ────────────────────────────────────────────────────────
+
+export interface BacktestTrade {
+  signal_id:    number;
+  symbol:       string;
+  direction:    string;
+  timeframe:    string;
+  entry_price:  number;
+  stop_loss:    number | null;
+  tp1:          number | null;
+  outcome:      string;
+  tp_level:     string | null;
+  r:            number;
+  pnl:          number;
+  hit_at:       string | null;
+  created_at:   string;
+  context_score: number | null;
+  regime:       string | null;
+}
+
+export interface BacktestResult {
+  params:           { symbol: string | null; direction: string | null; risk_pct: number; start_equity: number; since: string | null; until: string | null };
+  signals_tested:   number;
+  filled:           number;
+  wins:             number;
+  losses:           number;
+  expired:          number;
+  win_rate:         number;
+  profit_factor:    number;
+  expectancy_r:     number;
+  total_r:          number;
+  max_drawdown:     number;
+  final_equity:     number;
+  total_return_pct: number;
+  equity_curve:     { index: number; equity: number; r: number }[];
+  r_distribution:   Record<string, number>;
+  trades:           BacktestTrade[];
+}
+
+export async function runBacktest(params: {
+  symbol?:       string;
+  direction?:    string;
+  since?:        string;
+  until?:        string;
+  risk_pct?:     number;
+  start_equity?: number;
+}): Promise<BacktestResult> {
+  const response = await fetch(`${BASE_URL}/backtest/run`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<BacktestResult>;
+}

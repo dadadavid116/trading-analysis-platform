@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 89**.
+> Last updated: end of **Phase 90**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 89** (Paper Execution Adapter).
+- **Current completed implementation phase:** **Phase 90** (Backtesting and Replay).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -35,10 +35,11 @@
 | 87 | Risk Engine v1 | Alembic 0012: `kill_switch_active` BOOLEAN on `account_config`. `risk_engine.py`: deterministic `assess_trade()` — kill switch hard block, per-trade risk % gate, open risk headroom check, daily drawdown gate; auto position sizing from equity × risk% / sl_distance. `set_kill_switch()` + `kill_switch_active` in `get_account_state()`. `/api/risk/assess` POST, `/api/risk/summary` GET, `/api/risk/kill-switch` POST. `RiskEnginePanel.tsx`: kill switch (confirm dialog, red/green border), risk status (equity, realized PnL, open count, open-risk bar, daily-drawdown bar, traffic-light colors), trade sizer form (entry/SL/size/override risk%, verdict badge, suggested size, reasons/warnings). "Risk" tab in OperatorConsole desktop + mobile. |
 | 88 | Execution & Account Workspace | Alembic 0013: `orders` + `order_events` tables (FK to signals + open_positions). `order_service.py`: create/fill/cancel; fill auto-opens a position via account_state.open_position(). `/api/account/equity-curve` (oldest-first snapshots), `/api/account/trade-stats` (wins/losses/win-rate/expectancy/PnL today+month+all-time), orders CRUD endpoints. `AccountWorkspace.tsx`: 4th nav-page with 5 inner tabs — Overview (equity, return%, drawdown, open-risk bar, equity-curve SVG, trade stats grid), Positions (open+close/cancel + closed history), Orders (pending/filled/cancelled filter + new-order form), Risk (kill switch toggle, exposure bars, per-symbol risk, rule adherence checklist), Config (capital + risk params form). Layout.tsx + App.tsx updated with "Account" workspace nav. |
 | 89 | Paper Execution Adapter | Alembic 0014: `execution_proposals` (signal_id FK, full price levels, risk assessment snapshot, status=pending/approved/rejected). `paper_execution.py`: create_proposal (risk-sizes via assess_trade), approve (order+fill→position), reject, check_sl_tp (scan open positions vs latest DB price; auto-closes on SL/TP hit; logs to event_log). `/api/execution/proposals` CRUD + `/api/execution/check`. `ExecutionPanel.tsx`: Pending/History/+Manual tabs, ProposalCard with verdict badge, risk reasons/warnings, Approve+Reject confirm dialogs. AccountWorkspace "Execution" tab. SignalQueuePanel "▶ Execute" button on candidate+active signals with toast feedback. |
+| 90 | Backtesting and Replay | No new migration. `backtest_service.py`: per-signal outcome simulation — walks 1-min price_candles from created_at → expires_at; detects SL/TP1/TP2/TP3 hits per direction; computes R-multiple; simulates compounding equity (risk_pct% per trade); bucket R-distribution (9 buckets); returns win_rate, profit_factor, expectancy_r, max_drawdown, total_return_pct, equity curve, trade list. `POST /api/backtest/run`, `GET /api/backtest/replay`. `BacktestPanel.tsx`: param form (symbol/direction/date range/risk%/start equity), Run button; stat grid; equity curve SVG with dashed baseline; R-distribution bar chart; toggle-able trade log table (dir/symbol/entry/outcome/R/PnL/regime). "Backtest" tab in OperatorConsole desktop + mobile. |
 
 ## Next implementation phase
 
-**Phase 90 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 91 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in
