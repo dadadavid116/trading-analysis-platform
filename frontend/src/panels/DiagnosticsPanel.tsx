@@ -21,8 +21,6 @@ const row: React.CSSProperties = {
   fontSize: 12, padding: '4px 0', borderBottom: '1px solid #21262d',
 };
 
-const lbl: React.CSSProperties = { color: '#8b949e' };
-
 function pnlColor(v: number) { return v > 0 ? '#3fb950' : v < 0 ? '#f85149' : '#8b949e'; }
 function rateColor(r: number) { return r >= 55 ? '#3fb950' : r >= 45 ? '#e3b341' : '#f85149'; }
 

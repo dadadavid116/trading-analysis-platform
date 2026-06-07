@@ -157,7 +157,7 @@ function Results({ r }: { r: BacktestResult }) {
         <div style={secHeader}>Results — {r.params.symbol ?? 'All Symbols'} {r.params.direction ? `· ${r.params.direction}` : ''}</div>
         {statGroups.map((group, gi) => (
           <div key={gi} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0 4px' }}>
-            {group.map(([label, value, extra]) => (
+            {group.map(([label, value, _extra]) => (
               <div key={label as string} style={row}>
                 <span style={lbl}>{label}</span>
                 <span style={{
