@@ -431,51 +431,71 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
   const rawCandlesRef           = useRef<KlineCandle[]>([]);
 
   // ── Price-scale width synchronization ─────────────────────────────────────
-  // After each data load or container resize, reads the actual rendered width
-  // of the right price-scale column in every chart container, then applies the
-  // maximum as minimumWidth to all instances — so their time axes stay aligned
-  // regardless of the current price range (BTC at $1k or $1M).
+  // Reads the actual rendered right price-scale column width from each chart
+  // container after the library has finished painting (double-rAF pattern),
+  // then applies the maximum as minimumWidth to ALL chart instances so their
+  // time axes stay pixel-perfectly aligned regardless of the price range or
+  // any price line labels added later (e.g. "Resistance 2", "Stop loss").
   //
-  // To add a future subplot: append its containerRef to `containers` and its
-  // chartRef to `charts` inside syncPriceScaleWidths — no other changes needed.
-  const scaleSyncRafRef = useRef<number>(0);
+  // To add a future subplot: add its containerRef to `containers` and its
+  // chartRef to `charts` — no other changes required.
+  const scaleSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const syncPriceScaleWidths = useCallback(() => {
-    cancelAnimationFrame(scaleSyncRafRef.current);
-    scaleSyncRafRef.current = requestAnimationFrame(() => {
-      const containers = [
-        chartContainerRef.current, rsiContainerRef.current,
-        macdContainerRef.current,  stochContainerRef.current, cvdContainerRef.current,
-      ];
-      const charts = [
-        chartRef.current, rsiChartRef.current, macdChartRef.current,
-        stochChartRef.current,  cvdChartRef.current,
-      ];
-      // lightweight-charts renders a <table>; the right price scale is the last
-      // <td> in the first <tr>. This structure has been stable across v3 and v4.
-      let maxW = 0;
-      for (const el of containers) {
-        if (!el) continue;
-        const td = el.querySelector<HTMLElement>('tr:first-child > td:last-child');
-        if (td) maxW = Math.max(maxW, td.offsetWidth);
-      }
-      if (maxW === 0) return;
-      for (const c of charts) {
-        c?.applyOptions({ rightPriceScale: { minimumWidth: maxW } });
-      }
-    });
+    // Clear any pending sync
+    if (scaleSyncTimerRef.current) clearTimeout(scaleSyncTimerRef.current);
+
+    // Double-rAF: the first yields to lightweight-charts' own paint rAF,
+    // the second measures AFTER the library has updated the DOM layout.
+    scaleSyncTimerRef.current = setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const containers = [
+            chartContainerRef.current, rsiContainerRef.current,
+            macdContainerRef.current,  stochContainerRef.current, cvdContainerRef.current,
+          ];
+          const charts = [
+            chartRef.current, rsiChartRef.current, macdChartRef.current,
+            stochChartRef.current,  cvdChartRef.current,
+          ];
+          // lightweight-charts renders a <table>; the right price-scale column
+          // is the last <td> of the first <tr> (stable across v3 and v4).
+          let maxW = 0;
+          for (const el of containers) {
+            if (!el) continue;
+            // Find first row of the internal table; take its last cell.
+            const firstRow = el.querySelector('table tr');
+            if (!firstRow) continue;
+            const cells = firstRow.querySelectorAll('td');
+            if (cells.length === 0) continue;
+            const lastCell = cells[cells.length - 1] as HTMLElement;
+            const w = Math.ceil(lastCell.getBoundingClientRect().width);
+            if (w > maxW) maxW = w;
+          }
+          if (maxW < 30) return; // not yet rendered or collapsed chart
+          for (const c of charts) {
+            c?.applyOptions({ rightPriceScale: { minimumWidth: maxW } });
+          }
+        });
+      });
+    }, 0); // setTimeout(0) yields to the event loop so pending rAFs can complete
   }, []); // stable — all values read via stable refs at call time
 
-  // Set up window-resize listener and two initial-sync timers.
-  // Container-resize sync is handled by adding syncPriceScaleWidths() to the
-  // existing ResizeObserver inside the chart-creation effect below.
+  // Initial sync (runs 3 times to catch: initial render, data load, stable state).
+  // Periodic 3 s fallback catches edge cases like analysis lines added after load.
+  // Container-resize sync is hooked into the existing ResizeObserver below.
   useEffect(() => {
-    const t1 = setTimeout(syncPriceScaleWidths, 150);
-    const t2 = setTimeout(syncPriceScaleWidths, 700);
+    const t1 = setTimeout(syncPriceScaleWidths, 300);
+    const t2 = setTimeout(syncPriceScaleWidths, 800);
+    const t3 = setTimeout(syncPriceScaleWidths, 1500);
+    const periodic = setInterval(syncPriceScaleWidths, 3000);
     window.addEventListener('resize', syncPriceScaleWidths);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
-      cancelAnimationFrame(scaleSyncRafRef.current);
+      clearTimeout(t3);
+      clearInterval(periodic);
+      if (scaleSyncTimerRef.current) clearTimeout(scaleSyncTimerRef.current);
       window.removeEventListener('resize', syncPriceScaleWidths);
     };
   }, [syncPriceScaleWidths]);
@@ -1231,6 +1251,9 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
         `*Lines on chart — green: support, red: resistance, blue: entry zone, orange: stop loss.*`;
 
       onAnalysis(msg);
+      // Analysis lines may have wide axis labels (e.g. "Short entry high") —
+      // re-sync all price-scale widths so subcharts stay aligned.
+      syncPriceScaleWidths();
     } catch (err: unknown) {
       setAnalyzeError(err instanceof Error ? err.message : 'Analysis failed.');
     } finally {
