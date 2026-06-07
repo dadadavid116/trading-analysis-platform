@@ -3,9 +3,10 @@ import {
   fetchDailyReview, fetchRegimeStats, fetchRuleAdherence, fetchSetupStats,
   DailyReview, RegimeStat, RuleAdherence, SetupStat,
 } from '../api';
-import JournalPanel     from '../panels/JournalPanel';
-import PerformancePanel from '../panels/PerformancePanel';
-import BacktestPanel    from '../panels/BacktestPanel';
+import JournalPanel      from '../panels/JournalPanel';
+import PerformancePanel  from '../panels/PerformancePanel';
+import BacktestPanel     from '../panels/BacktestPanel';
+import DiagnosticsPanel  from '../panels/DiagnosticsPanel';
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -303,13 +304,14 @@ function PanelTab({ children }: { children: React.ReactNode }) {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'daily' | 'regime' | 'rules' | 'setups' | 'journal' | 'performance' | 'backtest';
+type Tab = 'daily' | 'regime' | 'rules' | 'setups' | 'diagnostics' | 'journal' | 'performance' | 'backtest';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'daily',       label: 'Daily Review' },
   { id: 'regime',      label: 'By Regime'    },
   { id: 'rules',       label: 'Rules'        },
   { id: 'setups',      label: 'By Setup'     },
+  { id: 'diagnostics', label: 'Diagnostics'  },
   { id: 'journal',     label: 'Journal'      },
   { id: 'performance', label: 'Performance'  },
   { id: 'backtest',    label: 'Backtest'     },
@@ -336,6 +338,7 @@ export default function ResearchWorkspace() {
         {tab === 'regime'      && <RegimeStatsTab />}
         {tab === 'rules'       && <RuleAdherenceTab />}
         {tab === 'setups'      && <SetupStatsTab />}
+        {tab === 'diagnostics' && <PanelTab><DiagnosticsPanel /></PanelTab>}
         {tab === 'journal'     && <PanelTab><JournalPanel /></PanelTab>}
         {tab === 'performance' && <PanelTab><PerformancePanel /></PanelTab>}
         {tab === 'backtest'    && <PanelTab><BacktestPanel /></PanelTab>}

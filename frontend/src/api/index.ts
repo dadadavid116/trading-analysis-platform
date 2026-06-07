@@ -1420,3 +1420,73 @@ export function fetchDailyReview():    Promise<DailyReview>    { return apiFetch
 export function fetchRegimeStats():    Promise<RegimeStat[]>   { return apiFetch('/review/regime-stats'); }
 export function fetchRuleAdherence():  Promise<RuleAdherence>  { return apiFetch('/review/rule-adherence'); }
 export function fetchSetupStats():     Promise<SetupStat[]>    { return apiFetch('/review/setup-stats'); }
+
+// ── Diagnostics & Factor Attribution (Phase 92) ───────────────────────────────
+
+export interface FactorICItem {
+  factor:  string;
+  n:       number;
+  ic:      number | null;
+  rank_ic: number | null;
+  label:   string;
+}
+
+export interface FactorIC {
+  n:                 number;
+  factors:           FactorICItem[];
+  context_terciles:  { label: string; n: number; win_rate: number; avg_pnl: number }[];
+  note?:             string;
+}
+
+export interface RegimeHeatmapCell {
+  regime:    string;
+  period:    string;
+  total:     number;
+  wins:      number;
+  win_rate:  number;
+  total_pnl: number;
+}
+
+export interface RegimeHeatmap {
+  regimes: string[];
+  periods: string[];
+  cells:   RegimeHeatmapCell[];
+  note?:   string;
+}
+
+export interface ScoreQuartile {
+  quartile:  string;
+  label:     string;
+  n:         number;
+  score_lo:  number;
+  score_hi:  number;
+  win_rate:  number;
+  avg_pnl:   number;
+  total_pnl: number;
+}
+
+export interface ScoreQuartiles {
+  n?:         number;
+  quartiles:  ScoreQuartile[];
+  note?:      string;
+}
+
+export interface TradeAttribution {
+  id:            number;
+  symbol:        string;
+  direction:     string;
+  realized_pnl:  number;
+  closed_at:     string | null;
+  context_score: number | null;
+  crypto_score:  number | null;
+  macro_score:   number | null;
+  regime:        string | null;
+  timeframe:     string | null;
+}
+
+export function fetchFactorIC():                 Promise<FactorIC>            { return apiFetch('/diagnostics/factor-ic'); }
+export function fetchRegimeHeatmap():            Promise<RegimeHeatmap>       { return apiFetch('/diagnostics/regime-heatmap'); }
+export function fetchScoreQuartiles():           Promise<ScoreQuartiles>      { return apiFetch('/diagnostics/score-quartiles'); }
+export function fetchTradeAttribution(limit = 25): Promise<TradeAttribution[]> {
+  return apiFetch(`/diagnostics/trade-attribution?limit=${limit}`);
+}
