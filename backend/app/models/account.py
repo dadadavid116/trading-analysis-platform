@@ -6,7 +6,7 @@ models/account.py — ORM models for account state foundation (Phase 86).
   open_positions    — open paper positions (exposure base for risk engine)
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, Boolean
 from app.database import Base
 
 
@@ -19,6 +19,7 @@ class AccountConfig(Base):
     max_risk_per_trade_pct = Column(Float, nullable=False, default=2.0)
     max_open_risk_pct      = Column(Float, nullable=False, default=10.0)
     daily_loss_limit_pct   = Column(Float, nullable=False, default=5.0)
+    kill_switch_active     = Column(Boolean, nullable=False, default=False)
     updated_at             = Column(DateTime(timezone=True), nullable=False)
 
 

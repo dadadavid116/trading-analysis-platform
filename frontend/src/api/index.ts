@@ -973,6 +973,7 @@ export interface AccountState {
   max_risk_per_trade_usd: number;
   max_open_risk_pct:      number;
   daily_loss_limit_pct:   number;
+  kill_switch_active:     boolean;
   positions:              AccountPosition[];
 }
 
@@ -1042,4 +1043,73 @@ export async function cancelPosition(id: number): Promise<AccountPosition> {
     throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
   }
   return response.json() as Promise<AccountPosition>;
+}
+
+// ── Risk Engine (Phase 87) ────────────────────────────────────────────────────
+
+export interface RiskAssessment {
+  verdict:               'approved' | 'blocked' | 'warning';
+  reasons:               string[];
+  warnings:              string[];
+  suggested_size_usd:    number;
+  max_allowed_usd:       number;
+  risk_usd:              number;
+  risk_pct_of_equity:    number;
+  kill_switch_active:    boolean;
+  current_equity:        number;
+  open_risk_usd:         number;
+  open_risk_pct:         number;
+  max_open_risk_pct:     number;
+  max_risk_per_trade_pct: number;
+  daily_loss_limit_pct:  number;
+}
+
+export interface RiskSummary {
+  kill_switch_active:     boolean;
+  current_equity:         number;
+  open_risk_usd:          number;
+  open_risk_pct:          number;
+  max_open_risk_pct:      number;
+  open_risk_traffic:      'green' | 'orange' | 'red';
+  daily_loss_pct:         number;
+  daily_loss_limit_pct:   number;
+  daily_loss_traffic:     'green' | 'orange' | 'red';
+  max_risk_per_trade_pct: number;
+  open_count:             number;
+  realized_pnl:           number;
+}
+
+export function getRiskSummary(): Promise<RiskSummary> {
+  return apiFetch<RiskSummary>('/risk/summary');
+}
+
+export async function assessTrade(params: {
+  entry_price:        number;
+  stop_loss:          number;
+  size_usd?:          number;
+  override_risk_pct?: number;
+}): Promise<RiskAssessment> {
+  const response = await fetch(`${BASE_URL}/risk/assess`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<RiskAssessment>;
+}
+
+export async function toggleKillSwitch(active: boolean): Promise<{ kill_switch_active: boolean; message: string }> {
+  const response = await fetch(`${BASE_URL}/risk/kill-switch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ active }),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json();
 }

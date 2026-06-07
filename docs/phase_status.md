@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 86**.
+> Last updated: end of **Phase 87**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 86** (Account State Foundation).
+- **Current completed implementation phase:** **Phase 87** (Risk Engine v1).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -32,10 +32,11 @@
 | 84 | AI Analysis Separation and Upgrade | `ChartAnalysisRequest` + `analyze_chart()` extended with `trader_style`/`risk_per_trade`/`target_rr`. TRADER PROFILE context block injected into Claude prompt. Button renamed "✦ Trade Setup". Modal renamed "Trade Setup Preferences" with trader profile dropdowns (Style / Risk % / Min R:R, localStorage-persisted as `tap_trader_prefs`) above the indicator list. Clear button removes analysis price lines. Timestamp "Analyzed at HH:MM" shown after each run. |
 | 85 | Persisted Signal Engine v1 | Alembic 0010: `signals` + `signal_events` tables. `signal_engine.py`: create/activate/invalidate/expire/price-check lifecycle. Scanner worker auto-persists signals when composite ≥ 0.60 + count ≥ 2. Context score snapshot (context/crypto/macro/regime) captured from `factor_scores` at creation. Basic entry/SL/TP computed from current price (±1.6% SL, TP1 +2%, TP2 +3.5%, TP3 +5%). `/api/signals/` list + detail + activate + invalidate endpoints. `SignalQueuePanel.tsx`: Live/Closed/All tabs, signal cards with direction badge, price levels, R:R, scores, scanner labels, Activate/Invalidate buttons, 30s auto-refresh. "Queue" tab added to OperatorConsole right column. |
 | 86 | Account State Foundation | Alembic 0011: `account_config` (single-row, UPSERT, seeded 10k USD, default risk params) + `account_snapshots` + `open_positions` tables. `account_state.py`: equity = starting_capital + realized_pnl_total; open_risk_usd = Σ|entry−stop|/entry×size; snapshots auto-taken on position open/close. Full position CRUD (open/close/cancel) with realized PnL calc. `/api/account/state`, `/api/account/config` GET+POST, `/api/account/positions`, `/api/account/snapshots` endpoints. `AccountStatePanel.tsx`: equity section, open-risk bar (color-coded vs max), risk limits, open position cards with inline close-price input, ⚙ config modal (capital + 3 risk %). "Account" tab in OperatorConsole. |
+| 87 | Risk Engine v1 | Alembic 0012: `kill_switch_active` BOOLEAN on `account_config`. `risk_engine.py`: deterministic `assess_trade()` — kill switch hard block, per-trade risk % gate, open risk headroom check, daily drawdown gate; auto position sizing from equity × risk% / sl_distance. `set_kill_switch()` + `kill_switch_active` in `get_account_state()`. `/api/risk/assess` POST, `/api/risk/summary` GET, `/api/risk/kill-switch` POST. `RiskEnginePanel.tsx`: kill switch (confirm dialog, red/green border), risk status (equity, realized PnL, open count, open-risk bar, daily-drawdown bar, traffic-light colors), trade sizer form (entry/SL/size/override risk%, verdict badge, suggested size, reasons/warnings). "Risk" tab in OperatorConsole desktop + mobile. |
 
 ## Next implementation phase
 
-**Phase 87 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 88 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

@@ -10,11 +10,12 @@ import PortfolioPanel from '../panels/PortfolioPanel';
 import SignalMatrixPanel from '../panels/SignalMatrixPanel';
 import SignalQueuePanel from '../panels/SignalQueuePanel';
 import AccountStatePanel from '../panels/AccountStatePanel';
+import RiskEnginePanel from '../panels/RiskEnginePanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 // Note: News + Market Map (Heatmap) moved to the Context Desk workspace in Phase 73.
-type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals' | 'queue' | 'account';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals' | 'queue' | 'account';
+type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner'   },
@@ -26,6 +27,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'events',      label: 'Events'    },
   { id: 'portfolio',   label: 'Portfolio' },
   { id: 'signals',     label: 'Signals'   },
+  { id: 'risk',        label: 'Risk'      },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -68,6 +70,7 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
         case 'events':      return <EventLogPanel />;
         case 'portfolio':   return <PortfolioPanel />;
         case 'signals':     return <SignalMatrixPanel />;
+        case 'risk':        return <RiskEnginePanel />;
       }
     })();
 
@@ -132,6 +135,9 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
           <button style={tabBtnStyle(rightTab === 'signals')} onClick={() => setRightTab('signals')}>
             Signals
           </button>
+          <button style={tabBtnStyle(rightTab === 'risk')} onClick={() => setRightTab('risk')}>
+            Risk
+          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
           {rightTab === 'events'      && <EventLogPanel />}
@@ -141,6 +147,7 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
           {rightTab === 'queue'       && <SignalQueuePanel />}
           {rightTab === 'account'     && <AccountStatePanel />}
           {rightTab === 'signals'     && <SignalMatrixPanel />}
+          {rightTab === 'risk'        && <RiskEnginePanel />}
         </div>
       </div>
     </div>

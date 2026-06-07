@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import require_api_key
 from app.config import settings
-from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news, factors, macro, context, signals, account
+from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news, factors, macro, context, signals, account, risk
 
 logger = logging.getLogger(__name__)
 
@@ -123,3 +123,4 @@ app.include_router(macro.router,        prefix="/api", dependencies=_auth)
 app.include_router(context.router,      prefix="/api", dependencies=_auth)
 app.include_router(signals.router,      prefix="/api", dependencies=_auth)
 app.include_router(account.router,      prefix="/api", dependencies=_auth)
+app.include_router(risk.router,         prefix="/api", dependencies=_auth)

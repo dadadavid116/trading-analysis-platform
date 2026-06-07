@@ -67,6 +67,16 @@ async def update_config(
     return cfg
 
 
+async def set_kill_switch(db: AsyncSession, active: bool) -> bool:
+    """Enable or disable the kill switch. Returns the new state."""
+    cfg = await get_config(db)
+    cfg.kill_switch_active = active
+    cfg.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    logger.info("Kill switch set to: %s", active)
+    return active
+
+
 # ── Equity calculation ─────────────────────────────────────────────────────────
 
 async def _realized_pnl_total(db: AsyncSession) -> float:
@@ -124,6 +134,7 @@ async def get_account_state(db: AsyncSession) -> dict:
         "max_risk_per_trade_usd": max_risk_usd,
         "max_open_risk_pct":      cfg.max_open_risk_pct,
         "daily_loss_limit_pct":   cfg.daily_loss_limit_pct,
+        "kill_switch_active":     cfg.kill_switch_active,
         "positions": [_pos_dict(p) for p in open_pos],
     }
 
