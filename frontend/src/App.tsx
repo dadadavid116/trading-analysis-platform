@@ -8,9 +8,10 @@ import DerivativesPanel from './panels/DerivativesPanel';
 import ChatPanel from './panels/ChatPanel';
 import OperatorConsole from './pages/OperatorConsole';
 import ContextDesk from './pages/ContextDesk';
+import AccountWorkspace from './pages/AccountWorkspace';
 import { useIsMobile } from './hooks/useIsMobile';
 
-type Page          = 'dashboard' | 'console' | 'context';
+type Page          = 'dashboard' | 'console' | 'context' | 'account';
 type MobileDashTab = 'chart' | 'liq' | 'ob' | 'deriv' | 'alerts' | 'chat';
 
 const MOBILE_DASH_TABS: { id: MobileDashTab; label: string }[] = [
@@ -129,7 +130,9 @@ export default function App() {
         activePage={activePage}
         onPageChange={setActivePage}
       >
-        {activePage === 'console' ? <OperatorConsole activeSymbol={activeSymbol} /> : <ContextDesk activeSymbol={activeSymbol} />}
+        {activePage === 'console'  ? <OperatorConsole activeSymbol={activeSymbol} /> :
+         activePage === 'account'  ? <AccountWorkspace /> :
+         <ContextDesk activeSymbol={activeSymbol} />}
       </Layout>
     );
   }
@@ -166,6 +169,8 @@ export default function App() {
         </>
       ) : activePage === 'console' ? (
         <OperatorConsole activeSymbol={activeSymbol} />
+      ) : activePage === 'account' ? (
+        <AccountWorkspace />
       ) : (
         <ContextDesk activeSymbol={activeSymbol} />
       )}

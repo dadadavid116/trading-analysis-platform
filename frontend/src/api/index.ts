@@ -1113,3 +1113,111 @@ export async function toggleKillSwitch(active: boolean): Promise<{ kill_switch_a
   }
   return response.json();
 }
+
+// ── Account Workspace (Phase 88) ──────────────────────────────────────────────
+
+export interface EquityCurvePoint {
+  timestamp:      string;
+  equity:         number;
+  realized_pnl:   number;
+  open_risk_usd:  number;
+  trigger:        string;
+}
+
+export interface PeriodStats {
+  total:      number;
+  wins:       number;
+  losses:     number;
+  win_rate:   number;
+  total_pnl:  number;
+  avg_win:    number;
+  avg_loss:   number;
+  expectancy: number;
+}
+
+export interface TradeStats {
+  all_time: PeriodStats;
+  today:    PeriodStats;
+  month:    PeriodStats;
+}
+
+export interface PaperOrder {
+  id:              number;
+  signal_id:       number | null;
+  position_id:     number | null;
+  symbol:          string;
+  direction:       'long' | 'short';
+  order_type:      string;
+  status:          string;
+  requested_price: number | null;
+  filled_price:    number | null;
+  size_usd:        number;
+  stop_loss:       number | null;
+  tp1:             number | null;
+  tp2:             number | null;
+  tp3:             number | null;
+  created_at:      string;
+  filled_at:       string | null;
+  cancelled_at:    string | null;
+  notes:           string | null;
+}
+
+export function fetchEquityCurve(limit = 200): Promise<EquityCurvePoint[]> {
+  return apiFetch<EquityCurvePoint[]>(`/account/equity-curve?limit=${limit}`);
+}
+
+export function fetchTradeStats(): Promise<TradeStats> {
+  return apiFetch<TradeStats>('/account/trade-stats');
+}
+
+export function fetchOrders(status?: string, symbol?: string): Promise<PaperOrder[]> {
+  const params = new URLSearchParams();
+  if (status) params.set('status', status);
+  if (symbol) params.set('symbol', symbol);
+  const qs = params.toString();
+  return apiFetch<PaperOrder[]>(`/account/orders${qs ? `?${qs}` : ''}`);
+}
+
+export async function createOrder(body: {
+  symbol: string; direction: string; size_usd: number;
+  requested_price?: number; stop_loss?: number;
+  tp1?: number; tp2?: number; tp3?: number;
+  order_type?: string; signal_id?: number; notes?: string;
+}): Promise<PaperOrder> {
+  const response = await fetch(`${BASE_URL}/account/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<PaperOrder>;
+}
+
+export async function fillOrder(id: number, fill_price: number): Promise<PaperOrder> {
+  const response = await fetch(`${BASE_URL}/account/orders/${id}/fill`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fill_price }),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<PaperOrder>;
+}
+
+export async function cancelOrder(id: number): Promise<PaperOrder> {
+  const response = await fetch(`${BASE_URL}/account/orders/${id}/cancel`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<PaperOrder>;
+}

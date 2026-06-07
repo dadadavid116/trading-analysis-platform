@@ -12,7 +12,7 @@ const SYMBOL_LABELS: Record<string, string> = {
   SOLUSDT: 'SOL',
 };
 
-type Page = 'dashboard' | 'console' | 'context';
+type Page = 'dashboard' | 'console' | 'context' | 'account';
 
 interface LayoutProps {
   children:       ReactNode;
@@ -29,6 +29,7 @@ const PAGES: { id: Page; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'console',   label: 'Console'   },
   { id: 'context',   label: 'Context'   },
+  { id: 'account',   label: 'Account'   },
 ];
 
 export default function Layout({
