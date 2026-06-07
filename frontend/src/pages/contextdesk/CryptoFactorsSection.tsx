@@ -199,7 +199,7 @@ export default function CryptoFactorsSection() {
       </div>
 
       <span style={{ fontSize: font.size.sm, color: colors.textFaint, fontStyle: 'italic' }}>
-        Crypto factors only — macro layer (DXY · yields · SPX · VIX) adds in Phase 81.
+        Crypto factors feed into the unified Context Score (60% weight). Macro context in the Macro tab.
       </span>
     </div>
   );

@@ -1,8 +1,10 @@
 """
-routers/context.py — Context Scoring Engine endpoints (Phase 82).
+routers/context.py — Context Scoring Engine endpoints (Phase 82 + 83).
 
-GET /api/context/score   — current unified Context Score (15-min cache)
-GET /api/context/history — scoring history from factor_scores table
+GET /api/context/score      — unified Context Score (15-min cache)
+GET /api/context/history    — scoring history from factor_scores table
+GET /api/context/events     — upcoming economic events (FOMC/CPI/NFP)
+GET /api/context/ai-summary — AI market context narrative (30-min cache)
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -11,6 +13,7 @@ from sqlalchemy import text
 
 from app.database import get_db
 from app.services.context_scorer import compute_context_snapshot
+from app.services.context_ai import upcoming_events, get_context_ai_summary
 
 router = APIRouter()
 
@@ -62,3 +65,24 @@ async def get_context_history(
         }
         for r in rows
     ]
+
+
+@router.get("/context/events")
+async def get_context_events(count: int = Query(default=6, ge=2, le=12)):
+    """Return upcoming high-impact economic events (FOMC / CPI / NFP)."""
+    return upcoming_events(count)
+
+
+@router.get("/context/ai-summary")
+async def get_context_ai_summary_endpoint(
+    symbol: str = "BTCUSDT",
+    refresh: bool = False,
+    db: AsyncSession = Depends(get_db),
+):
+    """AI market context narrative via Claude Haiku. 30-min cache; pass refresh=true to bypass."""
+    summary, generated_at = await get_context_ai_summary(db, symbol, refresh)
+    return {
+        "symbol":       symbol,
+        "summary":      summary,
+        "generated_at": generated_at.isoformat(),
+    }

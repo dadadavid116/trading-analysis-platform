@@ -830,3 +830,30 @@ export interface ContextScore {
 export function fetchContextScore(symbol: string = 'BTCUSDT'): Promise<ContextScore> {
   return apiFetch<ContextScore>(`/context/score?symbol=${symbol}`);
 }
+
+export interface ContextEvent {
+  name:      string;
+  date:      string;      // ISO date string e.g. "2026-06-17"
+  days_away: number;
+  type:      'fomc' | 'cpi' | 'nfp';
+  impact:    'high' | 'medium' | 'low';
+}
+
+export interface ContextAiSummary {
+  symbol:       string;
+  summary:      string;
+  generated_at: string;
+}
+
+/** Fetch the next N upcoming economic events (FOMC / CPI / NFP). */
+export function fetchContextEvents(count: number = 6): Promise<ContextEvent[]> {
+  return apiFetch<ContextEvent[]>(`/context/events?count=${count}`);
+}
+
+/** Fetch (or generate) AI market context narrative. Pass refresh=true to bypass 30-min cache. */
+export function fetchContextAiSummary(
+  symbol: string = 'BTCUSDT',
+  refresh: boolean = false,
+): Promise<ContextAiSummary> {
+  return apiFetch<ContextAiSummary>(`/context/ai-summary?symbol=${symbol}&refresh=${refresh}`);
+}

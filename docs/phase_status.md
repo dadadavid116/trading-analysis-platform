@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 82**.
+> Last updated: end of **Phase 83**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 82** (Factor Scoring Engine v1).
+- **Current completed implementation phase:** **Phase 83** (Context Desk v1 Complete).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -28,10 +28,11 @@
 | 80 | Macro Source Decision Matrix | Authoritative sourcing spec for all macro data items. Two vendors decided: **yfinance** (DXY, Gold, SPX, NDX, VIX — free, no key) + **FRED API** (yields, real rates, breakeven, HY spread, CPI, PCE, NFP — free API key). MOVE index omitted (not free); HY spread used as proxy. FOMC dates hardcoded in `macro_config.py`. Risk-on/off derived in Phase 82 scoring. `FRED_API_KEY` added to `.env.example`. Decisions D15–D21 logged in `decision_log.md`. |
 | 81 | Macro Factor Collector Pack | `macro_observations` table (Alembic 0008). 7 macro factors: DXY, SPX, VIX, Gold (yfinance), UST 10Y, HY credit spread, CPI YoY (FRED API). 15-min DB cache, on-demand. `GET /api/macro/snapshot` with FOMC countdown. `MacroFactorsSection.tsx` upgraded from placeholder to live regime header + 7 factor cards. FRED factors gracefully absent if `FRED_API_KEY` not set. |
 | 82 | Factor Scoring Engine v1 | `factor_scores` + `factor_weights` tables (Alembic 0009). `context_scorer.py` blends crypto (60%) + macro (40%) into a unified Context Score on -100..+100. `GET /api/context/score` + `/api/context/history`. `OverviewSection.tsx` upgraded from crypto-only PREVIEW to live unified score with consensus bar (▼ Short / ─ Neutral / ▲ Long), sub-score meta (Crypto 60% / Macro 40%), and 3 FactorCard contribution cards. Display-only v1 — does not gate scanner decisions. |
+| 83 | Context Desk v1 Complete | `context_ai.py` — AI market context narrative via Claude Haiku (30-min cache). `GET /api/context/events` (FOMC/CPI/NFP countdown). `GET /api/context/ai-summary` (AI narrative, Refresh button). OverviewSection extended: Event Calendar Strip, AI Context Card, macro signal tower rows (DXY/Gold/UST10Y/SPX, context-only). CryptoFactorsSection + MacroFactorsSection placeholder text updated. Context Desk now fully usable as a daily trading-support page. |
 
 ## Next implementation phase
 
-**Phase 83 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 84 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

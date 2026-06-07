@@ -224,8 +224,7 @@ export default function MacroFactorsSection() {
       </div>
 
       <span style={{ fontSize: font.size.sm, color: colors.textFaint, fontStyle: 'italic' }}>
-        Macro is context only. Crypto factors remain the primary scoring signal (Phase 79).
-        Unified composite score in Phase 82.
+        Macro is context only (40% weight in unified Context Score). Overview tab shows the combined score.
       </span>
     </div>
   );

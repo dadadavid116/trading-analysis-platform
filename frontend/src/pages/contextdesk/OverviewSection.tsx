@@ -1,14 +1,21 @@
-import { useState, useEffect, CSSProperties } from 'react';
-import { fetchScannerSignals, fetchContextScore } from '../../api';
-import type { ScannerResponse, SymbolScanResult, ContextScore } from '../../api';
+import { useState, useEffect, useCallback, CSSProperties } from 'react';
+import {
+  fetchScannerSignals, fetchContextScore, fetchMacroSnapshot,
+  fetchContextEvents, fetchContextAiSummary,
+} from '../../api';
+import type {
+  ScannerResponse, SymbolScanResult, ContextScore,
+  MacroSnapshot, MacroFactor, ContextEvent, ContextAiSummary,
+} from '../../api';
 import { Card, Badge, ScoreBar, FactorCard, SectionHeader, colors, space, font, Tone } from '../../theme';
 
 /**
- * OverviewSection — Context Desk landing view (Phase 82 upgrade).
+ * OverviewSection — Context Desk landing view (Phase 83 complete).
  *
- * Context Score is now the unified composite of crypto (60%) + macro (40%) factor
- * scores. The PREVIEW/CRYPTO-ONLY badges are removed; data is live from Phase 82
- * Factor Scoring Engine. Asset Signal Tower (scanner signals) is unchanged.
+ * Adds to Phase 82:
+ * - Event Calendar Strip (FOMC / CPI / NFP countdown chips)
+ * - AI Market Context Summary card (Claude Haiku, 30-min cache, Refresh button)
+ * - Extended Asset Signal Tower with macro rows (DXY / Gold / UST10Y / SPX)
  */
 
 const DISPLAY: Record<string, string> = { BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL' };
@@ -19,6 +26,12 @@ const REGIME_LABELS: Record<string, string> = {
   neutral:         'Neutral',
   neutral_bearish: 'Neutral-Bearish',
   risk_off:        'Risk-Off',
+};
+
+const EVENT_ICON: Record<string, string> = {
+  fomc: '🏦',
+  cpi:  '📊',
+  nfp:  '💼',
 };
 
 function regimeTone(regime: string): Tone {
@@ -42,6 +55,12 @@ function biasToDirection(bias: string): string {
   return bias === 'bullish' ? '▲ Long' : bias === 'bearish' ? '▼ Short' : '─ Neutral';
 }
 
+function macroDir(direction: string): { badge: string; tone: Tone } {
+  if (direction === 'bullish') return { badge: '▲ Long',    tone: 'bull' };
+  if (direction === 'bearish') return { badge: '▼ Short',   tone: 'bear' };
+  return                              { badge: '─ Neutral', tone: 'neutral' };
+}
+
 function subDir(score: number | null | undefined): 'long' | 'short' | 'neutral' {
   if (score == null) return 'neutral';
   if (score > 15)   return 'long';
@@ -59,23 +78,46 @@ function toBarScore(score: number | null | undefined): number {
   return Math.max(0, Math.min(100, 50 + score / 2));
 }
 
+function fmtMacroRaw(name: string, v: number | null | undefined): string {
+  if (v == null) return '—';
+  switch (name) {
+    case 'dxy':    return v.toFixed(2);
+    case 'spx':    return v.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    case 'gold':   return `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    case 'ust_10y': return `${v.toFixed(2)}%`;
+    default:       return v.toFixed(2);
+  }
+}
+
+const MACRO_ROW_ORDER = ['dxy', 'gold', 'ust_10y', 'spx'];
+const MACRO_ROW_LABEL: Record<string, string> = {
+  dxy:    'DXY',
+  gold:   'Gold',
+  ust_10y: 'UST10Y',
+  spx:    'SPX',
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export default function OverviewSection() {
   const [scanner, setScanner] = useState<ScannerResponse | null>(null);
   const [ctx,     setCtx]     = useState<ContextScore | null>(null);
+  const [macro,   setMacro]   = useState<MacroSnapshot | null>(null);
 
   useEffect(() => {
     const loadScanner = () => fetchScannerSignals().then(setScanner).catch(() => {});
     const loadCtx     = () => fetchContextScore('BTCUSDT').then(setCtx).catch(() => {});
+    const loadMacro   = () => fetchMacroSnapshot().then(setMacro).catch(() => {});
 
-    loadScanner();
-    loadCtx();
+    loadScanner(); loadCtx(); loadMacro();
 
-    const scanId = setInterval(loadScanner, 30_000);
-    const ctxId  = setInterval(loadCtx, 15 * 60 * 1000);
-    return () => { clearInterval(scanId); clearInterval(ctxId); };
+    const scanId  = setInterval(loadScanner, 30_000);
+    const ctxId   = setInterval(loadCtx,     15 * 60 * 1000);
+    const macroId = setInterval(loadMacro,   15 * 60 * 1000);
+    return () => { clearInterval(scanId); clearInterval(ctxId); clearInterval(macroId); };
   }, []);
 
-  const symbols     = scanner?.symbols ?? [];
+  const symbols     = scanner?.symbols   ?? [];
   const regime      = ctx?.regime            ?? 'neutral';
   const env         = ctx?.trade_environment ?? '—';
   const rawScore    = ctx?.context_score     ?? 0;
@@ -86,9 +128,15 @@ export default function OverviewSection() {
   const barScore    = toBarScore(rawScore);
   const tone        = regimeTone(regime);
 
+  const macroFactorMap: Record<string, MacroFactor> = {};
+  (macro?.factors ?? []).forEach((f) => { macroFactorMap[f.factor_name] = f; });
+
   return (
     <div style={scrollWrap}>
-      {/* ── Context Score header ─────────────────────────────────────────── */}
+      {/* ── Event Calendar Strip ──────────────────────────────────────── */}
+      <EventStrip />
+
+      {/* ── Context Score header ─────────────────────────────────────── */}
       <Card style={{ display: 'flex', flexDirection: 'column', gap: space.lg }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: space.md }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: space.md }}>
@@ -112,7 +160,6 @@ export default function OverviewSection() {
           <Meta label="Confidence"        value={`${(confidence * 100).toFixed(0)}%`} />
         </div>
 
-        {/* Consensus bar */}
         <div style={{ borderTop: `1px solid ${colors.borderSubtle}`, paddingTop: space.md, display: 'flex', flexDirection: 'column', gap: space.sm }}>
           <span style={{ fontSize: font.size.sm, color: colors.textDim, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
             Consensus
@@ -121,7 +168,7 @@ export default function OverviewSection() {
         </div>
       </Card>
 
-      {/* ── Factor Contribution Cards ────────────────────────────────────── */}
+      {/* ── Factor Contribution Cards ─────────────────────────────────── */}
       <SectionHeader title="Factor Contributions" />
       <div style={grid}>
         <FactorCard
@@ -147,15 +194,161 @@ export default function OverviewSection() {
         />
       </div>
 
-      {/* ── Asset Signal Tower ───────────────────────────────────────────── */}
+      {/* ── AI Market Context Summary ─────────────────────────────────── */}
+      <AiContextCard symbol="BTCUSDT" />
+
+      {/* ── Asset Signal Tower ───────────────────────────────────────── */}
       <SectionHeader title="Asset Signal Tower" right={<Badge tone="neutral">live scanner</Badge>} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: space.sm }}>
         {symbols.length === 0 && (
           <span style={{ fontSize: font.size.md, color: colors.textFaint, fontStyle: 'italic' }}>Loading scanner…</span>
         )}
         {symbols.map((s) => <SignalRow key={s.symbol} s={s} />)}
+
+        {/* Macro context rows */}
+        {MACRO_ROW_ORDER.some((k) => macroFactorMap[k]) && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space.sm, paddingTop: space.xs }}>
+              <span style={{ fontSize: font.size.sm, color: colors.textDim, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Macro Context
+              </span>
+              <span style={{ fontSize: font.size.xs, color: colors.textFaint }}>(context only, not tradeable here)</span>
+            </div>
+            {MACRO_ROW_ORDER.map((key) => {
+              const f = macroFactorMap[key];
+              if (!f) return null;
+              return (
+                <MacroSignalRow
+                  key={key}
+                  name={MACRO_ROW_LABEL[key] ?? key}
+                  direction={f.direction}
+                  rawDisplay={fmtMacroRaw(key, f.raw_value)}
+                  score={f.normalized_score}
+                />
+              );
+            })}
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+// ── Event Strip ───────────────────────────────────────────────────────────────
+
+function EventStrip() {
+  const [events, setEvents] = useState<ContextEvent[]>([]);
+
+  useEffect(() => {
+    fetchContextEvents(6).then(setEvents).catch(() => {});
+  }, []);
+
+  if (events.length === 0) return null;
+
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: space.sm }}>
+      {events.map((ev) => {
+        const urgency = ev.days_away <= 7 ? colors.bear
+          : ev.days_away <= 21 ? colors.warn
+          : colors.textFaint;
+        const daysLabel = ev.days_away === 0 ? 'today'
+          : ev.days_away === 1 ? 'tomorrow'
+          : `${ev.days_away}d`;
+        return (
+          <div
+            key={`${ev.type}-${ev.date}`}
+            style={{
+              display:         'flex',
+              alignItems:      'center',
+              gap:             space.xs,
+              padding:         `${space.xs} ${space.sm}`,
+              border:          `1px solid ${urgency}55`,
+              borderRadius:    '4px',
+              backgroundColor: `${urgency}0f`,
+            }}
+          >
+            <span style={{ fontSize: font.size.sm }}>{EVENT_ICON[ev.type] ?? '📅'}</span>
+            <span style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: urgency }}>
+              {ev.name}
+            </span>
+            <span style={{ fontSize: font.size.xs, color: colors.textFaint }}>
+              ↓{daysLabel}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── AI Context Summary Card ───────────────────────────────────────────────────
+
+function AiContextCard({ symbol }: { symbol: string }) {
+  const [data,    setData]    = useState<ContextAiSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchContextAiSummary(symbol, refresh);
+      setData(result);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [symbol]);
+
+  useEffect(() => { load(false); }, [load]);
+
+  const ts = data?.generated_at
+    ? new Date(data.generated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : '—';
+
+  return (
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: space.md }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space.sm }}>
+          <span style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: colors.textSecondary }}>
+            ✦ AI Market Context
+          </span>
+          {data && !loading && (
+            <span style={{ fontSize: font.size.xs, color: colors.textFaint }}>generated {ts}</span>
+          )}
+        </div>
+        <button
+          onClick={() => load(true)}
+          disabled={loading}
+          style={{
+            padding:         `${space.xs} ${space.sm}`,
+            background:      'transparent',
+            border:          `1px solid ${colors.borderSubtle}`,
+            borderRadius:    '4px',
+            color:           loading ? colors.textFaint : colors.textSecondary,
+            fontSize:        font.size.sm,
+            cursor:          loading ? 'wait' : 'pointer',
+          }}
+        >
+          {loading ? '…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && (
+        <span style={{ fontSize: font.size.sm, color: colors.bear }}>{error}</span>
+      )}
+      {data?.summary && (
+        <p style={{ fontSize: font.size.md, color: colors.text, lineHeight: font.lineHeight.normal, margin: 0 }}>
+          {data.summary}
+        </p>
+      )}
+      {!data && !error && !loading && (
+        <span style={{ fontSize: font.size.sm, color: colors.textFaint, fontStyle: 'italic' }}>
+          No summary yet — click Refresh to generate.
+        </span>
+      )}
+    </Card>
   );
 }
 
@@ -217,7 +410,7 @@ function SignalRow({ s }: { s: SymbolScanResult }) {
   const c         = tone === 'bull' ? colors.bull : tone === 'bear' ? colors.bear : colors.textMuted;
   return (
     <Card padding={space.md} style={{ display: 'flex', alignItems: 'center', gap: space.md }}>
-      <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: colors.text, width: '42px', flexShrink: 0 }}>
+      <span style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: colors.text, width: '52px', flexShrink: 0 }}>
         {DISPLAY[s.symbol] ?? s.symbol}
       </span>
       <span style={{ width: '74px', flexShrink: 0 }}>
@@ -237,6 +430,32 @@ function SignalRow({ s }: { s: SymbolScanResult }) {
         )}
       </div>
       <span style={{ fontSize: font.size.sm, color: colors.textFaint, flexShrink: 0 }}>{s.signal_count} sig</span>
+    </Card>
+  );
+}
+
+function MacroSignalRow({ name, direction, rawDisplay, score }: {
+  name: string; direction: string; rawDisplay: string; score: number;
+}) {
+  const { badge, tone } = macroDir(direction);
+  const c = tone === 'bull' ? colors.bull : tone === 'bear' ? colors.bear : colors.textMuted;
+  return (
+    <Card padding={space.md} style={{ display: 'flex', alignItems: 'center', gap: space.md, opacity: 0.9 }}>
+      <span style={{ fontSize: font.size.md, fontWeight: font.weight.bold, color: colors.textSecondary, width: '52px', flexShrink: 0 }}>
+        {name}
+      </span>
+      <span style={{ width: '74px', flexShrink: 0 }}>
+        <Badge tone={tone}>{badge}</Badge>
+      </span>
+      <span style={{ fontFamily: font.mono, fontSize: font.size.md, color: c, width: '54px', flexShrink: 0 }}>
+        {score >= 0 ? '+' : ''}{score.toFixed(2)}
+      </span>
+      <span style={{ flex: 1, fontSize: font.size.md, color: colors.textFaint }}>
+        {rawDisplay}
+      </span>
+      <span style={{ fontSize: font.size.xs, color: colors.textFaint, flexShrink: 0, fontStyle: 'italic' }}>
+        ctx
+      </span>
     </Card>
   );
 }
