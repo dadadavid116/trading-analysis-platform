@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   fetchAccountState, fetchTradeStats, fetchEquityCurve, fetchOrders,
   fetchAccountConfig, updateAccountConfig, closePosition, cancelPosition,
