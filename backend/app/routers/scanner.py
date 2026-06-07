@@ -176,7 +176,7 @@ async def _funding_signal(symbol: str, db: AsyncSession) -> list[dict]:
     if row is None:
         return []
 
-    rate = float(row[0])
+    rate = float(row)
 
     if rate > 0.0005:
         severity  = "alert" if rate > 0.001 else "warning"

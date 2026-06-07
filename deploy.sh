@@ -16,11 +16,14 @@ git checkout caddy/Caddyfile 2>/dev/null || true
 git pull
 
 if [ "${1}" = "quick" ]; then
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build frontend api
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache frontend
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans frontend api
 else
   # Rebuild everything that has a build: section.
-  # Services using pre-built images (db, caddy, backup) are unaffected by --build.
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+  # --no-cache frontend ensures JS/CSS changes always land even if layer hashes collide.
+  # --remove-orphans removes stale Caddy/other containers that cause 502s after renames.
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache frontend
+  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --remove-orphans
 fi
 
 # Apply any pending Alembic migrations.

@@ -926,11 +926,10 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
       cvdChart.applyOptions({ rightPriceScale: { minimumWidth: psWidth } });
       psSyncing = false;
     };
+    // Only subscribe the main chart — subcharts have timeScale: { visible: false }
+    // so their subscribeSizeChange fires with w=0, making psWidth = full container
+    // width which breaks alignment for all panels.
     chart.timeScale().subscribeSizeChange((w) => alignPriceScales(chartContainerRef.current, w));
-    rsiChart.timeScale().subscribeSizeChange((w) => alignPriceScales(rsiContainerRef.current, w));
-    macdChart.timeScale().subscribeSizeChange((w) => alignPriceScales(macdContainerRef.current, w));
-    stochChart.timeScale().subscribeSizeChange((w) => alignPriceScales(stochContainerRef.current, w));
-    cvdChart.timeScale().subscribeSizeChange((w) => alignPriceScales(cvdContainerRef.current, w));
 
     // ResizeObserver keeps all charts in sync with panel width changes.
     const ro = new ResizeObserver(() => {
