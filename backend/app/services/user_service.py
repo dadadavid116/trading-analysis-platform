@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt
 from jose import jwt
-from passlib.context import CryptContext
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,17 +17,21 @@ from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _ALGORITHM = "HS256"
 _TOKEN_EXPIRE_DAYS = 30
 
 
+def _normalize(password: str) -> bytes:
+    """SHA-256 pre-hash so bcrypt's 72-byte limit never applies."""
+    return hashlib.sha256(password.encode()).digest()
+
+
 def _hash_password(password: str) -> str:
-    return _pwd.hash(password)
+    return bcrypt.hashpw(_normalize(password), bcrypt.gensalt(rounds=12)).decode()
 
 
 def _verify_password(plain: str, hashed: str) -> bool:
-    return _pwd.verify(plain, hashed)
+    return bcrypt.checkpw(_normalize(plain), hashed.encode())
 
 
 def check_password(user: User, password: str) -> bool:

@@ -33,7 +33,7 @@ alembic>=1.13.0
 yfinance>=0.2.50
 
 # Password hashing for app-level user accounts (Phase 95)
-passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0
 
 # JWT token signing and verification (Phase 95)
 python-jose[cryptography]>=3.3.0
