@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, CSSProperties } from 'react';
-import { fetchSignals, activateSignal, invalidateSignal } from '../api';
+import { fetchSignals, activateSignal, invalidateSignal, createProposal } from '../api';
 import type { Signal, SignalStatus } from '../api';
 
 // ── Status config ──────────────────────────────────────────────────────────────
@@ -62,11 +62,12 @@ function createdAgo(created: string): string {
 // ── Signal card ────────────────────────────────────────────────────────────────
 
 function SignalCard({
-  signal, onActivate, onInvalidate,
+  signal, onActivate, onInvalidate, onExecute,
 }: {
   signal:      Signal;
   onActivate:  (id: number) => void;
   onInvalidate:(id: number) => void;
+  onExecute:   (id: number) => void;
 }) {
   const isLong    = signal.direction === 'long';
   const dirColor  = isLong ? '#26a69a' : '#ef5350';
@@ -151,6 +152,12 @@ function SignalCard({
             Activate
           </button>
           <button
+            onClick={() => onExecute(signal.id)}
+            style={{ ...actionBtnStyle, borderColor: '#1f6feb88', color: '#58a6ff', fontWeight: 700 }}
+          >
+            ▶ Execute
+          </button>
+          <button
             onClick={() => onInvalidate(signal.id)}
             style={{ ...actionBtnStyle, borderColor: '#3a2a2a', color: '#7a4a4a' }}
           >
@@ -160,6 +167,12 @@ function SignalCard({
       )}
       {signal.status === 'active' && (
         <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+          <button
+            onClick={() => onExecute(signal.id)}
+            style={{ ...actionBtnStyle, borderColor: '#1f6feb88', color: '#58a6ff', fontWeight: 700 }}
+          >
+            ▶ Execute
+          </button>
           <button
             onClick={() => onInvalidate(signal.id)}
             style={{ ...actionBtnStyle, borderColor: '#3a2a2a', color: '#7a4a4a' }}
@@ -243,6 +256,20 @@ export default function SignalQueuePanel() {
     }
   };
 
+  const [execMsg, setExecMsg] = useState<string | null>(null);
+  const handleExecute = async (id: number) => {
+    setBusyId(id);
+    setExecMsg(null);
+    try {
+      await createProposal({ signal_id: id });
+      setExecMsg('Proposal created — review it in the Account › Execution tab.');
+    } catch (e) {
+      setExecMsg((e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const liveCount = signals.filter((s) => s.status === 'candidate' || s.status === 'active').length;
 
   return (
@@ -265,6 +292,17 @@ export default function SignalQueuePanel() {
           {loading ? 'loading…' : lastUpdate ? `updated ${lastUpdate}` : ''}
         </span>
       </div>
+
+      {/* Execution toast */}
+      {execMsg && (
+        <div style={{
+          margin: '4px 8px 0', padding: '5px 8px', borderRadius: 4, fontSize: 11,
+          background: execMsg.includes('Proposal') ? '#1a3a2a' : '#3a1010',
+          color:      execMsg.includes('Proposal') ? '#3fb950' : '#f85149',
+        }}>
+          {execMsg}
+        </div>
+      )}
 
       {/* Filter tabs */}
       <div style={filterBarStyle}>
@@ -296,6 +334,7 @@ export default function SignalQueuePanel() {
             signal={sig}
             onActivate={busyId === sig.id ? () => {} : handleActivate}
             onInvalidate={busyId === sig.id ? () => {} : handleInvalidate}
+            onExecute={busyId === sig.id ? () => {} : handleExecute}
           />
         ))}
       </div>

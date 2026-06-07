@@ -5,6 +5,7 @@ import {
   fillOrder, cancelOrder, toggleKillSwitch, getRiskSummary,
   AccountState, TradeStats, EquityCurvePoint, PaperOrder, AccountConfig, RiskSummary,
 } from '../api';
+import ExecutionPanel from '../panels/ExecutionPanel';
 
 // ── Base styles ────────────────────────────────────────────────────────────────
 
@@ -579,7 +580,7 @@ function ConfigTab({ onRefresh }: { onRefresh: () => void }) {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'positions' | 'orders' | 'risk' | 'config';
+type Tab = 'overview' | 'positions' | 'orders' | 'execution' | 'risk' | 'config';
 
 export default function AccountWorkspace() {
   const [tab, setTab] = useState<Tab>('overview');
@@ -615,6 +616,7 @@ export default function AccountWorkspace() {
     { id: 'overview',   label: 'Overview'   },
     { id: 'positions',  label: 'Positions'  },
     { id: 'orders',     label: 'Orders'     },
+    { id: 'execution',  label: 'Execution'  },
     { id: 'risk',       label: 'Risk'       },
     { id: 'config',     label: 'Config'     },
   ];
@@ -636,6 +638,7 @@ export default function AccountWorkspace() {
       {tab === 'overview'  && <OverviewTab  state={state} curve={curve} stats={stats} riskSummary={riskSummary} />}
       {tab === 'positions' && <PositionsTab state={state} onRefresh={load} />}
       {tab === 'orders'    && <OrdersTab />}
+      {tab === 'execution' && <ExecutionPanel />}
       {tab === 'risk'      && <RiskTab state={state} riskSummary={riskSummary} onRefresh={load} />}
       {tab === 'config'    && <ConfigTab onRefresh={load} />}
     </div>

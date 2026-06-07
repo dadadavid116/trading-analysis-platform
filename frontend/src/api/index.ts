@@ -1221,3 +1221,92 @@ export async function cancelOrder(id: number): Promise<PaperOrder> {
   }
   return response.json() as Promise<PaperOrder>;
 }
+
+// ── Paper Execution (Phase 89) ────────────────────────────────────────────────
+
+export interface ExecutionProposal {
+  id:            number;
+  signal_id:     number | null;
+  symbol:        string;
+  direction:     'long' | 'short';
+  timeframe:     string;
+  entry_price:   number;
+  stop_loss:     number | null;
+  tp1:           number | null;
+  tp2:           number | null;
+  tp3:           number | null;
+  size_usd:      number;
+  risk_usd:      number | null;
+  risk_pct:      number | null;
+  risk_verdict:  'approved' | 'warning' | 'blocked';
+  risk_reasons:  string[];
+  risk_warnings: string[];
+  status:        'pending' | 'approved' | 'rejected';
+  order_id:      number | null;
+  position_id:   number | null;
+  created_at:    string;
+  reviewed_at:   string | null;
+  notes:         string | null;
+}
+
+export function fetchProposals(status?: string): Promise<ExecutionProposal[]> {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  return apiFetch<ExecutionProposal[]>(`/execution/proposals${qs}`);
+}
+
+export async function createProposal(body: {
+  signal_id?:   number;
+  symbol?:      string;
+  direction?:   string;
+  entry_price?: number;
+  stop_loss?:   number;
+  tp1?: number; tp2?: number; tp3?: number;
+  timeframe?:   string;
+  notes?:       string;
+}): Promise<ExecutionProposal> {
+  const response = await fetch(`${BASE_URL}/execution/proposals`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<ExecutionProposal>;
+}
+
+export async function approveProposal(id: number): Promise<ExecutionProposal> {
+  const response = await fetch(`${BASE_URL}/execution/proposals/${id}/approve`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<ExecutionProposal>;
+}
+
+export async function rejectProposal(id: number, notes?: string): Promise<ExecutionProposal> {
+  const response = await fetch(`${BASE_URL}/execution/proposals/${id}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes }),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<ExecutionProposal>;
+}
+
+export async function runSlTpCheck(): Promise<{ checked: boolean; triggered: unknown[]; count: number }> {
+  const response = await fetch(`${BASE_URL}/execution/check`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json();
+}
