@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 81**.
+> Last updated: end of **Phase 82**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 81** (Macro Factor Collector Pack).
+- **Current completed implementation phase:** **Phase 82** (Factor Scoring Engine v1).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -27,10 +27,11 @@
 | 79 | Crypto Factor Collector Pack | `factor_observations` + `regime_snapshots` tables (Alembic). 7 normalized factors: funding_rate, oi_delta, ls_ratio, liq_pressure, ob_imbalance, fear_greed, total_mcap_24h. Deterministic regime classification (risk_on/neutral/fragile/risk_off/crowded_long/crowded_short). Derivatives Pressure Score + Liquidity Pressure Score sub-scores. `GET /api/factors/snapshot` endpoint. Context Desk Crypto tab + Overview regime header now use live scored data (replaced Phase 75 heuristic). |
 | 80 | Macro Source Decision Matrix | Authoritative sourcing spec for all macro data items. Two vendors decided: **yfinance** (DXY, Gold, SPX, NDX, VIX — free, no key) + **FRED API** (yields, real rates, breakeven, HY spread, CPI, PCE, NFP — free API key). MOVE index omitted (not free); HY spread used as proxy. FOMC dates hardcoded in `macro_config.py`. Risk-on/off derived in Phase 82 scoring. `FRED_API_KEY` added to `.env.example`. Decisions D15–D21 logged in `decision_log.md`. |
 | 81 | Macro Factor Collector Pack | `macro_observations` table (Alembic 0008). 7 macro factors: DXY, SPX, VIX, Gold (yfinance), UST 10Y, HY credit spread, CPI YoY (FRED API). 15-min DB cache, on-demand. `GET /api/macro/snapshot` with FOMC countdown. `MacroFactorsSection.tsx` upgraded from placeholder to live regime header + 7 factor cards. FRED factors gracefully absent if `FRED_API_KEY` not set. |
+| 82 | Factor Scoring Engine v1 | `factor_scores` + `factor_weights` tables (Alembic 0009). `context_scorer.py` blends crypto (60%) + macro (40%) into a unified Context Score on -100..+100. `GET /api/context/score` + `/api/context/history`. `OverviewSection.tsx` upgraded from crypto-only PREVIEW to live unified score with consensus bar (▼ Short / ─ Neutral / ▲ Long), sub-score meta (Crypto 60% / Macro 40%), and 3 FactorCard contribution cards. Display-only v1 — does not gate scanner decisions. |
 
 ## Next implementation phase
 
-**Phase 82 — Factor Scoring Engine v1.**
+**Phase 83 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

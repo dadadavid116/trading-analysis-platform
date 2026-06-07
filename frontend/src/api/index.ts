@@ -809,3 +809,24 @@ export interface MacroSnapshot {
 export function fetchMacroSnapshot(): Promise<MacroSnapshot> {
   return apiFetch<MacroSnapshot>('/macro/snapshot');
 }
+
+// ── Context Scoring Engine (Phase 82) ────────────────────────────────────────
+
+export interface ContextScore {
+  computed_at:       string;
+  symbol:            string;
+  context_score:     number;           // -100..+100
+  regime:            string;           // risk_on|neutral_bullish|neutral|neutral_bearish|risk_off
+  trade_environment: string;           // Favorable|Cautious-Positive|Neutral|Caution|Avoid
+  consensus:         'long' | 'short' | 'neutral';
+  confidence:        number;           // 0..1
+  crypto_score:      number | null;
+  macro_score:       number | null;
+  weights:           { crypto: number; macro: number };
+  weights_version:   number;
+}
+
+/** Compute (or return cached) unified Context Score. 15-min cache. */
+export function fetchContextScore(symbol: string = 'BTCUSDT'): Promise<ContextScore> {
+  return apiFetch<ContextScore>(`/context/score?symbol=${symbol}`);
+}

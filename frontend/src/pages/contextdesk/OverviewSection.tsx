@@ -1,33 +1,30 @@
 import { useState, useEffect, CSSProperties } from 'react';
-import { fetchScannerSignals, fetchFactorSnapshot } from '../../api';
-import type { ScannerResponse, SymbolScanResult, FactorSnapshot } from '../../api';
-import { Card, Badge, ScoreBar, SectionHeader, colors, space, font, Tone } from '../../theme';
+import { fetchScannerSignals, fetchContextScore } from '../../api';
+import type { ScannerResponse, SymbolScanResult, ContextScore } from '../../api';
+import { Card, Badge, ScoreBar, FactorCard, SectionHeader, colors, space, font, Tone } from '../../theme';
 
 /**
- * OverviewSection — Context Desk landing view (Phase 79 upgrade).
+ * OverviewSection — Context Desk landing view (Phase 82 upgrade).
  *
- * Regime, score, and trade environment are now computed from live crypto factor
- * data (Phase 79 factor_scorer). The PREVIEW heuristic has been replaced by the
- * deterministic scoring engine. Macro factors add in Phase 81.
- *
- * Asset Signal Tower continues to use scanner signals (live, no change).
+ * Context Score is now the unified composite of crypto (60%) + macro (40%) factor
+ * scores. The PREVIEW/CRYPTO-ONLY badges are removed; data is live from Phase 82
+ * Factor Scoring Engine. Asset Signal Tower (scanner signals) is unchanged.
  */
 
 const DISPLAY: Record<string, string> = { BTCUSDT: 'BTC', ETHUSDT: 'ETH', SOLUSDT: 'SOL' };
 
 const REGIME_LABELS: Record<string, string> = {
-  risk_on:       'Risk-On',
-  neutral:       'Neutral',
-  fragile:       'Fragile',
-  risk_off:      'Risk-Off',
-  crowded_long:  'Crowded Long',
-  crowded_short: 'Crowded Short',
+  risk_on:         'Risk-On',
+  neutral_bullish: 'Neutral-Bullish',
+  neutral:         'Neutral',
+  neutral_bearish: 'Neutral-Bearish',
+  risk_off:        'Risk-Off',
 };
 
 function regimeTone(regime: string): Tone {
-  if (regime === 'risk_on')       return 'bull';
-  if (regime === 'risk_off')      return 'bear';
-  if (regime === 'crowded_long' || regime === 'crowded_short') return 'warn';
+  if (regime === 'risk_on')         return 'bull';
+  if (regime === 'risk_off')        return 'bear';
+  if (regime === 'neutral_bearish') return 'warn';
   return 'neutral';
 }
 
@@ -45,55 +42,60 @@ function biasToDirection(bias: string): string {
   return bias === 'bullish' ? '▲ Long' : bias === 'bearish' ? '▼ Short' : '─ Neutral';
 }
 
+function subDir(score: number | null | undefined): 'long' | 'short' | 'neutral' {
+  if (score == null) return 'neutral';
+  if (score > 15)   return 'long';
+  if (score < -15)  return 'short';
+  return 'neutral';
+}
+
+function fmt(score: number | null | undefined): string {
+  if (score == null) return '—';
+  return `${score >= 0 ? '+' : ''}${score.toFixed(1)}`;
+}
+
+function toBarScore(score: number | null | undefined): number {
+  if (score == null) return 50;
+  return Math.max(0, Math.min(100, 50 + score / 2));
+}
+
 export default function OverviewSection() {
-  const [scanner,  setScanner]  = useState<ScannerResponse | null>(null);
-  const [snapshot, setSnapshot] = useState<FactorSnapshot | null>(null);
+  const [scanner, setScanner] = useState<ScannerResponse | null>(null);
+  const [ctx,     setCtx]     = useState<ContextScore | null>(null);
 
   useEffect(() => {
-    const loadScanner = () =>
-      fetchScannerSignals().then(setScanner).catch(() => {});
-    const loadFactor = () =>
-      fetchFactorSnapshot('BTCUSDT').then(setSnapshot).catch(() => {});
+    const loadScanner = () => fetchScannerSignals().then(setScanner).catch(() => {});
+    const loadCtx     = () => fetchContextScore('BTCUSDT').then(setCtx).catch(() => {});
 
     loadScanner();
-    loadFactor();
+    loadCtx();
 
-    const scanId   = setInterval(loadScanner, 30_000);
-    const factorId = setInterval(loadFactor, 3 * 60 * 1000);
-    return () => { clearInterval(scanId); clearInterval(factorId); };
+    const scanId = setInterval(loadScanner, 30_000);
+    const ctxId  = setInterval(loadCtx, 15 * 60 * 1000);
+    return () => { clearInterval(scanId); clearInterval(ctxId); };
   }, []);
 
-  const symbols  = scanner?.symbols ?? [];
-  const regime   = snapshot?.regime ?? 'neutral';
-  const env      = snapshot?.trade_environment ?? '—';
-  const driver   = snapshot?.primary_driver ?? '—';
-  const rawScore = snapshot?.crypto_score ?? 0;    // -100 to +100
-  const barScore = Math.max(0, Math.min(100, 50 + rawScore / 2));  // map to 0–100
-
-  const fngFactor = snapshot?.factors.find((f) => f.factor_name === 'fear_greed');
-
-  const tone = regimeTone(regime);
+  const symbols     = scanner?.symbols ?? [];
+  const regime      = ctx?.regime            ?? 'neutral';
+  const env         = ctx?.trade_environment ?? '—';
+  const rawScore    = ctx?.context_score     ?? 0;
+  const cryptoScore = ctx?.crypto_score      ?? null;
+  const macroScore  = ctx?.macro_score       ?? null;
+  const consensus   = ctx?.consensus         ?? 'neutral';
+  const confidence  = ctx?.confidence        ?? 0;
+  const barScore    = toBarScore(rawScore);
+  const tone        = regimeTone(regime);
 
   return (
     <div style={scrollWrap}>
-      {/* Info banner */}
-      <Card padding={space.md} style={{ borderColor: colors.borderSubtle, backgroundColor: '#12131a', display: 'flex', gap: space.md, alignItems: 'flex-start' }}>
-        <span style={{ fontSize: font.size.lg }}>ℹ</span>
-        <span style={{ fontSize: font.size.md, color: colors.textSecondary, lineHeight: font.lineHeight.normal }}>
-          <strong style={{ color: colors.text }}>Crypto factors only.</strong> Regime and score are computed from live
-          derivatives, liquidity, and sentiment data. Macro factors (DXY · yields · SPX · VIX) add in Phase 81.
-        </span>
-      </Card>
-
-      {/* Regime header */}
+      {/* ── Context Score header ─────────────────────────────────────────── */}
       <Card style={{ display: 'flex', flexDirection: 'column', gap: space.lg }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: space.md }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: space.md }}>
             <span style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: colors.textSecondary }}>
-              Crypto Regime
+              Context Score
             </span>
             <Badge tone={tone}>{REGIME_LABELS[regime] ?? regime}</Badge>
-            <Badge tone="neutral">CRYPTO ONLY</Badge>
           </div>
           <span style={{ fontSize: font.size.xxl, fontWeight: font.weight.bold, color: colors.text, fontFamily: font.mono }}>
             {rawScore >= 0 ? '+' : ''}{rawScore.toFixed(1)}
@@ -104,41 +106,106 @@ export default function OverviewSection() {
         <ScoreBar value={barScore} tone={tone} showValue={false} />
 
         <div style={metaRow}>
-          <Meta label="Trade Environment" value={env}    tone={envTone(env)} />
-          <Meta label="Primary Driver"    value={driver} />
-          <Meta label="Next Major Event"  value="—" sub="macro calendar: Phase 81" />
-          <Meta
-            label="Fear & Greed"
-            value={fngFactor ? `${fngFactor.raw_value?.toFixed(0)} · ${fngFactor.direction}` : snapshot ? '—' : '…'}
-          />
+          <Meta label="Trade Environment" value={env}                              tone={envTone(env)} />
+          <Meta label="Crypto 60%"        value={fmt(cryptoScore)}                 sub="derivatives · liquidity · sentiment" />
+          <Meta label="Macro 40%"         value={fmt(macroScore)}                  sub={macroScore == null ? 'no data' : 'DXY · rates · VIX · SPX'} />
+          <Meta label="Confidence"        value={`${(confidence * 100).toFixed(0)}%`} />
+        </div>
+
+        {/* Consensus bar */}
+        <div style={{ borderTop: `1px solid ${colors.borderSubtle}`, paddingTop: space.md, display: 'flex', flexDirection: 'column', gap: space.sm }}>
+          <span style={{ fontSize: font.size.sm, color: colors.textDim, letterSpacing: '0.05em', textTransform: 'uppercase' as const }}>
+            Consensus
+          </span>
+          <ConsensusBar consensus={consensus} />
         </div>
       </Card>
 
-      {/* Asset Signal Tower */}
-      <SectionHeader title="Asset Signal Tower" right={<Badge tone="neutral">crypto · live scanner</Badge>} />
+      {/* ── Factor Contribution Cards ────────────────────────────────────── */}
+      <SectionHeader title="Factor Contributions" />
+      <div style={grid}>
+        <FactorCard
+          label="Crypto Factors"
+          value={fmt(cryptoScore)}
+          direction={subDir(cryptoScore)}
+          score={toBarScore(cryptoScore)}
+          sub="60% weight · Phase 79"
+        />
+        <FactorCard
+          label="Macro Factors"
+          value={fmt(macroScore)}
+          direction={subDir(macroScore)}
+          score={toBarScore(macroScore)}
+          sub="40% weight · Phase 81"
+        />
+        <FactorCard
+          label="News / Catalyst"
+          value="—"
+          direction="neutral"
+          score={50}
+          sub="0% weight · Phase 96"
+        />
+      </div>
+
+      {/* ── Asset Signal Tower ───────────────────────────────────────────── */}
+      <SectionHeader title="Asset Signal Tower" right={<Badge tone="neutral">live scanner</Badge>} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: space.sm }}>
         {symbols.length === 0 && (
           <span style={{ fontSize: font.size.md, color: colors.textFaint, fontStyle: 'italic' }}>Loading scanner…</span>
         )}
         {symbols.map((s) => <SignalRow key={s.symbol} s={s} />)}
-        <span style={{ fontSize: font.size.sm, color: colors.textFaint, fontStyle: 'italic', paddingTop: space.xs }}>
-          Macro rows (DXY · Gold · UST 10Y · SPX) are added in Phase 81 — context only, not cross-asset trading.
-        </span>
       </div>
     </div>
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function Meta({ label, value, tone, sub }: { label: string; value: string; tone?: Tone; sub?: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: '120px' }}>
-      <span style={{ fontSize: font.size.sm, color: colors.textDim, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', minWidth: '110px' }}>
+      <span style={{ fontSize: font.size.sm, color: colors.textDim, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        {label}
+      </span>
       <span style={{ fontSize: font.size.lg, fontWeight: font.weight.semibold, color: tone === 'bull' ? colors.bull : tone === 'bear' ? colors.bear : tone === 'warn' ? colors.warn : colors.text }}>
         {value}
       </span>
       {sub && <span style={{ fontSize: font.size.xs, color: colors.textFaint }}>{sub}</span>}
+    </div>
+  );
+}
+
+const CONSENSUS_SEGMENTS: { key: string; label: string; colorFn: (c: typeof colors) => string }[] = [
+  { key: 'short',   label: '▼ Short',   colorFn: (c) => c.bear },
+  { key: 'neutral', label: '─ Neutral', colorFn: (c) => c.textMuted },
+  { key: 'long',    label: '▲ Long',    colorFn: (c) => c.bull },
+];
+
+function ConsensusBar({ consensus }: { consensus: string }) {
+  return (
+    <div style={{ display: 'flex', gap: space.sm }}>
+      {CONSENSUS_SEGMENTS.map(({ key, label, colorFn }) => {
+        const active = key === consensus;
+        const color  = active ? colorFn(colors) : colors.textFaint;
+        return (
+          <div
+            key={key}
+            style={{
+              flex:            1,
+              textAlign:       'center',
+              padding:         `${space.sm} ${space.md}`,
+              border:          `1px solid ${active ? color : colors.borderSubtle}`,
+              borderRadius:    '4px',
+              fontSize:        font.size.md,
+              fontWeight:      active ? font.weight.semibold : font.weight.normal,
+              color,
+              backgroundColor: active ? `${color}1a` : 'transparent',
+            }}
+          >
+            {label}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -174,7 +241,7 @@ function SignalRow({ s }: { s: SymbolScanResult }) {
   );
 }
 
-// ── Styles ──────────────────────────────────────────────────────────────────────
+// ── Styles ─────────────────────────────────────────────────────────────────────
 
 const scrollWrap: CSSProperties = {
   height:        '100%',
@@ -192,4 +259,10 @@ const metaRow: CSSProperties = {
   gap:        space.xl,
   borderTop:  `1px solid ${colors.borderSubtle}`,
   paddingTop: space.md,
+};
+
+const grid: CSSProperties = {
+  display:             'grid',
+  gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+  gap:                 space.md,
 };
