@@ -97,8 +97,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const { user, jwtEnabled } = useAuth();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [saving, setSaving]     = useState(false);
-  const isAuthenticated = jwtEnabled ? !!user : true;
-
   // Load settings when auth state resolves
   useEffect(() => {
     let cancelled = false;

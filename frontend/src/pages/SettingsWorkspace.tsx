@@ -1,7 +1,7 @@
 import { useState, CSSProperties } from 'react';
 import { WorkspaceShell, SectionHeader, Card, Button, Badge } from '../theme/primitives';
 import { colors, space, font, radius } from '../theme/tokens';
-import { useSettings, useIsAuthenticated, DEFAULT_SETTINGS, FactorWeights } from '../contexts/SettingsContext';
+import { useSettings, DEFAULT_SETTINGS, FactorWeights } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 
 const TABS = [
