@@ -20,6 +20,7 @@ class AccountConfig(Base):
     max_open_risk_pct      = Column(Float, nullable=False, default=10.0)
     daily_loss_limit_pct   = Column(Float, nullable=False, default=5.0)
     kill_switch_active     = Column(Boolean, nullable=False, default=False)
+    live_mode_enabled      = Column(Boolean, nullable=False, default=False)
     updated_at             = Column(DateTime(timezone=True), nullable=False)
 
 

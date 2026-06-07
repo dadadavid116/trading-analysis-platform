@@ -89,6 +89,16 @@ class Settings(BaseSettings):
     admin_email: str = ""
     admin_password: str = ""
 
+    # ── OKX Live Execution (Phase 97) ─────────────────────────────────────────
+    # Required to enable live trading. Leave blank to keep the platform in
+    # paper-only mode. Keys need Trade permission only — never Withdraw.
+    # Use a sub-account API key with restricted IP for extra safety.
+    okx_api_key:        str  = ""
+    okx_api_secret:     str  = ""
+    okx_api_passphrase: str  = ""
+    # Set to True to use OKX simulated trading (testnet) instead of real orders.
+    okx_sandbox:        bool = True
+
 
 # Create a single shared settings instance.
 # Import this anywhere in the app:  from app.config import settings

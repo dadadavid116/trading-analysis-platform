@@ -6,6 +6,7 @@ import {
   AccountState, TradeStats, EquityCurvePoint, PaperOrder, AccountConfig, RiskSummary,
 } from '../api';
 import ExecutionPanel from '../panels/ExecutionPanel';
+import LiveGatePanel from '../panels/LiveGatePanel';
 
 // ── Base styles ────────────────────────────────────────────────────────────────
 
@@ -580,7 +581,7 @@ function ConfigTab({ onRefresh }: { onRefresh: () => void }) {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
-type Tab = 'overview' | 'positions' | 'orders' | 'execution' | 'risk' | 'config';
+type Tab = 'overview' | 'positions' | 'orders' | 'execution' | 'risk' | 'config' | 'live';
 
 export default function AccountWorkspace() {
   const [tab, setTab] = useState<Tab>('overview');
@@ -619,6 +620,7 @@ export default function AccountWorkspace() {
     { id: 'execution',  label: 'Execution'  },
     { id: 'risk',       label: 'Risk'       },
     { id: 'config',     label: 'Config'     },
+    { id: 'live',       label: '⚡ Live'    },
   ];
 
   return (
@@ -641,6 +643,7 @@ export default function AccountWorkspace() {
       {tab === 'execution' && <ExecutionPanel />}
       {tab === 'risk'      && <RiskTab state={state} riskSummary={riskSummary} onRefresh={load} />}
       {tab === 'config'    && <ConfigTab onRefresh={load} />}
+      {tab === 'live'      && <LiveGatePanel />}
     </div>
   );
 }
