@@ -857,6 +857,37 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
     syncAll(stochChart, [chart,    rsiChart,  macdChart,  cvdChart]);
     syncAll(cvdChart,   [chart,    rsiChart,  macdChart,  stochChart]);
 
+    // ── Price-scale width alignment ────────────────────────────────────────
+    // subscribeSizeChange fires whenever a chart's canvas area changes — which
+    // happens exactly when the right price-scale column changes width (e.g. BTC
+    // label "104,523" vs ETH label "2,456").  We read the actual price-scale
+    // width (= container width − time-scale canvas width) from the firing chart
+    // and apply it as minimumWidth to all five instances so their x-axes align.
+    //
+    // psSyncing prevents the cascade: applying minimumWidth to subcharts changes
+    // THEIR canvas areas, which would re-fire subscribeSizeChange in a loop.
+    //
+    // To add a future subplot: add one more subscribeSizeChange line below and
+    // include its chart in the alignPriceScales call — nothing else needed.
+    let psSyncing = false;
+    const alignPriceScales = (container: HTMLDivElement | null, tsWidth: number) => {
+      if (psSyncing || !container || container.clientHeight === 0) return;
+      const psWidth = Math.round(container.clientWidth - tsWidth);
+      if (psWidth < 40) return;
+      psSyncing = true;
+      chart.applyOptions({ rightPriceScale: { minimumWidth: psWidth } });
+      rsiChart.applyOptions({ rightPriceScale: { minimumWidth: psWidth } });
+      macdChart.applyOptions({ rightPriceScale: { minimumWidth: psWidth } });
+      stochChart.applyOptions({ rightPriceScale: { minimumWidth: psWidth } });
+      cvdChart.applyOptions({ rightPriceScale: { minimumWidth: psWidth } });
+      psSyncing = false;
+    };
+    chart.timeScale().subscribeSizeChange((w) => alignPriceScales(chartContainerRef.current, w));
+    rsiChart.timeScale().subscribeSizeChange((w) => alignPriceScales(rsiContainerRef.current, w));
+    macdChart.timeScale().subscribeSizeChange((w) => alignPriceScales(macdContainerRef.current, w));
+    stochChart.timeScale().subscribeSizeChange((w) => alignPriceScales(stochContainerRef.current, w));
+    cvdChart.timeScale().subscribeSizeChange((w) => alignPriceScales(cvdContainerRef.current, w));
+
     // ResizeObserver keeps all charts in sync with panel width changes.
     const ro = new ResizeObserver(() => {
       if (chartContainerRef.current)
@@ -1084,6 +1115,13 @@ function PricePanel({ symbol, onAnalysis }: PricePanelProps) {
           time: c.time as UTCTimestamp, open: c.open, high: c.high, low: c.low, close: c.close,
         }));
         const chartData = showHA ? computeHA(data) : rawData;
+        // Re-enable price-scale auto-scale before loading new data so the Y axis
+        // fits the new symbol/timeframe range (user may have manually scrolled it).
+        chartRef.current?.applyOptions({ rightPriceScale: { autoScale: true } });
+        rsiChartRef.current?.applyOptions({ rightPriceScale: { autoScale: true } });
+        macdChartRef.current?.applyOptions({ rightPriceScale: { autoScale: true } });
+        stochChartRef.current?.applyOptions({ rightPriceScale: { autoScale: true } });
+        cvdChartRef.current?.applyOptions({ rightPriceScale: { autoScale: true } });
         seriesRef.current!.setData(chartData);
         chartRef.current!.timeScale().fitContent();
         if (chartData.length > 0) {
