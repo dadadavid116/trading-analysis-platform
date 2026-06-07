@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 90**.
+> Last updated: end of **Phase 91**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 90** (Backtesting and Replay).
+- **Current completed implementation phase:** **Phase 91** (Review & Research Workspace).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -36,10 +36,11 @@
 | 88 | Execution & Account Workspace | Alembic 0013: `orders` + `order_events` tables (FK to signals + open_positions). `order_service.py`: create/fill/cancel; fill auto-opens a position via account_state.open_position(). `/api/account/equity-curve` (oldest-first snapshots), `/api/account/trade-stats` (wins/losses/win-rate/expectancy/PnL today+month+all-time), orders CRUD endpoints. `AccountWorkspace.tsx`: 4th nav-page with 5 inner tabs — Overview (equity, return%, drawdown, open-risk bar, equity-curve SVG, trade stats grid), Positions (open+close/cancel + closed history), Orders (pending/filled/cancelled filter + new-order form), Risk (kill switch toggle, exposure bars, per-symbol risk, rule adherence checklist), Config (capital + risk params form). Layout.tsx + App.tsx updated with "Account" workspace nav. |
 | 89 | Paper Execution Adapter | Alembic 0014: `execution_proposals` (signal_id FK, full price levels, risk assessment snapshot, status=pending/approved/rejected). `paper_execution.py`: create_proposal (risk-sizes via assess_trade), approve (order+fill→position), reject, check_sl_tp (scan open positions vs latest DB price; auto-closes on SL/TP hit; logs to event_log). `/api/execution/proposals` CRUD + `/api/execution/check`. `ExecutionPanel.tsx`: Pending/History/+Manual tabs, ProposalCard with verdict badge, risk reasons/warnings, Approve+Reject confirm dialogs. AccountWorkspace "Execution" tab. SignalQueuePanel "▶ Execute" button on candidate+active signals with toast feedback. |
 | 90 | Backtesting and Replay | No new migration. `backtest_service.py`: per-signal outcome simulation — walks 1-min price_candles from created_at → expires_at; detects SL/TP1/TP2/TP3 hits per direction; computes R-multiple; simulates compounding equity (risk_pct% per trade); bucket R-distribution (9 buckets); returns win_rate, profit_factor, expectancy_r, max_drawdown, total_return_pct, equity curve, trade list. `POST /api/backtest/run`, `GET /api/backtest/replay`. `BacktestPanel.tsx`: param form (symbol/direction/date range/risk%/start equity), Run button; stat grid; equity curve SVG with dashed baseline; R-distribution bar chart; toggle-able trade log table (dir/symbol/entry/outcome/R/PnL/regime). "Backtest" tab in OperatorConsole desktop + mobile. |
+| 91 | Review & Research Workspace | No new migration. `review_service.py`: `daily_review()` (today's closed trades, net PnL, win rate, AI coaching note via Haiku with 30-min cache), `regime_stats()` (closed trades grouped by signal regime), `rule_adherence()` (5-rule risk compliance score), `setup_type_stats()` (by timeframe + direction). `GET /api/review/daily|regime-stats|rule-adherence|setup-stats`. `ResearchWorkspace.tsx`: 5th nav-page "Review" with 7 tabs — Daily Review (AI coaching, trade list), By Regime (bar chart), Rules (score bar + per-rule pass/fail), By Setup (table), Journal (reused panel), Performance (reused panel), Backtest (reused panel). Layout.tsx + App.tsx updated with "Review" nav. OperatorConsole: journal/performance/backtest tabs removed (consolidated here). |
 
 ## Next implementation phase
 
-**Phase 91 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 92 — (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

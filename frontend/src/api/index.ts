@@ -1369,3 +1369,54 @@ export async function runBacktest(params: {
   }
   return response.json() as Promise<BacktestResult>;
 }
+
+// ── Review & Research (Phase 91) ──────────────────────────────────────────────
+
+export interface DailyReview {
+  date:             string;
+  total:            number;
+  wins:             number;
+  losses:           number;
+  win_rate:         number;
+  total_pnl:        number;
+  avg_win:          number;
+  avg_loss:         number;
+  open_count:       number;
+  open_risk_pct:    number;
+  current_equity:   number;
+  ai_coaching:      string | null;
+  recent_trades:    { symbol: string; direction: string; realized_pnl: number; closed_at: string | null }[];
+}
+
+export interface RegimeStat {
+  regime:    string;
+  total:     number;
+  wins:      number;
+  losses:    number;
+  win_rate:  number;
+  total_pnl: number;
+  avg_pnl:   number;
+}
+
+export interface RuleAdherence {
+  score:   number;
+  passing: number;
+  total:   number;
+  rules:   { rule: string; pass: boolean; detail: string }[];
+  equity:  number;
+  daily_drawdown_pct: number;
+}
+
+export interface SetupStat {
+  timeframe: string;
+  direction: string;
+  total:     number;
+  wins:      number;
+  win_rate:  number;
+  total_pnl: number;
+}
+
+export function fetchDailyReview():    Promise<DailyReview>    { return apiFetch('/review/daily'); }
+export function fetchRegimeStats():    Promise<RegimeStat[]>   { return apiFetch('/review/regime-stats'); }
+export function fetchRuleAdherence():  Promise<RuleAdherence>  { return apiFetch('/review/rule-adherence'); }
+export function fetchSetupStats():     Promise<SetupStat[]>    { return apiFetch('/review/setup-stats'); }

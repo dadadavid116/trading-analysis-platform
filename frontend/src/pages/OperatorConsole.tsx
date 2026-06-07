@@ -4,32 +4,27 @@ import type { ScannerResponse } from '../api';
 import EventLogPanel from '../panels/EventLogPanel';
 import ScannerPanel from '../panels/ScannerPanel';
 import CandidatePanel from '../panels/CandidatePanel';
-import JournalPanel from '../panels/JournalPanel';
-import PerformancePanel from '../panels/PerformancePanel';
 import PortfolioPanel from '../panels/PortfolioPanel';
 import SignalMatrixPanel from '../panels/SignalMatrixPanel';
 import SignalQueuePanel from '../panels/SignalQueuePanel';
 import AccountStatePanel from '../panels/AccountStatePanel';
 import RiskEnginePanel from '../panels/RiskEnginePanel';
-import BacktestPanel from '../panels/BacktestPanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
-// Note: News + Market Map (Heatmap) moved to the Context Desk workspace in Phase 73.
-type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk' | 'backtest';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk' | 'backtest';
+// Note: News + Market Map (Heatmap) moved to Context Desk (Phase 73).
+// Note: Journal, Performance, Backtest moved to Review workspace (Phase 91).
+type RightTab    = 'events' | 'portfolio' | 'signals' | 'queue' | 'account' | 'risk';
+type MobileTab   = 'scanner' | 'candidate' | 'queue' | 'account' | 'events' | 'portfolio' | 'signals' | 'risk';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
-  { id: 'scanner',     label: 'Scanner'   },
-  { id: 'candidate',   label: 'Setup'     },
-  { id: 'queue',       label: 'Queue'     },
-  { id: 'account',     label: 'Account'   },
-  { id: 'performance', label: 'Stats'     },
-  { id: 'journal',     label: 'Journal'   },
-  { id: 'events',      label: 'Events'    },
-  { id: 'portfolio',   label: 'Portfolio' },
-  { id: 'signals',     label: 'Signals'   },
-  { id: 'risk',        label: 'Risk'      },
-  { id: 'backtest',    label: 'Backtest'  },
+  { id: 'scanner',   label: 'Scanner'   },
+  { id: 'candidate', label: 'Setup'     },
+  { id: 'queue',     label: 'Queue'     },
+  { id: 'account',   label: 'Account'   },
+  { id: 'events',    label: 'Events'    },
+  { id: 'portfolio', label: 'Portfolio' },
+  { id: 'signals',   label: 'Signals'   },
+  { id: 'risk',      label: 'Risk'      },
 ];
 
 const dividerH: CSSProperties = { height: '1px', flexShrink: 0, backgroundColor: '#1e1e22' };
@@ -63,17 +58,14 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
   if (isMobile) {
     const activePanel = (() => {
       switch (mobileTab) {
-        case 'scanner':     return <ScannerPanel data={scanner} error={scanErr} />;
-        case 'candidate':   return <CandidatePanel data={scanner} />;
-        case 'queue':       return <SignalQueuePanel />;
-        case 'account':     return <AccountStatePanel />;
-        case 'performance': return <PerformancePanel />;
-        case 'journal':     return <JournalPanel />;
-        case 'events':      return <EventLogPanel />;
-        case 'portfolio':   return <PortfolioPanel />;
-        case 'signals':     return <SignalMatrixPanel />;
-        case 'risk':        return <RiskEnginePanel />;
-        case 'backtest':    return <BacktestPanel />;
+        case 'scanner':   return <ScannerPanel data={scanner} error={scanErr} />;
+        case 'candidate': return <CandidatePanel data={scanner} />;
+        case 'queue':     return <SignalQueuePanel />;
+        case 'account':   return <AccountStatePanel />;
+        case 'events':    return <EventLogPanel />;
+        case 'portfolio': return <PortfolioPanel />;
+        case 'signals':   return <SignalMatrixPanel />;
+        case 'risk':      return <RiskEnginePanel />;
       }
     })();
 
@@ -117,44 +109,32 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
       {/* Right column: tabbed (Event Log | Journal) */}
       <div style={rightColStyle}>
         <div style={tabBarStyle}>
-          <button style={tabBtnStyle(rightTab === 'events')}      onClick={() => setRightTab('events')}>
+          <button style={tabBtnStyle(rightTab === 'events')}    onClick={() => setRightTab('events')}>
             Event Log
           </button>
-          <button style={tabBtnStyle(rightTab === 'journal')}     onClick={() => setRightTab('journal')}>
-            Journal
+          <button style={tabBtnStyle(rightTab === 'queue')}     onClick={() => setRightTab('queue')}>
+            Queue
           </button>
-          <button style={tabBtnStyle(rightTab === 'performance')} onClick={() => setRightTab('performance')}>
-            Performance
+          <button style={tabBtnStyle(rightTab === 'account')}   onClick={() => setRightTab('account')}>
+            Account
+          </button>
+          <button style={tabBtnStyle(rightTab === 'signals')}   onClick={() => setRightTab('signals')}>
+            Signals
+          </button>
+          <button style={tabBtnStyle(rightTab === 'risk')}      onClick={() => setRightTab('risk')}>
+            Risk
           </button>
           <button style={tabBtnStyle(rightTab === 'portfolio')} onClick={() => setRightTab('portfolio')}>
             Portfolio
           </button>
-          <button style={tabBtnStyle(rightTab === 'queue')} onClick={() => setRightTab('queue')}>
-            Queue
-          </button>
-          <button style={tabBtnStyle(rightTab === 'account')} onClick={() => setRightTab('account')}>
-            Account
-          </button>
-          <button style={tabBtnStyle(rightTab === 'signals')} onClick={() => setRightTab('signals')}>
-            Signals
-          </button>
-          <button style={tabBtnStyle(rightTab === 'risk')} onClick={() => setRightTab('risk')}>
-            Risk
-          </button>
-          <button style={tabBtnStyle(rightTab === 'backtest')} onClick={() => setRightTab('backtest')}>
-            Backtest
-          </button>
         </div>
         <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          {rightTab === 'events'      && <EventLogPanel />}
-          {rightTab === 'journal'     && <JournalPanel />}
-          {rightTab === 'performance' && <PerformancePanel />}
-          {rightTab === 'portfolio'   && <PortfolioPanel />}
-          {rightTab === 'queue'       && <SignalQueuePanel />}
-          {rightTab === 'account'     && <AccountStatePanel />}
-          {rightTab === 'signals'     && <SignalMatrixPanel />}
-          {rightTab === 'risk'        && <RiskEnginePanel />}
-          {rightTab === 'backtest'    && <BacktestPanel />}
+          {rightTab === 'events'    && <EventLogPanel />}
+          {rightTab === 'queue'     && <SignalQueuePanel />}
+          {rightTab === 'account'   && <AccountStatePanel />}
+          {rightTab === 'signals'   && <SignalMatrixPanel />}
+          {rightTab === 'risk'      && <RiskEnginePanel />}
+          {rightTab === 'portfolio' && <PortfolioPanel />}
         </div>
       </div>
     </div>

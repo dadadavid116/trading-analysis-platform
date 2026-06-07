@@ -9,9 +9,10 @@ import ChatPanel from './panels/ChatPanel';
 import OperatorConsole from './pages/OperatorConsole';
 import ContextDesk from './pages/ContextDesk';
 import AccountWorkspace from './pages/AccountWorkspace';
+import ResearchWorkspace from './pages/ResearchWorkspace';
 import { useIsMobile } from './hooks/useIsMobile';
 
-type Page          = 'dashboard' | 'console' | 'context' | 'account';
+type Page          = 'dashboard' | 'console' | 'context' | 'account' | 'review';
 type MobileDashTab = 'chart' | 'liq' | 'ob' | 'deriv' | 'alerts' | 'chat';
 
 const MOBILE_DASH_TABS: { id: MobileDashTab; label: string }[] = [
@@ -132,6 +133,7 @@ export default function App() {
       >
         {activePage === 'console'  ? <OperatorConsole activeSymbol={activeSymbol} /> :
          activePage === 'account'  ? <AccountWorkspace /> :
+         activePage === 'review'   ? <ResearchWorkspace /> :
          <ContextDesk activeSymbol={activeSymbol} />}
       </Layout>
     );
@@ -171,6 +173,8 @@ export default function App() {
         <OperatorConsole activeSymbol={activeSymbol} />
       ) : activePage === 'account' ? (
         <AccountWorkspace />
+      ) : activePage === 'review' ? (
+        <ResearchWorkspace />
       ) : (
         <ContextDesk activeSymbol={activeSymbol} />
       )}
