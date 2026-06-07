@@ -50,19 +50,9 @@ export default function App() {
 }
 
 function AppInner() {
+  // All hooks must be declared before any conditional returns.
   const { jwtEnabled, user, loading } = useAuth();
   const isMobile = useIsMobile();
-
-  // While checking auth status, show a minimal dark screen.
-  if (loading) {
-    return <div style={{ background: '#0a0c12', height: '100vh', width: '100vw' }} />;
-  }
-
-  // JWT is enabled but no authenticated user — show login gate.
-  if (jwtEnabled && !user) {
-    return <LoginPage />;
-  }
-
   const [chatOpen,        setChatOpen]       = useState(!isMobile);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
   const [activeSymbol,    setActiveSymbol]   = useState('BTCUSDT');
@@ -86,6 +76,14 @@ function AppInner() {
   useEffect(() => {
     if (isMobile) setChatOpen(false);
   }, [isMobile]);
+
+  // Auth guards — safe to return early after all hooks are declared.
+  if (loading) {
+    return <div style={{ background: '#0a0c12', height: '100vh', width: '100vw' }} />;
+  }
+  if (jwtEnabled && !user) {
+    return <LoginPage />;
+  }
 
   const chatPanelEl = (
     <ChatPanel
