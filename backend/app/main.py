@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import require_api_key
 from app.config import settings
-from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news, factors, macro, context, signals, account, risk, execution, backtest, review, diagnostics, adapters, auth as auth_router
+from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news, factors, macro, context, signals, account, risk, execution, backtest, review, diagnostics, adapters, auth as auth_router, settings as settings_router
 
 logger = logging.getLogger(__name__)
 
@@ -137,4 +137,6 @@ app.include_router(review.router,       prefix="/api", dependencies=_auth)
 app.include_router(diagnostics.router,  prefix="/api", dependencies=_auth)
 app.include_router(adapters.router,     prefix="/api", dependencies=_auth)
 # Auth router has no _auth dependency — login/status endpoints must be reachable without a token.
-app.include_router(auth_router.router,  prefix="/api")
+app.include_router(auth_router.router,    prefix="/api")
+# Settings — protected by _auth (API key) but uses its own optional-user logic for JWT.
+app.include_router(settings_router.router, prefix="/api", dependencies=_auth)

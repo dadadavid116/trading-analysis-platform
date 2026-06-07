@@ -10,11 +10,13 @@ import OperatorConsole from './pages/OperatorConsole';
 import ContextDesk from './pages/ContextDesk';
 import AccountWorkspace from './pages/AccountWorkspace';
 import ResearchWorkspace from './pages/ResearchWorkspace';
+import SettingsWorkspace from './pages/SettingsWorkspace';
 import LoginPage from './pages/LoginPage';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SettingsProvider } from './contexts/SettingsContext';
 import { useIsMobile } from './hooks/useIsMobile';
 
-type Page          = 'dashboard' | 'console' | 'context' | 'account' | 'review';
+type Page          = 'dashboard' | 'console' | 'context' | 'account' | 'review' | 'settings';
 type MobileDashTab = 'chart' | 'liq' | 'ob' | 'deriv' | 'alerts' | 'chat';
 
 const MOBILE_DASH_TABS: { id: MobileDashTab; label: string }[] = [
@@ -44,7 +46,9 @@ function cell(flex: number): CSSProperties {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
+      <SettingsProvider>
+        <AppInner />
+      </SettingsProvider>
     </AuthProvider>
   );
 }
@@ -153,6 +157,7 @@ function AppInner() {
         {activePage === 'console'  ? <OperatorConsole activeSymbol={activeSymbol} /> :
          activePage === 'account'  ? <AccountWorkspace /> :
          activePage === 'review'   ? <ResearchWorkspace /> :
+         activePage === 'settings' ? <SettingsWorkspace /> :
          <ContextDesk activeSymbol={activeSymbol} />}
       </Layout>
     );
@@ -194,6 +199,8 @@ function AppInner() {
         <AccountWorkspace />
       ) : activePage === 'review' ? (
         <ResearchWorkspace />
+      ) : activePage === 'settings' ? (
+        <SettingsWorkspace />
       ) : (
         <ContextDesk activeSymbol={activeSymbol} />
       )}

@@ -4,13 +4,13 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 95**.
+> Last updated: end of **Phase 96**.
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 95** (Professional Account / Auth System).
+- **Current completed implementation phase:** **Phase 96** (Settings / Customization).
 - **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
 - **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
 
@@ -41,10 +41,11 @@
 | 93 | Telegram UX Upgrade | No new migration. `telegram_bot/bot.py` fully rewritten: BotFather command menu via `set_my_commands()` in `post_init` (15 commands). Persistent `ReplyKeyboardMarkup` (3 rows: Price/Signals/Risk/Positions, Market/Context/Alerts/History, BTC/ETH/SOL) sent with every response. Symbol switching: `/symbol BTC|ETH|SOL` + keyboard buttons update `chat_data["symbol"]`; all data commands use active symbol. New commands: `/signals` (candidate+active signal list), `/risk` (equity/exposure/kill-switch with inline toggle button), `/positions` (open paper positions), `/context` (factor score + regime from factor_scores), `/market` (AI commentary, replaces `/analysis`; alias kept), `/history` (recent closed trades). Kill switch inline button (`ks:on`/`ks:off`) writes directly to `account_config`. Keyboard button text routed to handlers in `handle_message`. AI chat now symbol-aware. |
 | 94 | Cross-Asset Adapter Refactor | No new migration. `backend/app/adapters/` package: `base.py` — abstract base classes (`MarketDataAdapter`, `DerivativesAdapter`, `NewsAdapter`, `ExecutionAdapter`) + DTOs (`PriceTick`, `OHLCVBar`, `FundingInfo`, `LiquidationEvent`, `AssetClass`, `AdapterNotImplemented`). `crypto_okx.py` — `OKXCryptoMarketDataAdapter` reads from `price_candles` DB table. `crypto_binance.py` — `BinanceCryptoDerivativesAdapter` reads from `funding_rates` + `open_interest` + `liquidations` tables. `stub_equities.py` — `StubEquityMarketDataAdapter`, `StubEquityDerivativesAdapter`, `StubPaperExecutionAdapter` (raises `AdapterNotImplemented` for equity/live calls; paper execution stub satisfies the interface). `registry.py` — `AdapterRegistry` singleton (`adapter_registry`) routes symbols to correct adapters; `status()` method for introspection. `GET /api/adapters/status`, `GET /api/adapters/ping`. Core services unchanged — adapters provide the seam for adding stocks/options without touching platform logic. |
 | 95 | Professional Account / Auth System | Alembic 0015: `users` table (email, username, hashed_password, role, is_active, created_at, last_login). `passlib[bcrypt]` + `python-jose[cryptography]` added to requirements. `app/models/user.py` — User ORM model. `app/services/user_service.py` — bcrypt password hashing, JWT create/decode (HS256, 30-day tokens), full user CRUD, `seed_admin()` (creates default admin from ADMIN_EMAIL/ADMIN_PASSWORD env vars on first startup). `app/routers/auth.py` — `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/change-password`, `GET /api/auth/status`. Auth router included in `main.py` without `_auth` dependency (login must be reachable without a token). JWT uses custom `X-App-Token` header to avoid conflicting with Caddy's `Authorization: Basic` layer. `frontend/src/contexts/AuthContext.tsx` — checks `/api/auth/status` on mount; validates stored token via `/api/auth/me`; exposes `user`, `jwtEnabled`, `loading`, `login()`, `logout()`. `frontend/src/pages/LoginPage.tsx` — dark-themed email/password login form. `App.tsx` wrapped in `<AuthProvider>`; shows loading screen → LoginPage (if JWT enabled + no user) → dashboard. `apiFetch` in `api/index.ts` automatically attaches `X-App-Token` header. Layout header shows username + Sign out button when JWT is active. Backward-compatible: if `JWT_SECRET_KEY` is not set, auth is skipped and the app loads directly. |
+| 96 | Settings / Customization | Alembic 0016: `settings_json TEXT NOT NULL DEFAULT '{}'` column on `users` table. `app/routers/settings.py` — `GET /api/settings` (returns user's settings or defaults if unauthenticated), `PUT /api/settings` (saves to user row; requires auth). `app/models/user.py` updated with `settings_json` column. `frontend/src/contexts/SettingsContext.tsx` — `AppSettings` type (density, aiModel, notifications, factorWeights, exportFormat), loads from backend when authenticated or localStorage when not, saves on change. `frontend/src/pages/SettingsWorkspace.tsx` — 6-tab settings page: General (density compact/normal), AI Models (claude/gpt per surface), Notifications (browser/Telegram/webhook/quiet hours), Account (change-password form), Factor Weights (editable weights 0–100 summing to 100, Phase 82 note), Export (csv/json). Settings workspace added as 6th nav item ("Settings") in Layout.tsx and App.tsx. Per-user persistence via backend; localStorage fallback for unauthenticated or JWT-disabled mode. |
 
 ## Next implementation phase
 
-**Phase 96 — (see `docs/future_phases_unfinished_overview.md`).**
+**Phase 97 — Live Execution Gate (see `docs/future_phases_unfinished_overview.md`).**
 
 ## Next implementation phase details
 - Retire or replace the **startup `create_all` + ad-hoc `ALTER TABLE IF NOT EXISTS`** behavior in

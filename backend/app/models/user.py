@@ -16,3 +16,4 @@ class User(Base):
     is_active       = Column(Boolean, nullable=False, default=True)
     created_at      = Column(DateTime(timezone=True), nullable=False)
     last_login      = Column(DateTime(timezone=True), nullable=True)
+    settings_json   = Column(Text, nullable=False, server_default="{}")
