@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import require_api_key
 from app.config import settings
-from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news, factors, macro, context, signals, account, risk, execution, backtest, review, diagnostics, adapters
+from app.routers import price, liquidations, orderbook, analysis, alerts, chat, strategy, chat_history, health, derivatives, symbols, events, scanner, journal, news, factors, macro, context, signals, account, risk, execution, backtest, review, diagnostics, adapters, auth as auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,13 @@ async def lifespan(app: FastAPI):
             "DASHBOARD_API_KEY not set — secondary API key layer is inactive. "
             "Primary access control is Caddy Basic Auth (production only)."
         )
+
+    # Seed the default admin user if JWT auth is configured and no users exist.
+    if settings.jwt_secret_key.strip() and settings.admin_email.strip():
+        from app.database import AsyncSessionLocal
+        from app.services.user_service import seed_admin
+        async with AsyncSessionLocal() as db:
+            await seed_admin(db)
 
     # Start background scanner worker
     from app.workers.scanner_worker import run_scanner_worker
@@ -129,3 +136,5 @@ app.include_router(backtest.router,     prefix="/api", dependencies=_auth)
 app.include_router(review.router,       prefix="/api", dependencies=_auth)
 app.include_router(diagnostics.router,  prefix="/api", dependencies=_auth)
 app.include_router(adapters.router,     prefix="/api", dependencies=_auth)
+# Auth router has no _auth dependency — login/status endpoints must be reachable without a token.
+app.include_router(auth_router.router,  prefix="/api")

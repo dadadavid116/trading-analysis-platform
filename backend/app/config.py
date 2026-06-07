@@ -77,6 +77,18 @@ class Settings(BaseSettings):
     # Not used by the frontend — no secret is embedded in the browser bundle.
     dashboard_api_key: str = ""
 
+    # ── JWT / App-level authentication (Phase 95) ─────────────────────────────
+    # Secret key for signing JWT tokens. Must be set to enable the in-app login
+    # system. Generate a value with:
+    #   python -c "import secrets; print(secrets.token_hex(32))"
+    # Leave blank to disable the login gate (Caddy Basic Auth remains the gate).
+    jwt_secret_key: str = ""
+
+    # Default admin account — seeded once on first startup if no users exist.
+    # After the first run the password can be changed via the Account settings.
+    admin_email: str = ""
+    admin_password: str = ""
+
 
 # Create a single shared settings instance.
 # Import this anywhere in the app:  from app.config import settings

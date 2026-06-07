@@ -4,6 +4,7 @@ import ServiceHealth from './ServiceHealth';
 import RelativeStrength from './RelativeStrength';
 import PriceTicker from './PriceTicker';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { useAuth } from '../contexts/AuthContext';
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] as const;
 const SYMBOL_LABELS: Record<string, string> = {
@@ -39,6 +40,7 @@ export default function Layout({
 }: LayoutProps) {
   const isMobile = useIsMobile();
   const isDash   = activePage === 'dashboard';
+  const { user, jwtEnabled, logout } = useAuth();
 
   return (
     <div style={rootStyle}>
@@ -94,6 +96,15 @@ export default function Layout({
 
           {isDash && <RelativeStrength />}
           <ServiceHealth />
+
+          {jwtEnabled && user && (
+            <div style={userChipStyle}>
+              <span style={userEmailStyle}>{user.username}</span>
+              <button style={logoutBtnStyle} onClick={logout} title="Sign out">
+                Sign out
+              </button>
+            </div>
+          )}
 
           {isDash && (
             <button style={chatToggleStyle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
@@ -262,3 +273,29 @@ const symbolBtnStyle = (active: boolean): CSSProperties => ({
   padding:         '3px 9px',
   transition:      'all 0.1s',
 });
+
+const userChipStyle: CSSProperties = {
+  display:     'flex',
+  alignItems:  'center',
+  gap:         '8px',
+  marginLeft:  '4px',
+};
+
+const userEmailStyle: CSSProperties = {
+  fontSize:  '11px',
+  color:     '#556',
+  maxWidth:  '120px',
+  overflow:  'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};
+
+const logoutBtnStyle: CSSProperties = {
+  backgroundColor: 'transparent',
+  border:          '1px solid #2a2a2e',
+  borderRadius:    '4px',
+  color:           '#556',
+  cursor:          'pointer',
+  fontSize:        '11px',
+  padding:         '3px 8px',
+};

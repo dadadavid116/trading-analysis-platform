@@ -48,12 +48,23 @@ export interface OrderBookSnapshot {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const BASE_URL = '/api';
+const TOKEN_KEY = 'tap_auth_token';
+
+function _appTokenHeaders(): HeadersInit {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { 'X-App-Token': token } : {};
+}
 
 /**
  * Generic fetch wrapper. Throws an error if the response is not OK.
+ * Automatically attaches the X-App-Token JWT header when a token is stored.
  */
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE_URL}${path}`, init);
+  const merged: RequestInit = {
+    ...init,
+    headers: { ..._appTokenHeaders(), ...(init?.headers ?? {}) },
+  };
+  const response = await fetch(`${BASE_URL}${path}`, merged);
   if (!response.ok) {
     throw new Error(`API error ${response.status}: ${response.statusText}`);
   }

@@ -10,6 +10,8 @@ import OperatorConsole from './pages/OperatorConsole';
 import ContextDesk from './pages/ContextDesk';
 import AccountWorkspace from './pages/AccountWorkspace';
 import ResearchWorkspace from './pages/ResearchWorkspace';
+import LoginPage from './pages/LoginPage';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useIsMobile } from './hooks/useIsMobile';
 
 type Page          = 'dashboard' | 'console' | 'context' | 'account' | 'review';
@@ -40,7 +42,26 @@ function cell(flex: number): CSSProperties {
 }
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
+  );
+}
+
+function AppInner() {
+  const { jwtEnabled, user, loading } = useAuth();
   const isMobile = useIsMobile();
+
+  // While checking auth status, show a minimal dark screen.
+  if (loading) {
+    return <div style={{ background: '#0a0c12', height: '100vh', width: '100vw' }} />;
+  }
+
+  // JWT is enabled but no authenticated user — show login gate.
+  if (jwtEnabled && !user) {
+    return <LoginPage />;
+  }
 
   const [chatOpen,        setChatOpen]       = useState(!isMobile);
   const [analysisMessage, setAnalysisMessage] = useState<string | null>(null);
