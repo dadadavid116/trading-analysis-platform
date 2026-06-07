@@ -939,3 +939,107 @@ export async function invalidateSignal(id: number, notes?: string): Promise<Sign
   }
   return response.json() as Promise<Signal>;
 }
+
+// ── Account state (Phase 86) ──────────────────────────────────────────────────
+
+export interface AccountPosition {
+  id:           number;
+  symbol:       string;
+  direction:    'long' | 'short';
+  entry_price:  number;
+  size_usd:     number;
+  stop_loss:    number | null;
+  tp1:          number | null;
+  tp2:          number | null;
+  tp3:          number | null;
+  signal_id:    number | null;
+  status:       string;
+  opened_at:    string;
+  closed_at:    string | null;
+  close_price:  number | null;
+  realized_pnl: number | null;
+  notes:        string | null;
+}
+
+export interface AccountState {
+  starting_capital:       number;
+  currency:               string;
+  current_equity:         number;
+  realized_pnl:           number;
+  open_count:             number;
+  open_risk_usd:          number;
+  open_risk_pct:          number;
+  max_risk_per_trade_pct: number;
+  max_risk_per_trade_usd: number;
+  max_open_risk_pct:      number;
+  daily_loss_limit_pct:   number;
+  positions:              AccountPosition[];
+}
+
+export interface AccountConfig {
+  starting_capital:       number;
+  currency:               string;
+  max_risk_per_trade_pct: number;
+  max_open_risk_pct:      number;
+  daily_loss_limit_pct:   number;
+  updated_at:             string | null;
+}
+
+export function fetchAccountState(): Promise<AccountState> {
+  return apiFetch<AccountState>('/account/state');
+}
+
+export function fetchAccountConfig(): Promise<AccountConfig> {
+  return apiFetch<AccountConfig>('/account/config');
+}
+
+export async function updateAccountConfig(patch: Partial<Omit<AccountConfig, 'currency' | 'updated_at'>>): Promise<AccountConfig> {
+  const response = await fetch(`${BASE_URL}/account/config`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<AccountConfig>;
+}
+
+export async function openPosition(body: {
+  symbol: string; direction: string; entry_price: number; size_usd: number;
+  stop_loss?: number; tp1?: number; tp2?: number; tp3?: number;
+  signal_id?: number; notes?: string;
+}): Promise<AccountPosition> {
+  const response = await fetch(`${BASE_URL}/account/positions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<AccountPosition>;
+}
+
+export async function closePosition(id: number, closePrice: number): Promise<AccountPosition> {
+  const response = await fetch(`${BASE_URL}/account/positions/${id}/close`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ close_price: closePrice }),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<AccountPosition>;
+}
+
+export async function cancelPosition(id: number): Promise<AccountPosition> {
+  const response = await fetch(`${BASE_URL}/account/positions/${id}/cancel`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<AccountPosition>;
+}
