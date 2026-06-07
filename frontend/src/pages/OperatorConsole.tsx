@@ -8,15 +8,17 @@ import JournalPanel from '../panels/JournalPanel';
 import PerformancePanel from '../panels/PerformancePanel';
 import PortfolioPanel from '../panels/PortfolioPanel';
 import SignalMatrixPanel from '../panels/SignalMatrixPanel';
+import SignalQueuePanel from '../panels/SignalQueuePanel';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 // Note: News + Market Map (Heatmap) moved to the Context Desk workspace in Phase 73.
-type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals';
-type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals';
+type RightTab    = 'events' | 'journal' | 'performance' | 'portfolio' | 'signals' | 'queue';
+type MobileTab   = 'scanner' | 'candidate' | 'performance' | 'journal' | 'events' | 'portfolio' | 'signals' | 'queue';
 
 const MOBILE_TABS: { id: MobileTab; label: string }[] = [
   { id: 'scanner',     label: 'Scanner'   },
   { id: 'candidate',   label: 'Setup'     },
+  { id: 'queue',       label: 'Queue'     },
   { id: 'performance', label: 'Stats'     },
   { id: 'journal',     label: 'Journal'   },
   { id: 'events',      label: 'Events'    },
@@ -57,6 +59,7 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
       switch (mobileTab) {
         case 'scanner':     return <ScannerPanel data={scanner} error={scanErr} />;
         case 'candidate':   return <CandidatePanel data={scanner} />;
+        case 'queue':       return <SignalQueuePanel />;
         case 'performance': return <PerformancePanel />;
         case 'journal':     return <JournalPanel />;
         case 'events':      return <EventLogPanel />;
@@ -117,6 +120,9 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
           <button style={tabBtnStyle(rightTab === 'portfolio')} onClick={() => setRightTab('portfolio')}>
             Portfolio
           </button>
+          <button style={tabBtnStyle(rightTab === 'queue')} onClick={() => setRightTab('queue')}>
+            Queue
+          </button>
           <button style={tabBtnStyle(rightTab === 'signals')} onClick={() => setRightTab('signals')}>
             Signals
           </button>
@@ -126,6 +132,7 @@ export default function OperatorConsole({ activeSymbol: _activeSymbol = 'BTCUSDT
           {rightTab === 'journal'     && <JournalPanel />}
           {rightTab === 'performance' && <PerformancePanel />}
           {rightTab === 'portfolio'   && <PortfolioPanel />}
+          {rightTab === 'queue'       && <SignalQueuePanel />}
           {rightTab === 'signals'     && <SignalMatrixPanel />}
         </div>
       </div>

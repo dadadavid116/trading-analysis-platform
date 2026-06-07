@@ -20,6 +20,7 @@ from app.database import AsyncSessionLocal
 from app.routers.scanner import _scan_symbol
 from app.services.event_logger import log_event
 from app.services.symbol_registry import load_active_canonical
+from app.services.signal_engine import create_signal
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,40 @@ async def _run_once() -> None:
 
             # Record debounce state
             _debounce[symbol] = (now, result["bias"])
+
+            # Persist as a signal candidate
+            direction = "long" if result["bias"] == "bullish" else "short"
+            signal_labels = [s["label"] for s in result["signals"][:6]]
+            current_price: float | None = None
+            try:
+                from sqlalchemy import select, desc
+                from app.models.price import PriceCandle
+                p_res = await db.execute(
+                    select(PriceCandle.close)
+                    .where(PriceCandle.symbol == symbol)
+                    .order_by(desc(PriceCandle.timestamp))
+                    .limit(1)
+                )
+                cp = p_res.scalar_one_or_none()
+                if cp:
+                    current_price = float(cp)
+            except Exception as exc:
+                logger.warning("Signal price fetch failed for %s: %s", symbol, exc)
+
+            if current_price:
+                try:
+                    await create_signal(
+                        db           = db,
+                        symbol       = symbol,
+                        direction    = direction,
+                        scanner_score = result["composite"],
+                        signal_count = result["signal_count"],
+                        current_price = current_price,
+                        signal_labels = signal_labels,
+                        timeframe    = "15m",
+                    )
+                except Exception as exc:
+                    logger.warning("Signal persist failed for %s: %s", symbol, exc)
 
             # Log to event feed
             sign = "+" if result["composite"] > 0 else ""

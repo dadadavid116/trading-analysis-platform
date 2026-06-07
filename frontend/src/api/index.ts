@@ -863,3 +863,79 @@ export function fetchContextAiSummary(
 ): Promise<ContextAiSummary> {
   return apiFetch<ContextAiSummary>(`/context/ai-summary?symbol=${symbol}&refresh=${refresh}`);
 }
+
+// ── Signal queue (Phase 85) ───────────────────────────────────────────────────
+
+export type SignalStatus =
+  | 'candidate' | 'active' | 'hit_tp' | 'hit_sl' | 'invalidated' | 'expired';
+
+export interface Signal {
+  id:            number;
+  symbol:        string;
+  timeframe:     string;
+  direction:     'long' | 'short';
+  status:        SignalStatus;
+  source:        string;
+  scanner_score: number | null;
+  signal_count:  number;
+  context_score: number | null;
+  crypto_score:  number | null;
+  macro_score:   number | null;
+  regime:        string | null;
+  entry_low:     number | null;
+  entry_high:    number | null;
+  stop_loss:     number | null;
+  tp1:           number | null;
+  tp2:           number | null;
+  tp3:           number | null;
+  risk_reward:   number | null;
+  signal_labels: string[];
+  created_at:    string;
+  activated_at:  string | null;
+  closed_at:     string | null;
+  expires_at:    string | null;
+  close_reason:  string | null;
+  notes:         string | null;
+}
+
+export interface SignalListResponse {
+  signals: Signal[];
+  total:   number;
+}
+
+export function fetchSignals(
+  status?: string,   // e.g. 'candidate,active'
+  symbol?: string,
+  limit = 50,
+): Promise<SignalListResponse> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (status) params.set('status', status);
+  if (symbol) params.set('symbol', symbol);
+  return apiFetch<SignalListResponse>(`/signals/?${params}`);
+}
+
+export async function activateSignal(id: number, price?: number): Promise<Signal> {
+  const response = await fetch(`${BASE_URL}/signals/${id}/activate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ price: price ?? null }),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<Signal>;
+}
+
+export async function invalidateSignal(id: number, notes?: string): Promise<Signal> {
+  const response = await fetch(`${BASE_URL}/signals/${id}/invalidate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notes: notes ?? null }),
+  });
+  if (!response.ok) {
+    const d = await response.json().catch(() => ({}));
+    throw new Error((d as { detail?: string }).detail ?? `API error ${response.status}`);
+  }
+  return response.json() as Promise<Signal>;
+}
