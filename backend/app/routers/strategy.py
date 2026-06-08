@@ -97,11 +97,8 @@ async def validate_strategy(body: StrategyRequest):
             status_code=503,
             detail="OPENAI_API_KEY is not configured. Add it to your .env file.",
         )
-    if not settings.anthropic_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="ANTHROPIC_API_KEY is not configured. Add it to your .env file.",
-        )
+    # ANTHROPIC_API_KEY is optional — Claude writes a summary if available,
+    # otherwise the response falls back to "Strategy validated successfully."
 
     # ── Step 1: OpenAI validates and extracts parameters ──────────────────────
     openai_client = openai_lib.AsyncOpenAI(api_key=settings.openai_api_key)

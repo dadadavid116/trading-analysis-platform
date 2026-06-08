@@ -35,14 +35,16 @@
    - [Settings](#76-settings-workspace)
 8. [Chart Panel — Full Feature Guide](#8-chart-panel--full-feature-guide)
 9. [AI Chat Panel](#9-ai-chat-panel)
-10. [Alerts](#10-alerts)
-11. [Signal Queue & Paper Execution](#11-signal-queue--paper-execution)
-12. [Risk Engine & Kill Switch](#12-risk-engine--kill-switch)
-13. [Live Execution Gate (OKX)](#13-live-execution-gate-okx)
-14. [Telegram Bot — Complete Guide](#14-telegram-bot--complete-guide)
-15. [Deploying Updates to the VPS](#15-deploying-updates-to-the-vps)
-16. [Troubleshooting](#16-troubleshooting)
-17. [Glossary](#17-glossary)
+   - [Chat History, Save Chat, and Export Location](#chat-history-save-chat-and-export-location)
+10. [Strategy Validator & Alert Builder](#10-strategy-validator--alert-builder)
+11. [Alerts](#11-alerts)
+12. [Signal Queue & Paper Execution](#12-signal-queue--paper-execution)
+13. [Risk Engine & Kill Switch](#13-risk-engine--kill-switch)
+14. [Live Execution Gate (OKX)](#14-live-execution-gate-okx)
+15. [Telegram Bot — Complete Guide](#15-telegram-bot--complete-guide)
+16. [Deploying Updates to the VPS](#16-deploying-updates-to-the-vps)
+17. [Troubleshooting](#17-troubleshooting)
+18. [Glossary](#18-glossary)
 
 ---
 
@@ -644,7 +646,153 @@ Example: *"Set an alert when BTC goes above 72000"* — the AI calls the tool an
 
 ---
 
-## 10. Alerts
+### Chat History, Save Chat, and Export Location
+
+Every web chat and Telegram AI chat message is persisted to the database automatically. This section
+explains how to save, find, and retrieve your chat logs.
+
+#### How sessions are stored
+
+- Every chat conversation is saved as a **session** in the database (table: `chat_sessions` + `chat_messages`).
+- Sessions are created automatically — you do not need to do anything to save a chat in progress.
+- Sessions are visible in the Chat panel's session sidebar on the web (newest first).
+
+#### Resuming a past session
+
+On the web: open the Chat panel → click the **History** or **Sessions** icon in the chat header →
+select a previous session. The full message history loads and you can continue the conversation.
+
+#### Save Chat button
+
+Each session has a **Save** button. Clicking it calls `POST /api/chat-history/sessions/{id}/save`
+which writes the session to a Markdown file on the VPS.
+
+**File location on the VPS:**
+
+```
+~/trading-analysis-platform/chat_history/
+  Claude/
+    2026-06-08 14:30 (Saved by User).md
+  ChatGPT/
+    2026-06-08 15:00 (Saved by User).md
+  Telegram/
+    2026-06-08 Daily Log (Auto-Saved).md
+```
+
+The subfolder (`Claude`, `ChatGPT`, or `Telegram`) is determined by which model and platform
+generated the session.
+
+#### Nightly export
+
+The `chat_export` Docker service runs every day at **00:00 UTC**. It:
+1. Exports all sessions from **yesterday** into a combined daily log file per subfolder
+2. Deletes sessions older than `CHAT_HISTORY_RETENTION_DAYS` (default: **60 days**) from the database
+
+Nightly export files are named `YYYY-MM-DD Daily Log (Auto-Saved).md`.
+
+#### Retrieving files from the VPS via SSH
+
+```bash
+# List all saved files
+ls ~/trading-analysis-platform/chat_history/Claude/
+ls ~/trading-analysis-platform/chat_history/ChatGPT/
+ls ~/trading-analysis-platform/chat_history/Telegram/
+
+# Download a specific file to your local computer (run this on your local machine)
+scp user@your-vps-ip:~/trading-analysis-platform/chat_history/Claude/"2026-06-08 14:30 (Saved by User).md" .
+```
+
+#### Telegram chat sessions
+
+Telegram AI messages are persisted to the same database with `platform="telegram"`. They appear in
+the `Telegram/` subfolder in nightly exports.
+
+**Important:** The active Telegram conversation context (the message history that the bot has in
+memory) is stored in the bot's `chat_data` and **resets on bot restart**. After a restart, the
+next message starts a fresh in-memory context (new session). Past sessions are still in the
+database and will appear in the nightly export — only the in-memory context window is lost.
+
+To restart a Telegram conversation from a clean state without restarting the bot, use `/clear`.
+
+#### Privacy warning
+
+Chat logs can contain your market analysis, position details, and risk parameters. Do not upload
+saved chat files to public services, pastebin, or issue trackers without removing sensitive data.
+
+---
+
+## 10. Strategy Validator & Alert Builder
+
+> **What this feature is:** A tool that validates whether a written trading strategy description
+> is complete and actionable, then creates price-level alerts based on the strategy's
+> entry, stop-loss, and take-profit levels.
+>
+> **What it is NOT:** It does not continuously monitor indicator values (EMA, RSI, candle close),
+> macro events, or any custom logic. It does not backtest user-written strategy rules.
+> Those alerts are trade-management reminders, not a full automated trading system.
+
+### How it works
+
+1. You write a strategy description in plain English
+2. **OpenAI GPT-4o** validates whether the description is specific and actionable:
+   - Must have a clear entry condition (not vague like "when price goes up")
+   - Must have a clear exit condition
+   - Must name a timeframe
+3. If valid: Claude writes a plain-English summary
+4. You see the structured strategy card with entry, exit, SL, TP, timeframe
+5. Click **Approve & Set Alert** → Claude uses its price-alert tools to create
+   `price_above` / `price_below` alerts at the strategy's key price levels
+6. Click **Dismiss** to discard
+
+### What the generated alerts do
+
+The alerts are standard price-crossing notifications:
+- When price crosses above or below a specified level, you receive a Telegram notification
+- They are reminder alerts — they do not open trades, execute orders, or adjust positions
+
+### Example
+
+Strategy input:
+> *"BTC 1H EMA Trend Pullback — Buy when price pulls back to the 20 EMA on 1H and the RSI
+> is between 40 and 60. Stop below the most recent swing low. Target 2R."*
+
+After validation and approval, Claude might create alerts like:
+- BTC above $65,500 (break of resistance — potential entry zone)
+- BTC below $63,200 (stop-loss level warning)
+- BTC above $67,800 (take-profit 1 target)
+
+**What the alerts do NOT track:** The 20 EMA value, the RSI range (40–60), or whether a candle
+actually closes above or below a level. You receive a notification when price crosses a threshold,
+then manually decide whether the full strategy conditions are met.
+
+### Accessing strategy validation
+
+**Web:** Chat panel → type `/strategy` or use the Strategy card in the chat interface
+
+**Telegram:** `/strategy Buy BTC when RSI < 30 on 4H, stop 5% below entry, target 2R`
+
+### Requirements
+
+- `OPENAI_API_KEY` — **required** for the validation step
+- `ANTHROPIC_API_KEY` — optional; provides the plain-English summary; falls back to
+  "Strategy validated successfully." if not configured
+
+### Backtest vs. Strategy Validator
+
+These are different features:
+
+| Feature | What it does |
+|---|---|
+| **Strategy Validator** | Validates a written strategy description; creates price alerts |
+| **Backtest** (Review → Backtest) | Replays **platform scanner signals** against 1-minute historical candle data |
+
+The Backtest does not test user-written strategy rules. It runs the platform's built-in signal
+engine against historical data. If you want to evaluate a custom rule like "EMA 20 > EMA 50 +
+RSI < 40", you would need to review historical chart data manually.
+
+---
+
+## 11. Alerts
 
 Alerts watch a price condition and fire a Telegram notification when it is met.
 
@@ -685,7 +833,7 @@ Alerts watch a price condition and fire a Telegram notification when it is met.
 
 ---
 
-## 11. Signal Queue & Paper Execution
+## 12. Signal Queue & Paper Execution
 
 Signals are automatically generated by the scanner when multiple market factors align.
 
@@ -734,7 +882,7 @@ This is an intentional design — the check is manual and on-demand.
 
 ---
 
-## 12. Risk Engine & Kill Switch
+## 13. Risk Engine & Kill Switch
 
 The risk engine evaluates every execution proposal before it is allowed to proceed.
 
@@ -768,7 +916,7 @@ Does not cancel any orders already open on the OKX exchange.
 
 ---
 
-## 13. Live Execution Gate (OKX)
+## 14. Live Execution Gate (OKX)
 
 > **This section concerns real money. Read carefully.**
 >
@@ -833,7 +981,7 @@ Manually cancel any open positions and orders directly on the OKX website.
 
 ---
 
-## 14. Telegram Bot — Complete Guide
+## 15. Telegram Bot — Complete Guide
 
 The Telegram bot gives you full platform access from your phone.
 
@@ -910,7 +1058,7 @@ for all subsequent commands.
 | `/claude` | Quick switch to Claude |
 | `/chatgpt` | Quick switch to ChatGPT |
 
-#### Strategy validation
+#### Strategy validation (validator / alert-builder only)
 
 ```
 /strategy Buy BTC when RSI < 30 on 4H, stop 5% below entry, target 2R
@@ -919,9 +1067,14 @@ for all subsequent commands.
 1. GPT-4o validates whether the description is a complete, specific, actionable strategy
 2. If valid: shows entry condition, exit condition, timeframe, SL, TP
 3. Claude writes a plain-English summary
-4. Inline buttons: **Approve & Set Alert** (Claude creates relevant price alerts) or **Dismiss**
+4. Inline buttons: **Approve & Set Alert** or **Dismiss**
 
-> Requires `OPENAI_API_KEY`. Claude API key is used for the summary step (optional but recommended).
+On approval, Claude creates `price_above` / `price_below` alerts at the strategy's key price levels
+(entry zone, SL level, TP level). These are **price-crossing reminder alerts** — they do not
+monitor EMA values, RSI ranges, or candle-close logic. See [Section 10](#10-strategy-validator--alert-builder)
+for full details and limitations.
+
+> `OPENAI_API_KEY` required. `ANTHROPIC_API_KEY` optional (provides summary, degrades gracefully).
 
 #### Utility
 
@@ -962,7 +1115,7 @@ The message includes the alert name, symbol, condition, threshold, and current p
 
 ---
 
-## 15. Deploying Updates to the VPS
+## 16. Deploying Updates to the VPS
 
 Code pushed to GitHub is **not live** until you run the deploy script on the VPS.
 
@@ -1013,14 +1166,118 @@ reloads environment variables.
 
 ---
 
-## 16. Troubleshooting
+## 17. Troubleshooting
 
-### "Analysis error: 401 invalid x-api-key"
+### "Analysis error: 401 invalid x-api-key" (web Trade Setup)
 
 Your `ANTHROPIC_API_KEY` is missing, wrong, or was revoked.
 1. Get a new key from [https://console.anthropic.com](https://console.anthropic.com)
 2. `nano ~/trading-analysis-platform/.env` → update `ANTHROPIC_API_KEY=`
-3. `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api`
+3. **Both** the `api` and `telegram` containers must be recreated (not just restarted):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api telegram
+   ```
+4. Confirm the API service picked up the new key:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml logs api | grep -i anthropic
+   ```
+
+---
+
+### Telegram /market shows "Claude API key is missing or invalid"
+
+After the Phase 98 fix, Telegram shows a clean error message instead of the raw API error.
+
+Root cause: `ANTHROPIC_API_KEY` in `.env` is missing, invalid, or was revoked AND the
+`telegram` container has not been recreated since the key was last changed.
+
+Fix:
+1. `nano ~/trading-analysis-platform/.env` → update `ANTHROPIC_API_KEY=`
+2. Recreate **both** containers (the key is loaded on container creation, not restart):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api telegram
+   ```
+3. Verify the telegram service loaded the key:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml logs telegram | tail -20
+   ```
+4. Send `/market` to the bot again — it should return a normal market commentary
+
+> Note: `docker compose restart telegram` is NOT enough — it does not reload `.env`.
+> You must use `up -d` to recreate the container.
+
+---
+
+### Telegram /market works with ChatGPT but not Claude
+
+Switch back to Claude model in Telegram: send `/claude` or `/model claude`.
+Then verify your `ANTHROPIC_API_KEY` is valid (see entry above).
+
+---
+
+### Strategy validator shows "OPENAI_API_KEY is not configured"
+
+The strategy validation feature requires an OpenAI key. The Claude summary step is optional.
+1. Get an OpenAI key at [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys)
+2. Add `OPENAI_API_KEY=sk-...` to `.env` on the VPS
+3. Run `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api telegram`
+
+---
+
+### Strategy created alerts but did not track EMA / RSI rules
+
+This is expected behaviour. The Strategy Validator creates simple `price_above` / `price_below`
+alerts at the strategy's key price levels. It does not continuously evaluate:
+- EMA values (e.g. whether price is above EMA 20)
+- RSI ranges (e.g. whether RSI is between 40 and 60)
+- Candle close conditions (e.g. whether a candle closes above a level)
+- Volume conditions or multi-factor combinations
+
+You receive a Telegram ping when price crosses a threshold. You then manually check whether the
+full strategy conditions (EMA, RSI, etc.) are met on the chart before deciding to act.
+
+This is the intended design. Full automated indicator monitoring requires a custom signal engine,
+which is not part of the current platform.
+
+---
+
+### Backtest does not test my custom written strategy
+
+The Backtest feature (Review → Backtest) replays the platform's own scanner signals against
+1-minute historical candle data. It does not accept user-written strategy rules.
+
+If you want to test a custom rule such as "EMA 20 > EMA 50 + RSI < 40", you would need to:
+1. Review historical chart data manually for matching setups
+2. Paper trade those setups using the platform's manual execution
+3. Track results in the Journal
+
+---
+
+### I clicked Save Chat but cannot find the file
+
+Check:
+1. On the VPS:
+   ```bash
+   ls ~/trading-analysis-platform/chat_history/Claude/
+   ls ~/trading-analysis-platform/chat_history/ChatGPT/
+   ls ~/trading-analysis-platform/chat_history/Telegram/
+   ```
+2. The file is named `YYYY-MM-DD HH:MM (Saved by User).md` using UTC time at the moment of saving.
+3. If the directory is empty: the `chat_export` and `api` containers must both have the volume
+   mounted. Check `docker compose ... logs api` for any file-write errors.
+4. If you are looking for the **nightly export** (not a manual save), it runs at 00:00 UTC —
+   wait until after midnight or check whether yesterday's export file exists.
+
+---
+
+### My Telegram chat context disappeared after a bot restart
+
+This is expected. The bot keeps the active conversation context (message history for the AI)
+in memory (`chat_data`). When the `telegram` container restarts (e.g. after a deploy), that
+in-memory context is lost. Your past messages are still in the database and will appear in the
+nightly export file.
+
+To start a fresh context deliberately: send `/clear` before restarting.
 
 ---
 
@@ -1165,7 +1422,7 @@ On iOS, browser push requires the PWA to be installed to the home screen.
 
 ---
 
-## 17. Glossary
+## 18. Glossary
 
 | Term | Definition |
 |---|---|
@@ -1191,5 +1448,5 @@ On iOS, browser push requires the PWA to be installed to the home screen.
 
 ---
 
-*This guide covers the platform as built through Phase 97 (June 2026).
+*This guide covers the platform as built through Phase 98 (June 2026).
 For questions, corrections, or new phase planning, refer to `docs/phase_status.md`.*

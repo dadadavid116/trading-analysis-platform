@@ -745,9 +745,18 @@ async def cmd_market(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             f"Market ({_sym_label(symbol)}) — {model_label}\n\n{reply}",
             reply_markup=MAIN_KEYBOARD,
         )
+    except anthropic.AuthenticationError as exc:
+        logger.error("Anthropic auth error in /market: %s", exc)
+        await update.message.reply_text(
+            "Claude API key is missing or invalid.\n\n"
+            "Fix: update ANTHROPIC_API_KEY in .env on the VPS, then run:\n"
+            "bash deploy.sh\n\n"
+            "(Both the api and telegram containers must be recreated.)",
+            reply_markup=MAIN_KEYBOARD,
+        )
     except Exception as exc:
         logger.error("Market analysis failed: %s", exc)
-        await update.message.reply_text(f"Analysis failed: {exc}", reply_markup=MAIN_KEYBOARD)
+        await update.message.reply_text("Analysis failed. Please try again later.", reply_markup=MAIN_KEYBOARD)
 
 
 async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1049,9 +1058,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await update.message.chat.send_action(ChatAction.TYPING)
     try:
         reply = await _ai_reply(text, context)
+    except anthropic.AuthenticationError as exc:
+        logger.error("Anthropic auth error in AI chat: %s", exc)
+        reply = (
+            "Claude API key is missing or invalid.\n\n"
+            "Fix: update ANTHROPIC_API_KEY in .env on the VPS, then run:\n"
+            "bash deploy.sh"
+        )
     except Exception as exc:
         logger.error("AI chat error: %s", exc)
-        reply = f"Error: {exc}"
+        reply = "AI service error. Please try again later."
 
     if len(reply) <= 4096:
         await update.message.reply_text(reply, reply_markup=MAIN_KEYBOARD)
@@ -1114,8 +1130,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
             reply = await _reply_via_claude([{"role": "user", "content": approval_msg}], system_prompt)
             await query.message.reply_text(reply, reply_markup=MAIN_KEYBOARD)
+        except anthropic.AuthenticationError as exc:
+            logger.error("Anthropic auth error in strategy approval: %s", exc)
+            await query.message.reply_text(
+                "Claude API key is invalid — cannot create alerts.\n"
+                "Fix: update ANTHROPIC_API_KEY in .env and run bash deploy.sh.",
+                reply_markup=MAIN_KEYBOARD,
+            )
         except Exception as exc:
-            await query.message.reply_text(f"Error: {exc}", reply_markup=MAIN_KEYBOARD)
+            logger.error("Strategy approval error: %s", exc)
+            await query.message.reply_text("Could not create alerts. Please try again.", reply_markup=MAIN_KEYBOARD)
 
 
 # ── Post-init: register commands with BotFather ────────────────────────────────

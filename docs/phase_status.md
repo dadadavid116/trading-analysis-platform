@@ -4,15 +4,15 @@
 > comes next. It is updated at the end of each phase. If anything here disagrees with chat
 > memory, **this file wins.**
 >
-> Last updated: end of **Phase 97**.
+> Last updated: start of **Phase 98** (in progress).
 
 ---
 
 ## Current position
 
-- **Current completed implementation phase:** **Phase 97** (Live Execution Gate — final phase).
-- **Roadmap range:** **Phase 73 → 97** (authoritative detail in `docs/future_phases_unfinished_overview.md`).
-- **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–77 recorded here.
+- **Current active phase:** **Phase 98** — Stabilization, Bugfix, and Documentation Accuracy Pass.
+- **Prior completed range:** **Phase 73 → 97** fully implemented.
+- **Legacy build log:** `docs/roadmap.md` records Phases 1–75 as done; Phases 76–97 recorded here.
 
 ## Completed recent slice
 
@@ -44,9 +44,33 @@
 | 96 | Settings / Customization | Alembic 0016: `settings_json TEXT NOT NULL DEFAULT '{}'` column on `users` table. `app/routers/settings.py` — `GET /api/settings` (returns user's settings or defaults if unauthenticated), `PUT /api/settings` (saves to user row; requires auth). `app/models/user.py` updated with `settings_json` column. `frontend/src/contexts/SettingsContext.tsx` — `AppSettings` type (density, aiModel, notifications, factorWeights, exportFormat), loads from backend when authenticated or localStorage when not, saves on change. `frontend/src/pages/SettingsWorkspace.tsx` — 6-tab settings page: General (density compact/normal), AI Models (claude/gpt per surface), Notifications (browser/Telegram/webhook/quiet hours), Account (change-password form), Factor Weights (editable weights 0–100 summing to 100, Phase 82 note), Export (csv/json). Settings workspace added as 6th nav item ("Settings") in Layout.tsx and App.tsx. Per-user persistence via backend; localStorage fallback for unauthenticated or JWT-disabled mode. |
 | 97 | Live Execution Gate | Alembic 0017: `live_mode_enabled BOOLEAN DEFAULT FALSE` on `account_config`; `live_orders` table (symbol, direction, order_type, size_usd, okx_order_id, okx_status, fill_price, error_msg). `backend/app/models/live_order.py`. `backend/app/services/live_execution.py` — OKX REST API client with HMAC-SHA256 signing, sandbox header support, contract-size calculation (BTC 0.01 / ETH 0.1 / SOL 1.0 per contract), `check_live_gate()` (5 deterministic gates), `enable_live_mode()`, `disable_live_mode()`, `verify_okx_keys()`, `place_live_order()`, `cancel_live_order()`. `backend/app/routers/live_execution.py` — `GET /api/live/gate`, `POST /api/live/enable` (requires phrase "ENABLE LIVE TRADING"), `POST /api/live/disable`, `GET /api/live/test`, `GET /api/live/orders`, `POST /api/live/orders`, `POST /api/live/orders/{id}/cancel`. OKX keys (`OKX_API_KEY`, `OKX_API_SECRET`, `OKX_API_PASSPHRASE`, `OKX_SANDBOX`) added to `config.py` and `.env.example`. `frontend/src/panels/LiveGatePanel.tsx` — gate checklist, 3-step enable flow (disclaimer + typed confirmation), live order form, sandbox/real indicator, live order history table with cancel button. "⚡ Live" tab added to `AccountWorkspace.tsx`. | `settings_json TEXT NOT NULL DEFAULT '{}'` column on `users` table. `app/routers/settings.py` — `GET /api/settings` (returns user's settings or defaults if unauthenticated), `PUT /api/settings` (saves to user row; requires auth). `app/models/user.py` updated with `settings_json` column. `frontend/src/contexts/SettingsContext.tsx` — `AppSettings` type (density, aiModel, notifications, factorWeights, exportFormat), loads from backend when authenticated or localStorage when not, saves on change. `frontend/src/pages/SettingsWorkspace.tsx` — 6-tab settings page: General (density compact/normal), AI Models (claude/gpt per surface), Notifications (browser/Telegram/webhook/quiet hours), Account (change-password form), Factor Weights (editable weights 0–100 summing to 100, Phase 82 note), Export (csv/json). Settings workspace added as 6th nav item ("Settings") in Layout.tsx and App.tsx. Per-user persistence via backend; localStorage fallback for unauthenticated or JWT-disabled mode. |
 
+## Phase 98 — Stabilization, Bugfix, and Documentation Accuracy Pass
+
+**Status: in progress**
+
+### Scope
+
+| Item | Status |
+|---|---|
+| Telegram `/market` 401 bug — clean error instead of raw API error | ✅ Fixed (bot.py) |
+| Telegram AI chat / strategy approval — same raw-error exposure | ✅ Fixed (bot.py) |
+| strategy.py — upfront ANTHROPIC check blocks endpoint unnecessarily | ✅ Fixed (strategy.py) |
+| USER_GUIDE.md — chat history / Save Chat path and retrieval steps | ✅ Added (Section 9) |
+| USER_GUIDE.md — Strategy Validator section (validator/alert-builder, not full automation) | ✅ Added (Section 10) |
+| USER_GUIDE.md — expanded troubleshooting (Telegram key, strategy, chat export) | ✅ Added |
+| docs/roadmap.md — Phase 98 added | ✅ Done |
+| docs/phase_98_smoke_test_checklist.md | ✅ Created |
+| Manual smoke tests on VPS | ⏳ Requires manual run after deploy |
+
+### Phase 98 not yet done
+
+- Phase 98 should be marked complete after smoke tests pass on the live VPS.
+
 ## Next implementation phase
 
-**All phases 73–97 are complete.** The roadmap defined in `docs/future_phases_unfinished_overview.md` is fully implemented. Future work should be planned as new phases.
+**All phases 73–97 are complete. Phase 98 is the active stabilization phase.**
+The roadmap defined in `docs/future_phases_unfinished_overview.md` is fully implemented.
+Future feature work should be planned as Phase 99+.
 
 ## Current runtime / deployment status
 
