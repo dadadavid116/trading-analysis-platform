@@ -48,19 +48,25 @@ export default function Layout({
       {/* ── Header ── */}
       {isMobile ? (
         <header style={mobileHeaderStyle}>
-          {/* Row 1: title + page tabs + health */}
+          {/* Row 1: logo + health dot + chat toggle */}
           <div style={mobileRow1Style}>
             <span style={mobileTitleStyle}>TAP</span>
-            <div style={navBarStyle}>
-              {PAGES.map((p) => (
-                <button key={p.id} style={navBtnStyle(p.id === activePage)} onClick={() => onPageChange(p.id)}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
             <ServiceHealth />
+            {isDash && (
+              <button style={mobileChatBtnStyle(chatOpen)} onClick={onToggleChat} title="Toggle AI Chat">
+                {chatOpen ? '✕ Chat' : '💬 Chat'}
+              </button>
+            )}
           </div>
-          {/* Row 2: symbol selector + price ticker (all pages) */}
+          {/* Row 2: scrollable nav tabs */}
+          <div style={mobileNavRowStyle}>
+            {PAGES.map((p) => (
+              <button key={p.id} style={navBtnStyle(p.id === activePage)} onClick={() => onPageChange(p.id)}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {/* Row 3: symbol selector + price ticker */}
           <div style={mobileRow2Style}>
             <div style={symbolBarStyle}>
               {SYMBOLS.map((sym) => (
@@ -117,9 +123,16 @@ export default function Layout({
 
       {/* ── Body ── */}
       <div style={bodyStyle}>
-        <div style={panelAreaStyle}>
-          {children}
-        </div>
+        {/* On mobile: when chat is open on dashboard, chat takes the full body */}
+        {isMobile && isDash && chatOpen ? (
+          <div style={mobileChatBodyStyle}>
+            {chatPanel}
+          </div>
+        ) : (
+          <div style={panelAreaStyle}>
+            {children}
+          </div>
+        )}
 
         {/* Chat column — desktop only, dashboard only */}
         {!isMobile && isDash && (
@@ -163,11 +176,26 @@ const mobileHeaderStyle: CSSProperties = {
 };
 
 const mobileRow1Style: CSSProperties = {
-  display:     'flex',
-  alignItems:  'center',
-  gap:         '10px',
-  padding:     '0 14px',
-  height:      '44px',
+  display:        'flex',
+  alignItems:     'center',
+  gap:            '8px',
+  padding:        '0 14px',
+  height:         '40px',
+  flexShrink:     0,
+};
+
+const mobileNavRowStyle: CSSProperties = {
+  display:          'flex',
+  gap:              '2px',
+  padding:          '3px 10px',
+  height:           '36px',
+  alignItems:       'center',
+  overflowX:        'auto',
+  flexShrink:       0,
+  borderTop:        '1px solid #1e1e22',
+  // Hide scrollbar visually while keeping it scrollable
+  scrollbarWidth:   'none',
+  msOverflowStyle:  'none' as 'none',
 };
 
 const mobileRow2Style: CSSProperties = {
@@ -177,13 +205,38 @@ const mobileRow2Style: CSSProperties = {
   padding:        '4px 14px 6px',
   borderTop:      '1px solid #1e1e22',
   justifyContent: 'space-between',
+  flexShrink:     0,
 };
 
 const mobileTitleStyle: CSSProperties = {
-  fontSize:      '14px',
+  fontSize:      '13px',
   fontWeight:    700,
-  color:         '#f0f0f0',
+  color:         '#33aa66',
   letterSpacing: '1px',
+  flexShrink:    0,
+};
+
+const mobileChatBtnStyle = (open: boolean): CSSProperties => ({
+  backgroundColor: open ? '#1e3a5f' : '#111114',
+  border:          `1px solid ${open ? '#3a6a9f' : '#2a2a2e'}`,
+  borderRadius:    '5px',
+  color:           open ? '#90b8e0' : '#888',
+  cursor:          'pointer',
+  fontSize:        '11px',
+  fontWeight:      600,
+  padding:         '4px 10px',
+  marginLeft:      'auto',
+  flexShrink:      0,
+  transition:      'all 0.15s',
+  whiteSpace:      'nowrap' as 'nowrap',
+});
+
+const mobileChatBodyStyle: CSSProperties = {
+  flex:          1,
+  overflow:      'hidden',
+  display:       'flex',
+  flexDirection: 'column',
+  minHeight:     0,
 };
 
 const logoStyle: CSSProperties = {

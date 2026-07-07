@@ -1,30 +1,26 @@
 """
-liquidation_collector.py — Multi-symbol liquidation collector via OKX WebSocket.
+liquidation_collector.py — Multi-symbol liquidation collector via Bybit WebSocket.
 
-Subscribes to OKX's public `liquidation-orders` channel (SWAP instType) which
-covers BTC/ETH/SOL perpetual swaps.
+Subscribes to Bybit's public `liquidation.<SYMBOL>` topics for each tracked symbol
+(BTCUSDT, ETHUSDT, SOLUSDT).  Bybit uses standard port 443, which is accessible
+from most VPS providers.
 
-Switched from Binance fstream because Binance futures WebSocket is unreachable
-from many VPS regions.
-
-OKX message format:
+Bybit message format:
   {
-    "arg":  { "channel": "liquidation-orders", "instType": "SWAP" },
-    "data": [{
-      "instId": "BTC-USDT-SWAP",
-      "ts":     "1623987654321",   # ms, outer timestamp
-      "details": [{
-        "side":    "sell",         # sell = long liq, buy = short liq
-        "posSide": "long",
-        "bkPx":   "65000",        # liquidation/bankruptcy price
-        "sz":     "1.2",          # size in contracts
-        "state":  "filled"
-      }]
-    }]
+    "topic": "liquidation.BTCUSDT",
+    "ts":    1715161395596,
+    "type":  "snapshot",
+    "data": {
+      "symbol":      "BTCUSDT",
+      "side":        "Sell",        # "Sell" = long liq'd, "Buy" = short liq'd
+      "size":        "0.001",       # quantity in base currency
+      "price":       "61017.00",    # liquidation / bankruptcy price
+      "updatedTime": 1715161395589  # event timestamp in ms
+    }
   }
 
-OKX sends a plain-text "ping" every 25 s — we reply "pong".
-A 90 s receive timeout detects silent hangs and forces a reconnect.
+Bybit sends a JSON heartbeat {"op":"ping"} every 20 s — we reply {"op":"pong"}.
+A 35 s receive timeout detects silent hangs and forces a reconnect.
 """
 
 import asyncio
@@ -36,67 +32,53 @@ import websockets
 
 from app.database import AsyncSessionLocal
 from app.models.liquidation import Liquidation
-from app.services.symbol_registry import load_okx_symbol_map
+from app.services.symbol_registry import load_active_canonical
 
 logger = logging.getLogger(__name__)
 
-OKX_WS_URL = "wss://ws.okx.com:8443/ws/v5/public"
-
-_SUBSCRIBE = json.dumps({
-    "op":   "subscribe",
-    "args": [{"channel": "liquidation-orders", "instType": "SWAP"}],
-})
+BYBIT_WS_URL = "wss://stream.bybit.com/v5/public/linear"
 
 
-async def _store(inst_id: str, detail: dict, ts_ms: int, symbol_map: dict[str, str]) -> None:
-    canonical = symbol_map.get(inst_id)
-    if not canonical:
-        return
-
-    side = detail.get("side", "")
-    if side not in ("buy", "sell"):
-        # Fallback: derive from position side
-        side = "sell" if detail.get("posSide") == "long" else "buy"
-
-    price = float(detail.get("bkPx") or 0)
-    qty   = float(detail.get("sz")   or 0)
-    if price <= 0 or qty <= 0:
-        return
-
+async def _store(symbol: str, side: str, price: float, qty: float, ts_ms: int) -> None:
     liq = Liquidation(
-        symbol    = canonical,
+        symbol    = symbol,
         timestamp = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc),
         side      = side,
         price     = price,
         quantity  = qty,
-        exchange  = "okx",
+        exchange  = "bybit",
     )
     async with AsyncSessionLocal() as session:
         session.add(liq)
         await session.commit()
-
-    logger.info("Liquidation: %s  side=%s  price=%.2f  qty=%.4f", canonical, side, price, qty)
+    logger.info("Liquidation: %s  side=%s  price=%.2f  qty=%.4f", symbol, side, price, qty)
 
 
 async def run() -> None:
-    symbol_map = await load_okx_symbol_map()
-    logger.info("Liquidation collector starting (OKX liquidation-orders WebSocket, symbols=%s)...",
-                list(symbol_map.values()))
+    symbols = await load_active_canonical()
+    # Bybit topic names match canonical symbols directly (BTCUSDT, ETHUSDT, SOLUSDT)
+    sub_args      = [f"liquidation.{sym}" for sym in symbols]
+    subscribe_msg = json.dumps({"op": "subscribe", "args": sub_args})
+    symbols_set   = set(symbols)
+
+    logger.info(
+        "Liquidation collector starting (Bybit WebSocket, topics=%s)...",
+        sub_args,
+    )
+
     while True:
         try:
-            async with websockets.connect(OKX_WS_URL) as ws:
-                await ws.send(_SUBSCRIBE)
-                logger.info("Liquidation collector: subscribed to OKX liquidation-orders (SWAP).")
+            async with websockets.connect(BYBIT_WS_URL) as ws:
+                await ws.send(subscribe_msg)
+                logger.info("Liquidation collector: subscribed to Bybit %s.", sub_args)
 
                 while True:
                     try:
-                        raw = await asyncio.wait_for(ws.recv(), timeout=90.0)
+                        raw = await asyncio.wait_for(ws.recv(), timeout=35.0)
                     except asyncio.TimeoutError:
-                        logger.warning("Liquidation WS: no message for 90 s — reconnecting.")
-                        break
-
-                    if raw == "ping":
-                        await ws.send("pong")
+                        # Send a keepalive ping; Bybit disconnects after ~30 s of silence
+                        logger.debug("Liquidation WS: timeout — sending keepalive ping.")
+                        await ws.send(json.dumps({"op": "ping"}))
                         continue
 
                     try:
@@ -104,20 +86,40 @@ async def run() -> None:
                     except json.JSONDecodeError:
                         continue
 
-                    if "event" in msg:
-                        logger.debug("Liquidation WS event: %s", msg)
+                    # Respond to server heartbeat pings
+                    if msg.get("op") == "ping":
+                        await ws.send(json.dumps({"op": "pong"}))
                         continue
 
-                    for item in msg.get("data", []):
-                        inst_id = item.get("instId", "")
-                        if inst_id not in symbol_map:
-                            continue
-                        ts_ms = int(item.get("ts") or 0)
-                        for detail in item.get("details", []):
-                            try:
-                                await _store(inst_id, detail, ts_ms, symbol_map)
-                            except Exception as exc:
-                                logger.error("Error storing liquidation: %s", exc)
+                    # Ignore pong echoes, subscribe acks, and other control messages
+                    if "topic" not in msg:
+                        logger.debug("Liquidation WS control message: %s", msg)
+                        continue
+
+                    topic = msg.get("topic", "")
+                    if not topic.startswith("liquidation."):
+                        continue
+
+                    data   = msg.get("data", {})
+                    symbol = data.get("symbol", "")
+                    if symbol not in symbols_set:
+                        continue
+
+                    side_raw = data.get("side", "")
+                    # Bybit convention: "Sell" order closed a long position (bearish liq)
+                    #                   "Buy"  order closed a short position (bullish liq)
+                    side  = "sell" if side_raw == "Sell" else "buy"
+                    price = float(data.get("price", 0))
+                    qty   = float(data.get("size",  0))
+                    ts_ms = int(data.get("updatedTime", 0)) or int(msg.get("ts", 0))
+
+                    if price <= 0 or qty <= 0:
+                        continue
+
+                    try:
+                        await _store(symbol, side, price, qty, ts_ms)
+                    except Exception as exc:
+                        logger.error("Error storing liquidation: %s", exc)
 
         except Exception as exc:
             logger.error("Liquidation collector error: %s — reconnecting in 5 s.", exc)

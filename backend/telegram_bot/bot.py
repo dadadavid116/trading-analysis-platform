@@ -950,15 +950,12 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 model=CLAUDE_MODEL, max_tokens=200,
                 messages=[{"role": "user", "content": (
                     "Write a 2-sentence plain-English summary of this trading strategy for Telegram. "
-                    "End with: 'Approve to set alerts.'\n\n" + json.dumps(parsed)
+                    "Be concise.\n\n" + json.dumps(parsed)
                 )}],
             )
             summary = cr.content[0].text.strip()
         except Exception:
             pass
-
-    sid = str(uuid.uuid4())[:8]
-    _pending_strategies[sid] = parsed
 
     card = (
         "Strategy Validated\n"
@@ -970,11 +967,48 @@ async def cmd_strategy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         f"SL:      {parsed.get('stop_loss', '—')}\n"
         f"TP:      {parsed.get('take_profit', '—')}"
     )
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("Approve & Set Alert", callback_data=f"approve:{sid}"),
-        InlineKeyboardButton("Dismiss",             callback_data=f"dismiss:{sid}"),
-    ]])
-    await update.message.reply_text(card, reply_markup=keyboard)
+    await update.message.reply_text(card)
+
+    # Auto-create price alerts based on strategy + current market conditions.
+    if not settings.anthropic_api_key:
+        await update.message.reply_text(
+            "Note: ANTHROPIC_API_KEY not configured — alerts could not be set automatically.",
+            reply_markup=MAIN_KEYBOARD,
+        )
+        return
+
+    await update.message.reply_text("Setting alerts based on current market…")
+    await update.message.chat.send_action(ChatAction.TYPING)
+
+    approval_msg = (
+        f"A trading strategy has been validated: \"{parsed.get('name')}\". "
+        f"Entry: {parsed.get('entry_condition')}. Exit: {parsed.get('exit_condition')}. "
+        f"Timeframe: {parsed.get('timeframe')}. TP: {parsed.get('take_profit')}. "
+        f"SL: {parsed.get('stop_loss')}. "
+        "Based on current market prices, create appropriate price alerts for this strategy now. "
+        "Include entry invalidation, stop loss, and take profit levels."
+    )
+    try:
+        market_ctx    = await _get_market_context()
+        system_prompt = (
+            "You are a trading assistant on Telegram. Be concise. "
+            "Create price alerts using your tools based on current market conditions.\n\n"
+            + market_ctx
+        )
+        reply = await _reply_via_claude([{"role": "user", "content": approval_msg}], system_prompt)
+        await update.message.reply_text(reply, reply_markup=MAIN_KEYBOARD)
+    except anthropic.AuthenticationError as exc:
+        logger.error("Anthropic auth error in strategy auto-alert: %s", exc)
+        await update.message.reply_text(
+            "Claude API key is invalid — could not set alerts.\n"
+            "Fix: update ANTHROPIC_API_KEY in .env and run bash deploy.sh.",
+            reply_markup=MAIN_KEYBOARD,
+        )
+    except Exception as exc:
+        logger.error("Strategy auto-alert error: %s", exc)
+        await update.message.reply_text(
+            "Could not create alerts. Please try again.", reply_markup=MAIN_KEYBOARD,
+        )
 
 
 async def cmd_model(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

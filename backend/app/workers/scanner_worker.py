@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 
 # ── Tunable constants ─────────────────────────────────────────────────────────
 
-SCAN_INTERVAL        = 5 * 60   # seconds between full scan cycles
-NOTIFY_COOLDOWN      = 60 * 60  # minimum seconds between alerts for same symbol
-COMPOSITE_THRESHOLD  = 0.60     # |composite| must exceed this to notify
-MIN_SIGNALS          = 2        # minimum signal count required
+SCAN_INTERVAL        = 5 * 60       # seconds between full scan cycles
+NOTIFY_COOLDOWN      = 4 * 60 * 60  # minimum seconds between alerts (4 hours)
+COMPOSITE_THRESHOLD  = 0.68         # raised threshold — only strong signals notify
+MIN_SIGNALS          = 3            # minimum signal count required
 
 # ── Module-level state (accessed from the status endpoint) ────────────────────
 
@@ -42,27 +42,76 @@ _debounce: dict[str, tuple[datetime, str]] = {}
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+def _is_4h_boundary(now: datetime) -> bool:
+    """True within the first 10 minutes of a 4-hour candle period (00/04/08/12/16/20 UTC)."""
+    return now.hour % 4 == 0 and now.minute < 10
+
+
 def _should_notify(symbol: str, bias: str, now: datetime) -> bool:
+    near_4h = _is_4h_boundary(now)
     if symbol not in _debounce:
-        return True
+        return near_4h
     last_time, last_bias = _debounce[symbol]
     cooldown_passed = (now - last_time).total_seconds() >= NOTIFY_COOLDOWN
     bias_flipped    = bias != last_bias and bias != "neutral"
-    return cooldown_passed or bias_flipped
+    if bias_flipped:
+        return True  # always notify on direction change, regardless of 4H boundary
+    return near_4h and cooldown_passed
 
 
-def _format_telegram(symbol: str, result: dict) -> str:
-    labels = {"BTCUSDT": "BTC/USDT", "ETHUSDT": "ETH/USDT", "SOLUSDT": "SOL/USDT"}
+def _format_telegram(symbol: str, result: dict, current_price: float | None = None) -> str:
+    labels  = {"BTCUSDT": "BTC/USDT", "ETHUSDT": "ETH/USDT", "SOLUSDT": "SOL/USDT"}
     display = labels.get(symbol, symbol)
     bias    = result["bias"].upper()
     score   = result["composite"]
     sign    = "+" if score > 0 else ""
-    lines   = [f"Scanner: {display}  {bias} ({sign}{score:.2f})"]
 
-    for s in result["signals"][:5]:
-        sev = {"alert": "!", "warning": "*", "info": "i"}[s["severity"]]
-        dr  = {"bullish": "^", "bearish": "v", "neutral": "-"}[s["direction"]]
-        lines.append(f"  [{sev}{dr}] {s['label']}")
+    price_str = f" | ${current_price:,.2f}" if current_price else ""
+    header    = f"\U0001f4e1 {display} — {bias}{price_str}"
+    subhead   = f"Score: {sign}{score:.2f} | {result['signal_count']} signals"
+    lines     = [header, subhead]
+
+    # ── Categorise signals ────────────────────────────────────────────────────
+    sigs = result["signals"]
+    key_levels  = [s for s in sigs if s.get("type", "") in ("key_level_support", "key_level_resistance")]
+    momentum    = [s for s in sigs if "momentum" in s.get("type", "") or "pattern" in s.get("type", "")]
+    derivatives = [s for s in sigs if s.get("type", "") in ("funding_extreme", "oi_expansion", "oi_contraction", "ls_skew")]
+    liq_vol     = [s for s in sigs if s.get("type", "") in ("liq_surge", "volume_surge")]
+
+    if key_levels:
+        lines.append("")
+        lines.append("Key Levels:")
+        for s in key_levels:
+            arrow = "↑" if s["direction"] == "bullish" else "↓"
+            lines.append(f"  {arrow} {s['label']}")
+        # Add a price-reaction note if current price is known
+        if current_price:
+            for s in key_levels:
+                if s.get("type") == "key_level_support":
+                    lines.append(f"    → Price holding above — watch for bounce confirmation")
+                    break
+                if s.get("type") == "key_level_resistance":
+                    lines.append(f"    → Testing resistance — watch for rejection or breakout")
+                    break
+
+    if momentum:
+        lines.append("")
+        lines.append("Price Action:")
+        for s in momentum[:4]:
+            sev = {"alert": "!", "warning": "*", "info": "·"}[s.get("severity", "info")]
+            lines.append(f"  {sev} {s['label']}")
+
+    if derivatives:
+        lines.append("")
+        lines.append("Derivatives:")
+        for s in derivatives:
+            lines.append(f"  {s['label']}")
+
+    if liq_vol:
+        lines.append("")
+        lines.append("Flow:")
+        for s in liq_vol:
+            lines.append(f"  {s['label']}")
 
     return "\n".join(lines)
 
@@ -159,8 +208,8 @@ async def _run_once() -> None:
                 notifications_sent += 1
                 continue
 
-            msg  = _format_telegram(symbol, result)
-            text = f"\U0001f4e1 {msg}"
+            msg  = _format_telegram(symbol, result, current_price)
+            text = msg
             try:
                 import httpx
                 async with httpx.AsyncClient(timeout=10.0) as client:
